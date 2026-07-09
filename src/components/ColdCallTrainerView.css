@@ -1,0 +1,210 @@
+.ccr-trainer {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 1.25rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 860px) {
+  .ccr-trainer {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ccr-trainer h1 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  margin: 0 0 0.25rem;
+}
+
+.ccr-muted {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.ccr-trainer__setup,
+.ccr-trainer__live {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.15rem;
+}
+
+.ccr-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.ccr-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ccr-trainer label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0.65rem 0;
+}
+
+.ccr-trainer input,
+.ccr-trainer select,
+.ccr-trainer button {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--ink);
+  padding: 0.55rem 0.7rem;
+}
+
+.ccr-trainer button {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ccr-primary {
+  background: var(--accent) !important;
+  border-color: transparent !important;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem !important;
+}
+
+.ccr-danger {
+  background: #7f1d1d !important;
+  border-color: transparent !important;
+}
+
+.ccr-panel {
+  margin: 0.85rem 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.ccr-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.ccr-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+.ccr-toggles label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.ccr-error {
+  color: var(--bad);
+  font-size: 0.9rem;
+}
+
+.ccr-status {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.ccr-status .live {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.ccr-status .speaking {
+  color: var(--warn);
+}
+
+.ccr-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  background: var(--bg-soft);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.bubble strong {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.bubble--user {
+  border-left: 3px solid var(--accent-2);
+}
+
+.bubble--gatekeeper,
+.bubble--prospect {
+  border-left: 3px solid var(--accent);
+}
+
+.bubble--decision_maker {
+  border-left: 3px solid var(--warn);
+}
+
+.ccr-coach {
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+}
+
+.ccr-coach p {
+  margin: 0.35rem 0 0;
+}
+
+.ccr-scorecard {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.ccr-scorecard h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+}
+
+.ccr-scorecard small {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.ccr-script {
+  margin-top: 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ccr-script h4 {
+  color: var(--ink);
+  margin: 0.75rem 0 0.25rem;
+}

@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanTier {
+  STARTER
+  PRO
+}
+
+model UserProfile {
+  id                 String    @id // Clerk userId
+  email              String?
+  displayName        String?
+  orgId              String?
+  plan               PlanTier  @default(STARTER)
+  minutesRemaining   Int       @default(80)
+  minutesUsed        Int       @default(0)
+  stripeCustomerId   String?
+  stripeSubscriptionId String?
+  referralCode       String    @unique
+  referredByCode     String?
+  totalPoints        Int       @default(0)
+  currentStreak      Int       @default(0)
+  longestStreak      Int       @default(0)
+  lastSessionDate    DateTime?
+  hiringBoardOptIn   Boolean   @default(false)
+  hiringHeadline     String?
+  hiringBio          String?
+  badges             String    @default("[]") // JSON string[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions   TrainerSession[]
+  prospects  Prospect[]
+  referrals  Referral[]       @relation("Referrer")
+  referred   Referral[]       @relation("Referee")
+
+  @@index([orgId])
+  @@index([totalPoints])
+  @@index([hiringBoardOptIn])
+}
+
+model Prospect {
+  id               String   @id @default(cuid())
+  userId           String
+  user             UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName      String
+  industry         String?
+  city             String?
+  state            String?
+  phone            String?
+  website          String?
+  ownerName        String?
+  ownerTitle       String?  @default("Owner")
+  gatekeeperName   String?  @default("Sarah")
+  reviewRating     Float?
+  reviewCount      Int?
+  hooksJSON        String?  // JSON string[] marketing hooks from scraper
+  source           String   @default("manual") // manual | maps | url
+  mapsPlaceId      String?
+  createdAt        DateTime @default(now())
+
+  sessions TrainerSession[]
+
+  @@index([userId])
+}
+
+model TrainerSession {
+  id             String   @id @default(cuid())
+  userId         String
+  user           UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prospectId     String?
+  prospect       Prospect? @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  scenarioType   String
+  focusArea      String
+  difficulty     String   @default("medium")
+  transcript     String   @db.Text
+  scorecardJSON  String   @db.Text
+  overallScore   Int
+  categoryScores String   @db.Text
+  duration       Int      @default(0)
+  pointsEarned   Int      @default(0)
+  coachLogJSON   String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([focusArea, overallScore])
+  @@index([overallScore])
+}
+
+model Referral {
+  id              String   @id @default(cuid())
+  referrerId      String
+  referrer        UserProfile @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId       String?
+  referee         UserProfile? @relation("Referee", fields: [refereeId], references: [id], onDelete: SetNull)
+  code            String
+  status          String   @default("pending") // pending | completed | rewarded
+  bonusMinutes    Int      @default(30)
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([code])
+  @@index([referrerId])
+}
+
+model WeeklyLeaderboard {
+  id           String   @id @default(cuid())
+  weekStart    DateTime
+  scope        String   // global | org | focus
+  scopeKey     String   // "global" | orgId | focusArea
+  userId       String
+  displayName  String?
+  points       Int
+  sessions     Int
+  avgScore     Float
+  createdAt    DateTime @default(now())
+
+  @@unique([weekStart, scope, scopeKey, userId])
+  @@index([weekStart, scope, scopeKey, points])
+}

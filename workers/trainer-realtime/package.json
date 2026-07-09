@@ -1,0 +1,14 @@
+{
+  "name": "coldcallreps-trainer-realtime",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250417.0",
+    "typescript": "^5.8.2",
+    "wrangler": "^4.103.0"
+  }
+}

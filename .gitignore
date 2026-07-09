@@ -1,0 +1,15 @@
+node_modules
+.next
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+.netlify
+.vercel
+dist
+*.tsbuildinfo
+prisma/*.db
+prisma/*.db-journal
+workers/**/.wrangler
+workers/**/node_modules

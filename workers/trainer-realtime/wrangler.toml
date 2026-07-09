@@ -1,0 +1,19 @@
+name = "coldcallreps-trainer-realtime"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Public Next.js origin used to fetch scenario prompts
+APP_ORIGIN = "https://coldcallreps.com"
+
+[[durable_objects.bindings]]
+name = "TRAINER_SESSION"
+class_name = "TrainerSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TrainerSession"]
+
+[observability]
+enabled = true
