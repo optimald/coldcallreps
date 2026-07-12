@@ -1,0 +1,10 @@
+name = "coldcallreps-clips-r2"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[[r2_buckets]]
+binding = "CLIPS"
+bucket_name = "coldcallreps-clips"
+
+[vars]
+# Set CLIPS_UPLOAD_SECRET via: wrangler secret put CLIPS_UPLOAD_SECRET

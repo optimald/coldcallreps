@@ -1,9 +1,14 @@
-import { SignUp } from '@clerk/nextjs';
+import { Suspense } from 'react';
+import SignUpClient from './SignUpClient';
 
 export default function SignUpPage() {
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
-      <SignUp />
-    </div>
+    <Suspense
+      fallback={
+        <main style={{ display: 'grid', placeItems: 'center', minHeight: '70vh' }}>Loading…</main>
+      }
+    >
+      <SignUpClient />
+    </Suspense>
   );
 }

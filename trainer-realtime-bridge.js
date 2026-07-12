@@ -68,6 +68,7 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
     let pendingBossGreeting = false;
     let pendingSilenceResponse = false;
     let sessionDifficulty = 'medium';
+    let sessionHintMode = false;
     let prospectSpeaking = false;
     let audioStreamForResponse = null;
     let activeResponseId = null;
@@ -365,11 +366,12 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
             return;
         }
 
-        const minGatekeeperResponses = 2;
-        const minUserTurns = 1;
+        // Align with prompt: ≥3 GK / ≥2 user; hint mode softens to 2 / 1
+        const minGatekeeperResponses = sessionHintMode ? 2 : 3;
+        const minUserTurns = sessionHintMode ? 1 : 2;
         if (gatekeeperResponseCount < minGatekeeperResponses || userTurnCount < minUserTurns) {
             console.log(
-                `[Trainer Realtime] Transfer REJECTED (gatekeeper=${gatekeeperResponseCount}, user=${userTurnCount})`
+                `[Trainer Realtime] Transfer REJECTED (gatekeeper=${gatekeeperResponseCount}, user=${userTurnCount}, hint=${sessionHintMode})`
             );
 
             xaiWs.send(JSON.stringify({
@@ -389,7 +391,7 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
                 type: 'response.create',
                 response: {
                     instructions:
-                        'Stay as the gatekeeper. Do NOT transfer yet. Continue screening — ask who is calling and what this is regarding.',
+                        'Stay as the gatekeeper. Do NOT transfer yet. Continue screening — ask who is calling and what this is regarding. Require their name and a specific business reason before transferring.',
                 },
             }));
             return;
@@ -448,10 +450,29 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
         if (msg.type !== 'start' || sessionStarted) return;
         sessionStarted = true;
 
-        const { leadId, prospectId, difficulty = 'medium', focus = 'standard', hintMode = false, voice, gatekeeperVoice: msgGatekeeperVoice, bossVoice: msgBossVoice, prospectOverride } = msg;
+        const { leadId, prospectId, difficulty = 'medium', focus = 'standard', hintMode = false, voice, gatekeeperVoice: msgGatekeeperVoice, bossVoice: msgBossVoice, prospectOverride, brandId, packId, playbookId, gateToken, userId: msgUserId, orgId: msgOrgId } = msg;
         sessionDifficulty = difficulty;
+        sessionHintMode = !!hintMode;
 
         try {
+            // Enforce session gate in local bridge (parity with production worker)
+            if (!gateToken) {
+                sendJson(browserWs, { type: 'error', error: 'Session gate required. Refresh and try again.' });
+                cleanup();
+                browserWs.close();
+                return;
+            }
+            const gateRes = await fetch(`http://127.0.0.1:${port}/api/trainer/session-gate?token=${encodeURIComponent(gateToken)}`);
+            if (!gateRes.ok) {
+                sendJson(browserWs, { type: 'error', error: 'No practice minutes left or gate expired. Upgrade to continue.' });
+                cleanup();
+                browserWs.close();
+                return;
+            }
+            const gateData = await gateRes.json().catch(() => ({}));
+            const userId = gateData.userId || msgUserId;
+            const orgId = msgOrgId;
+
             const xaiWsPromise = new Promise((resolve, reject) => {
                 const ws = new WebSocket('wss://api.x.ai/v1/realtime?model=grok-voice-latest', {
                     headers: {
@@ -464,7 +485,19 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
             });
 
             const [scenarioResult, connectedWs] = await Promise.all([
-                fetchTrainerPrompt(port, { leadId, prospectId: prospectId || leadId, difficulty, focus, hintMode, prospectOverride }),
+                fetchTrainerPrompt(port, {
+                    leadId,
+                    prospectId: prospectId || leadId,
+                    difficulty,
+                    focus,
+                    hintMode,
+                    prospectOverride,
+                    brandId,
+                    packId,
+                    playbookId,
+                    userId,
+                    orgId,
+                }),
                 xaiWsPromise,
             ]);
 

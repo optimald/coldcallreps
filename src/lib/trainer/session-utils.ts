@@ -87,7 +87,7 @@ export function formatDuration(secs: number): string {
 }
 
 export function scoreColor(score: number): string {
-  if (score >= 80) return '#22c55e';
-  if (score >= 60) return '#eab308';
-  return '#ef4444';
+  if (score >= 80) return 'var(--good)';
+  if (score >= 60) return 'var(--warn)';
+  return 'var(--bad)';
 }

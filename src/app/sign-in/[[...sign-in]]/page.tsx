@@ -1,9 +1,12 @@
+'use client';
+
 import { SignIn } from '@clerk/nextjs';
+import ClerkAuthShell from '@/components/ClerkAuthShell';
 
 export default function SignInPage() {
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
+    <ClerkAuthShell mode="sign-in">
       <SignIn />
-    </div>
+    </ClerkAuthShell>
   );
 }

@@ -26,8 +26,13 @@ export async function GET(req: Request) {
         overallScore: true,
         pointsEarned: true,
         focusArea: true,
+        integrityFlags: true,
       },
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
     });
+
+    const { hasBlockingIntegrity } = await import('@/lib/integrity-gate');
 
     const byUser = new Map<
       string,
@@ -35,6 +40,8 @@ export async function GET(req: Request) {
     >();
 
     for (const s of sessions) {
+      // Exclude integrity-flagged sessions from public leaderboard signal
+      if (hasBlockingIntegrity(s.integrityFlags)) continue;
       const cur = byUser.get(s.userId) || { points: 0, sessions: 0, scoreSum: 0 };
       cur.points += s.pointsEarned || s.overallScore;
       cur.sessions += 1;

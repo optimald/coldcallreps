@@ -2,126 +2,928 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Turso / libSQL (SQLite-compatible). Prisma CLI uses DATABASE_URL (local file).
+// App runtime uses @prisma/adapter-libsql + TURSO_DATABASE_URL / TURSO_AUTH_TOKEN.
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 enum PlanTier {
+  FREE
   STARTER
   PRO
+  RECRUITER
+  TEAM
+}
+
+enum PlatformRole {
+  REP
+  RECRUITER
+  BRAND
+  MANAGER
+  SUPERADMIN
 }
 
 model UserProfile {
-  id                 String    @id // Clerk userId
-  email              String?
-  displayName        String?
-  orgId              String?
-  plan               PlanTier  @default(STARTER)
-  minutesRemaining   Int       @default(80)
-  minutesUsed        Int       @default(0)
-  stripeCustomerId   String?
+  id                   String       @id // Clerk userId
+  email                String?
+  displayName          String?
+  orgId                String?
+  platformRole         PlatformRole @default(REP)
+  /** JSON PlatformRole[] — roles unlocked after accept + onboarding (REP / BRAND). */
+  unlockedRolesJSON    String       @default("[\"REP\"]")
+  /** When the SDR profile onboarding was completed. */
+  repOnboardedAt       DateTime?
+  /** When the Brand desk onboarding was completed. */
+  brandOnboardedAt     DateTime?
+  /** Optional public/resume avatar URL (https or site-relative). */
+  avatarUrl            String?
+  plan                 PlanTier     @default(FREE)
+  minutesRemaining     Int          @default(5)
+  minutesUsed          Int          @default(0)
+  bountyCredits        Int          @default(0) // cents earned from bounties
+  stripeCustomerId     String?
   stripeSubscriptionId String?
-  referralCode       String    @unique
-  referredByCode     String?
-  totalPoints        Int       @default(0)
-  currentStreak      Int       @default(0)
-  longestStreak      Int       @default(0)
-  lastSessionDate    DateTime?
-  hiringBoardOptIn   Boolean   @default(false)
-  hiringHeadline     String?
-  hiringBio          String?
-  badges             String    @default("[]") // JSON string[]
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  /** Stripe Connect account (acct_…) for receiving campaign payouts. */
+  stripeConnectAccountId String?
+  stripeConnectDetailsSubmitted Boolean @default(false)
+  stripeConnectPayoutsEnabled   Boolean @default(false)
+  lastPaymentFailedAt  DateTime?
+  referralCode         String       @unique
+  referredByCode       String?
+  totalPoints          Int          @default(0)
+  currentStreak        Int          @default(0)
+  longestStreak        Int          @default(0)
+  lastSessionDate      DateTime?
+  hiringBoardOptIn     Boolean      @default(false)
+  hiringHeadline       String?
+  hiringBio            String?
+  badges               String       @default("[]") // JSON string[]
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  sessions   TrainerSession[]
-  prospects  Prospect[]
-  referrals  Referral[]       @relation("Referrer")
-  referred   Referral[]       @relation("Referee")
+  sessions            TrainerSession[]
+  prospects           Prospect[]
+  referrals           Referral[]          @relation("Referrer")
+  referred            Referral[]          @relation("Referee")
+  repProfile          RepProfile?
+  recruiterSeat       RecruiterSeat?
+  sentMessages        DirectMessage[]     @relation("MessageFrom")
+  receivedMessages    DirectMessage[]     @relation("MessageTo")
+  jobPosts            JobPost[]
+  jobApplications     JobApplication[]
+  digestSubscription  DigestSubscription?
+  academyMemberships  AcademyMember[]
+  certifications      Certification[]
+  clips               Clip[]
+  attributionEvents   AttributionEvent[]
+  crmConnections      CrmConnection[]
+  coachMemories       CoachMemory[]
+  seasonPasses        SeasonPass[]
+  tournamentEntries   TournamentEntry[]
+  playbooks           Playbook[]
+  apiKeys             ApiKey[]
+  brandsOwned         Brand[]             @relation("BrandOwner")
+  auditLogs           AuditLog[]
+  webhookEndpoints    WebhookEndpoint[]
+  minuteHolds         MinuteHold[]
+  bountyAwards        BountyAward[]
+  campaignsCreated    Campaign[]          @relation("CampaignCreator")
+  campaignApplications CampaignApplication[]
+  campaignPayoutsPaid  CampaignPayout[]    @relation("PayoutBrand")
+  campaignPayoutsEarned CampaignPayout[]   @relation("PayoutRep")
+  callLogs            CallLog[]
+  callbackLocks       Prospect[]           @relation("CallbackLock")
 
   @@index([orgId])
   @@index([totalPoints])
   @@index([hiringBoardOptIn])
+  @@index([platformRole])
+  @@index([stripeConnectAccountId])
 }
 
 model Prospect {
-  id               String   @id @default(cuid())
-  userId           String
-  user             UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companyName      String
-  industry         String?
-  city             String?
-  state            String?
-  phone            String?
-  website          String?
-  ownerName        String?
-  ownerTitle       String?  @default("Owner")
-  gatekeeperName   String?  @default("Sarah")
-  reviewRating     Float?
-  reviewCount      Int?
-  hooksJSON        String?  // JSON string[] marketing hooks from scraper
-  source           String   @default("manual") // manual | maps | url
-  mapsPlaceId      String?
-  createdAt        DateTime @default(now())
+  id             String      @id @default(cuid())
+  userId         String
+  user           UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /** Brand-owned lead list (founders load/enrich; accepted SDRs dial these). */
+  brandId        String?
+  brand          Brand?      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  /** Optional campaign assignment — SDRs on ACTIVE apps dial these. */
+  campaignId     String?
+  campaign       Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  companyName    String
+  industry       String?
+  city           String?
+  state          String?
+  phone          String?
+  website        String?
+  ownerName      String?
+  ownerTitle     String?     @default("Owner")
+  gatekeeperName String?     @default("Sarah")
+  reviewRating   Float?
+  reviewCount    Int?
+  hooksJSON      String? // JSON string[] marketing hooks from scraper
+  notes          String?    
+  status         String      @default("new") // new | warming | dialing | done
+  enrichmentStatus String   @default("none") // none | done | failed
+  imageUrl       String?
+  imageR2Key     String?
+  source         String      @default("manual") // manual | maps | url | import | training
+  mapsPlaceId    String?
+  /** 48h inbound callback routing — last SDR who dialed this lead on a campaign. */
+  callbackLockedUntil    DateTime?
+  callbackLockedByUserId String?
+  callbackLockedBy       UserProfile? @relation("CallbackLock", fields: [callbackLockedByUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   sessions TrainerSession[]
+  callLogs CallLog[]
 
   @@index([userId])
+  @@index([userId, mapsPlaceId])
+  @@index([userId, status])
+  @@index([brandId, status])
+  @@index([campaignId])
+  @@index([brandId, campaignId])
+  @@index([callbackLockedByUserId, callbackLockedUntil])
+}
+
+/** Manual browser→PSTN call log (no autodialer / AI outbound). */
+model CallLog {
+  id               String       @id @default(cuid())
+  userId           String
+  user             UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prospectId       String?
+  prospect         Prospect?    @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  campaignId       String?
+  brandId          String?
+  brand            Brand?       @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  brandPhoneNumberId String?
+  brandPhoneNumber BrandPhoneNumber? @relation(fields: [brandPhoneNumberId], references: [id], onDelete: SetNull)
+  direction        String       @default("outbound") // outbound | inbound
+  status           String       @default("initiated") // initiated | ringing | in-progress | completed | failed | no_answer
+  duration         Int? // seconds
+  toNumber         String?
+  fromNumber       String?
+  telephonyCallSid String?
+  outcome          String? // interested | callback | not_interested | voicemail | no_answer | other
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([prospectId])
+  @@index([telephonyCallSid])
+  @@index([brandId])
+  @@index([brandPhoneNumberId])
 }
 
 model TrainerSession {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   userId         String
   user           UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
   prospectId     String?
   prospect       Prospect? @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  brandId        String?
+  packId         String?
+  gateHoldId     String? // MinuteHold jti bound at session start
   scenarioType   String
   focusArea      String
-  difficulty     String   @default("medium")
-  transcript     String   @db.Text
-  scorecardJSON  String   @db.Text
+  difficulty     String    @default("medium")
+  transcript     String   
+  scorecardJSON  String   
   overallScore   Int
-  categoryScores String   @db.Text
-  duration       Int      @default(0)
-  pointsEarned   Int      @default(0)
-  coachLogJSON   String?  @db.Text
-  createdAt      DateTime @default(now())
+  categoryScores String   
+  duration       Int       @default(0)
+  pointsEarned   Int       @default(0)
+  coachLogJSON    String?  
+  integrityFlags  String? // JSON IntegrityFlag[]
+  clientRequestId String? // idempotency key from client
+  createdAt       DateTime  @default(now())
 
+  clips Clip[]
+
+  @@index([userId, clientRequestId])
   @@index([userId])
   @@index([createdAt])
   @@index([focusArea, overallScore])
   @@index([overallScore])
+  @@index([brandId])
+}
+
+/** Soft-reserve practice minutes so concurrent starts can't overdraw. */
+model MinuteHold {
+  id         String    @id // jti from gate token
+  userId     String
+  user       UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  minutes    Int       @default(1)
+  brandId    String?
+  packId     String?
+  expiresAt  DateTime
+  startedAt  DateTime? // set on first worker gate verify
+  consumedAt DateTime? // set when scorecard deducts
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
 }
 
 model Referral {
-  id              String   @id @default(cuid())
-  referrerId      String
-  referrer        UserProfile @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
-  refereeId       String?
-  referee         UserProfile? @relation("Referee", fields: [refereeId], references: [id], onDelete: SetNull)
-  code            String
-  status          String   @default("pending") // pending | completed | rewarded
-  bonusMinutes    Int      @default(30)
-  createdAt       DateTime @default(now())
-  completedAt     DateTime?
+  id           String       @id @default(cuid())
+  referrerId   String
+  referrer     UserProfile  @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId    String?      @unique
+  referee      UserProfile? @relation("Referee", fields: [refereeId], references: [id], onDelete: SetNull)
+  code         String
+  status       String       @default("pending") // pending | completed | rewarded
+  bonusMinutes Int          @default(100)
+  createdAt    DateTime     @default(now())
+  completedAt  DateTime?
 
   @@index([code])
   @@index([referrerId])
 }
 
-model WeeklyLeaderboard {
-  id           String   @id @default(cuid())
-  weekStart    DateTime
-  scope        String   // global | org | focus
-  scopeKey     String   // "global" | orgId | focusArea
+/** Stripe webhook idempotency — one row per event.id */
+model StripeEvent {
+  id          String   @id // Stripe event id (evt_…)
+  type        String
+  processedAt DateTime @default(now())
+}
+
+/** One bounty payout per user (idempotent awards). */
+model BountyAward {
+  id          String      @id @default(cuid())
+  bountyId    String
+  bounty      Bounty      @relation(fields: [bountyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardCents Int         @default(0)
+  sessionId   String?
+  createdAt   DateTime    @default(now())
+
+  @@unique([bountyId, userId])
+  @@index([userId])
+}
+
+// ——— V2 Talent Signal ———
+
+model RepProfile {
+  id                   String      @id @default(cuid())
+  userId               String      @unique
+  user                 UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug                 String      @unique
+  bio                  String?    
+  skillsJSON           String      @default("[]") // string[]
+  clipUrlsJSON         String      @default("[]") // string[] external / legacy highlight URLs
+  featuredClipIdsJSON  String      @default("[]") // ordered Clip.id[] (max 3) featured on public resume
+  verified             Boolean     @default(false)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([slug])
+}
+
+model RecruiterSeat {
+  id               String      @id @default(cuid())
+  userId           String      @unique
+  user             UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company          String?
+  active           Boolean     @default(true)
+  paid             Boolean     @default(false)
+  stripePriceId    String?
+  creditsRemaining Int         @default(10) // Direct Connect messages / mo
+  createdAt        DateTime    @default(now())
+}
+
+model DirectMessage {
+  id         String      @id @default(cuid())
+  fromUserId String
+  fromUser   UserProfile @relation("MessageFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     UserProfile @relation("MessageTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  body       String     
+  status     String      @default("queued") // queued | sent | failed | stub
+  createdAt  DateTime    @default(now())
+
+  @@index([toUserId, createdAt])
+  @@index([fromUserId])
+}
+
+model JobPost {
+  id            String      @id @default(cuid())
+  posterId      String
+  poster        UserProfile @relation(fields: [posterId], references: [id], onDelete: Cascade)
+  title         String
+  company       String?
+  description   String     
+  scenarioTags  String      @default("[]") // JSON string[]
+  orgId         String?
+  active        Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  applications JobApplication[]
+
+  @@index([active, createdAt])
+  @@index([posterId])
+}
+
+model JobApplication {
+  id        String      @id @default(cuid())
+  jobId     String
+  job       JobPost     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String?    
+  status    String      @default("submitted") // submitted | viewed | rejected | hired
+  createdAt DateTime    @default(now())
+
+  @@unique([jobId, userId])
+  @@index([userId])
+  @@index([jobId, createdAt])
+}
+
+model DigestSubscription {
+  id        String      @id @default(cuid())
+  userId    String      @unique
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean     @default(false)
+  email     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model Academy {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  slug        String?  @unique // public /{slug} (also /t/{slug} redirect)
+  description String?
+  publicBio   String? 
+  openToHire  Boolean  @default(false) // team is hiring / open to talent
+  websiteUrl  String?
+  createdAt   DateTime @default(now())
+
+  curricula AcademyCurriculum[]
+  members   AcademyMember[]
+
+  @@index([orgId])
+  @@index([slug])
+}
+
+/** Shared practice minutes for a Clerk organization (Team plan). */
+model OrgMinutePool {
+  id               String   @id @default(cuid())
+  orgId            String   @unique
+  minutesRemaining Int      @default(0)
+  minutesUsed      Int      @default(0)
+  lastTopUpAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AcademyCurriculum {
+  id        String  @id @default(cuid())
+  academyId String
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  title     String
+  focusAreas String @default("[]") // JSON
+  sortOrder Int     @default(0)
+
+  @@index([academyId])
+}
+
+model AcademyMember {
+  id           String      @id @default(cuid())
+  academyId    String
+  academy      Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
   userId       String
-  displayName  String?
-  points       Int
-  sessions     Int
-  avgScore     Float
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         String      @default("member") // member | manager
+  progressJSON String      @default("{}") // { [curriculumId]: { sessions, bestScore, complete } }
+  createdAt    DateTime    @default(now())
+
+  @@unique([academyId, userId])
+}
+
+// ——— V3 Brand Arena ———
+
+model Brand {
+  id          String      @id @default(cuid())
+  ownerId     String?
+  owner       UserProfile? @relation("BrandOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  name        String
+  slug        String      @unique
+  description String?
+  logoUrl     String?
+  /** Founder / central line when locked SDR is offline for inbound callbacks. */
+  fallbackPhoneE164 String?
+  /** Optional IVR greeting for inbound callbacks. */
+  inboundGreeting   String?
+  /** Legacy single DID — migrated into BrandPhoneNumber pool; prefer phoneNumbers. */
+  twilioPhoneE164   String?
+  twilioPhoneSid    String?
+  createdAt   DateTime    @default(now())
+
+  packs           ProductPack[]
+  playbooks       Playbook[]
+  sponsoredBoards SponsoredBoard[]
+  bounties        Bounty[]
+  certifications  Certification[]
+  campaigns       Campaign[]
+  prospects       Prospect[]
+  phoneNumbers    BrandPhoneNumber[]
+  callLogs        CallLog[]
+  wallet          BrandWallet?
+  productHuntImports ProductHuntImport[]
+
+  @@index([slug])
+  @@index([twilioPhoneE164])
+}
+
+/** Brand-owned Twilio DID pool (local presence). Platform Twilio account, tagged to brand. */
+model BrandPhoneNumber {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  e164      String
+  twilioSid String?
+  /** NANP area code (NPA), e.g. "312" for Chicago. */
+  areaCode  String
+  label     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  callLogs CallLog[]
+
+  @@unique([brandId, e164])
+  @@index([brandId, areaCode])
+  @@index([e164])
+  @@index([twilioSid])
+}
+
+model ProductPack {
+  id             String   @id @default(cuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name           String
+  icpJSON        String   @default("{}")
+  scriptsJSON    String   @default("[]")
+  objectionsJSON String   @default("[]")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  campaigns Campaign[]
+
+  @@index([brandId])
+}
+
+model SponsoredBoard {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title     String
+  focusArea String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([brandId])
+}
+
+model Bounty {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  rewardCents Int      @default(0)
+  minScore    Int      @default(80)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  awards BountyAward[]
+
+  @@index([brandId])
+}
+
+model Certification {
+  id        String      @id @default(cuid())
+  brandId   String
+  brand     Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score     Int
+  label     String
+  createdAt DateTime    @default(now())
+
+  @@unique([brandId, userId])
+  @@index([userId])
+}
+
+model Clip {
+  id          String         @id @default(cuid())
+  userId      String
+  user        UserProfile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String?
+  session     TrainerSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  status      String         @default("draft") // draft | processing | ready | failed
+  title       String?
+  mediaUrl    String? // public R2 or /h/{id} page URL
+  r2Key       String? // object key in R2 bucket
+  durationSec Int?
+  createdAt   DateTime       @default(now())
+
+  @@index([userId])
+  @@index([sessionId])
+}
+
+model AttributionEvent {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  brandId   String?
+  eventType String
+  metaJSON  String      @default("{}")
+  createdAt DateTime    @default(now())
+
+  @@index([brandId, createdAt])
+}
+
+// ——— V4 Cold Call OS ———
+
+model CrmConnection {
+  id              String      @id @default(cuid())
+  userId          String
+  user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String // hubspot | salesforce | pipedrive | google_calendar | microsoft_calendar | other
+  status          String      @default("disconnected") // disconnected | connected | error
+  externalId      String?
+  /** AES-GCM ciphertext of OAuth access token (never return raw to clients). */
+  accessTokenEnc  String?    
+  /** AES-GCM ciphertext of OAuth refresh token. */
+  refreshTokenEnc String?    
+  tokenExpiresAt  DateTime?
+  scopes          String?
+  metaJSON        String      @default("{}")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([userId, provider, status])
+}
+
+/** Meeting booked onto a brand calendar as campaign/gig outcome handoff. */
+model CalendarBooking {
+  id              String      @id @default(cuid())
+  campaignId      String?
+  applicationId   String?
+  brandId         String
+  createdByUserId String
+  provider        String      @default("google_calendar")
+  externalEventId String
+  htmlLink        String?
+  meetLink        String?
+  title           String
+  startsAt        DateTime
+  endsAt          DateTime
+  attendeeEmails  String      @default("[]") // JSON string[]
+  createdAt       DateTime    @default(now())
+
+  @@index([campaignId])
+  @@index([applicationId])
+  @@index([brandId, createdAt])
+  @@index([createdByUserId])
+}
+
+model CoachMemory {
+  id        String      @id @default(cuid())
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  valueJSON String     
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([userId, key])
+}
+
+model Tournament {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  focusArea   String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  entries TournamentEntry[]
+}
+
+model SeasonPass {
+  id        String      @id @default(cuid())
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seasonKey String
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, seasonKey])
+}
+
+model TournamentEntry {
+  id           String      @id @default(cuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score        Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  @@unique([tournamentId, userId])
+}
+
+model Playbook {
+  id          String      @id @default(cuid())
+  userId      String?
+  user        UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orgId       String?
+  brandId     String?
+  brand       Brand?      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title       String
+  contentJSON String      @default("{}")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  campaigns Campaign[]
+
+  @@index([orgId])
+  @@index([brandId])
+  @@index([userId])
+}
+
+// ——— Campaign marketplace (brand gigs) ———
+
+enum CampaignGoalType {
+  QUALIFIED_LEAD
+  BOOKED_MEETING
+}
+
+enum CampaignStatus {
+  DRAFT
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+enum CampaignApplicationStatus {
+  APPLIED
+  ACCEPTED
+  ACTIVE
+  COMPLETED
+  REJECTED
+  WITHDRAWN
+}
+
+/** Brand-owned paid outcome campaigns — SDRs browse as gigs. */
+model Campaign {
+  id               String           @id @default(cuid())
+  brandId          String
+  brand            Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdByUserId  String?
+  createdBy        UserProfile?     @relation("CampaignCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  title            String
+  description      String          
+  icpText          String?         
+  goalType         CampaignGoalType @default(BOOKED_MEETING)
+  payoutCents      Int
+  /** Productized tier: TIER1 | TIER2 | TIER3 */
+  pricingTier      String           @default("TIER2")
+  platformFeeBps   Int              @default(2000) // 20% platform fee
+  status           CampaignStatus   @default(DRAFT)
+  minScore         Int?             @default(80)
+  requireCertification Boolean      @default(true)
+  /** Min completed trainer sessions on this brand before apply. */
+  minPracticeSessions Int           @default(1)
+  packId           String?
+  pack             ProductPack?     @relation(fields: [packId], references: [id], onDelete: SetNull)
+  playbookId       String?
+  playbook         Playbook?        @relation(fields: [playbookId], references: [id], onDelete: SetNull)
+  budgetCents      Int?
+  /** Capital locked from BrandWallet while campaign is OPEN. */
+  escrowLockedCents Int             @default(0)
+  maxAwards        Int?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  applications CampaignApplication[]
+  prospects    Prospect[]
+  payouts      CampaignPayout[]
+  appointmentClaims AppointmentClaim[]
+
+  @@index([brandId, status])
+  @@index([status, createdAt])
+  @@index([createdByUserId])
+  @@index([packId])
+  @@index([playbookId])
+}
+
+enum CampaignPayoutStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+}
+
+model CampaignApplication {
+  id         String                     @id @default(cuid())
+  campaignId String
+  campaign   Campaign                   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  user       UserProfile                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     CampaignApplicationStatus  @default(APPLIED)
+  message    String?                   
+  createdAt  DateTime                   @default(now())
+  updatedAt  DateTime                   @updatedAt
+
+  payout CampaignPayout?
+  appointmentClaims AppointmentClaim[]
+
+  @@unique([campaignId, userId])
+  @@index([userId, status])
+  @@index([campaignId, status])
+}
+
+/** Brand prepaid wallet for escrow-funded appointment campaigns. */
+model BrandWallet {
+  id           String   @id @default(cuid())
+  brandId      String   @unique
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  balanceCents Int      @default(0)
+  currency     String   @default("usd")
+  updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 
-  @@unique([weekStart, scope, scopeKey, userId])
-  @@index([weekStart, scope, scopeKey, points])
+  ledger WalletLedger[]
+}
+
+enum WalletLedgerType {
+  FUND
+  ESCROW_LOCK
+  ESCROW_RELEASE
+  ESCROW_REFUND
+  ADJUSTMENT
+}
+
+model WalletLedger {
+  id             String          @id @default(cuid())
+  walletId       String
+  wallet         BrandWallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type           WalletLedgerType
+  amountCents    Int
+  balanceAfter   Int
+  campaignId     String?
+  claimId        String?
+  stripeSessionId String?
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([campaignId])
+}
+
+enum AppointmentClaimStatus {
+  PENDING_AUDIT
+  PASSED
+  FAILED
+  PAID
+}
+
+/** SDR claims a booked meeting — AI audit + escrow release. */
+model AppointmentClaim {
+  id              String                 @id @default(cuid())
+  campaignId      String
+  campaign        Campaign               @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applicationId   String
+  application     CampaignApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  repUserId       String
+  callLogId       String?
+  calendarEventId String?
+  prospectName    String?
+  meetingAt       DateTime?
+  notes           String?
+  transcriptSnippet String?
+  status          AppointmentClaimStatus @default(PENDING_AUDIT)
+  auditJSON       String?
+  auditScore      Int?
+  failureReason   String?
+  verifiedAt      DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([campaignId, status])
+  @@index([applicationId])
+  @@index([repUserId, createdAt])
+}
+
+/** Product Hunt launch ingest → founder prospect pipeline. */
+model ProductHuntImport {
+  id           String   @id @default(cuid())
+  brandId      String?
+  brand        Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  phId         String
+  name         String
+  tagline      String?
+  url          String?
+  votesCount   Int      @default(0)
+  featuredAt   DateTime?
+  rawJSON      String?
+  prospectId   String?
+  createdAt    DateTime @default(now())
+
+  @@unique([phId])
+  @@index([brandId, createdAt])
+  @@index([featuredAt])
+}
+
+/** One outcome payout per application — brand pays via Connect destination charge / escrow release. */
+model CampaignPayout {
+  id                      String               @id @default(cuid())
+  campaignId              String
+  campaign                Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  applicationId           String               @unique
+  application             CampaignApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  brandUserId             String
+  brandUser               UserProfile          @relation("PayoutBrand", fields: [brandUserId], references: [id], onDelete: Cascade)
+  repUserId               String
+  repUser                 UserProfile          @relation("PayoutRep", fields: [repUserId], references: [id], onDelete: Cascade)
+  /** Amount brand is charged (campaign.payoutCents). */
+  grossCents              Int
+  platformFeeCents        Int
+  /** Amount transferred to the SDR (gross − fee). */
+  netCents                Int
+  platformFeeBps          Int                  @default(2000)
+  status                  CampaignPayoutStatus @default(PENDING)
+  stripeCheckoutSessionId String?
+  stripePaymentIntentId   String?
+  stripeTransferId        String?
+  failureReason           String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  paidAt                  DateTime?
+
+  @@index([campaignId, status])
+  @@index([repUserId, status])
+  @@index([brandUserId, createdAt])
+  @@index([stripeCheckoutSessionId])
+}
+
+model ApiKey {
+  id         String      @id @default(cuid())
+  userId     String
+  user       UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String
+  keyPrefix  String
+  lastUsedAt DateTime?
+  createdAt  DateTime    @default(now())
+  revokedAt  DateTime?
+
+  @@index([keyPrefix])
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String       @id @default(cuid())
+  actorId   String?
+  actor     UserProfile? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  targetType String?
+  targetId  String?
+  metaJSON  String       @default("{}")
+  createdAt DateTime     @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([action])
+}
+
+model WebhookEndpoint {
+  id            String      @id @default(cuid())
+  userId        String
+  user          UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url           String
+  secret        String
+  events        String      @default("[\"session.scored\",\"bounty.cleared\",\"application.submitted\"]")
+  active        Boolean     @default(true)
+  lastAttemptAt DateTime?
+  lastError     String?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId])
 }

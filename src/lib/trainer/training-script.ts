@@ -105,6 +105,9 @@ export async function buildTrainingScript(options: {
   focus?: string;
   difficulty?: string;
   companyName?: string;
+  userId?: string | null;
+  orgId?: string | null;
+  playbookId?: string | null;
 }): Promise<TrainingScript> {
   const focus = options.focus || 'standard';
   const difficulty = options.difficulty || 'medium';
@@ -120,10 +123,29 @@ export async function buildTrainingScript(options: {
     }
   }
 
-  const sections = (FOCUS_FLOWS[focus] || FOCUS_FLOWS.standard).map((s) => ({
+  let sections = (FOCUS_FLOWS[focus] || FOCUS_FLOWS.standard).map((s) => ({
     ...s,
     points: s.points.map((pt) => pt.replace(/\[Owner\]/g, 'the owner').replace(/\[Company\]/g, companyName)),
   }));
+
+  if (options.playbookId && options.userId) {
+    try {
+      const { resolvePlaybookContext } = await import('@/lib/trainer/playbook-context');
+      const pb = await resolvePlaybookContext({
+        userId: options.userId,
+        orgId: options.orgId,
+        playbookId: options.playbookId,
+      });
+      if (pb?.sections?.length) {
+        sections = [
+          { title: `Playbook — ${pb.title}`, points: [`Using agency playbook: ${pb.title}`] },
+          ...pb.sections,
+        ];
+      }
+    } catch {
+      /* keep default sections */
+    }
+  }
 
   return { companyName, focus, difficulty, sections };
 }

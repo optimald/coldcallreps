@@ -22,6 +22,13 @@ export interface TrainerSessionConfig {
     gatekeeperVoice?: string;
     bossVoice?: string;
     hintMode?: boolean;
+    brandId?: string;
+    packId?: string;
+    playbookId?: string;
+    /** Clerk user id — required for playbook/memory resolution via worker internal prompt fetch */
+    userId?: string;
+    orgId?: string;
+    gateToken?: string;
     prospectOverride?: Record<string, unknown>;
 }
 
@@ -80,6 +87,10 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     const awaitingGatekeeperGreetingRef = useRef(false);
     const prospectSpeakingRef = useRef(false);
     const acceptProspectAudioRef = useRef(false);
+    const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<Blob[]>([]);
+    const recordingBlobRef = useRef<Blob | null>(null);
 
     micEnabledRef.current = micEnabled;
 
@@ -110,6 +121,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
+        if (mixDestRef.current) source.connect(mixDestRef.current);
 
         const now = ctx.currentTime;
         const start = Math.max(now, nextPlayTimeRef.current);
@@ -180,13 +192,39 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         };
 
         source.connect(processor);
+        if (mixDestRef.current) source.connect(mixDestRef.current);
         const silent = ctx.createGain();
         silent.gain.value = 0;
         processor.connect(silent);
         silent.connect(ctx.destination);
     }, [stopMicCapture]);
 
+    const stopRecording = useCallback((): Promise<Blob | null> => {
+        return new Promise((resolve) => {
+            const recorder = mediaRecorderRef.current;
+            if (!recorder || recorder.state === 'inactive') {
+                resolve(recordingBlobRef.current);
+                return;
+            }
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunksRef.current, {
+                    type: recorder.mimeType || 'audio/webm',
+                });
+                recordingBlobRef.current = blob.size > 0 ? blob : null;
+                recordedChunksRef.current = [];
+                mediaRecorderRef.current = null;
+                resolve(recordingBlobRef.current);
+            };
+            try {
+                recorder.stop();
+            } catch {
+                resolve(recordingBlobRef.current);
+            }
+        });
+    }, []);
+
     const disconnect = useCallback(() => {
+        void stopRecording();
         stopMicCapture();
         interruptPlayback();
 
@@ -205,6 +243,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         audioFlushReadyRef.current = false;
         earlyAudioBufferRef.current = [];
         awaitingGatekeeperGreetingRef.current = false;
+        mixDestRef.current = null;
 
         if (audioContextRef.current) {
             audioContextRef.current.close().catch(() => {});
@@ -217,18 +256,55 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         setIsUserSpeaking(false);
         setPhase('prospect');
         setTwoStage(false);
-    }, [interruptPlayback, stopMicCapture]);
+    }, [interruptPlayback, stopMicCapture, stopRecording]);
 
     const connect = useCallback(
-        async (config: TrainerSessionConfig) => {
+        async (config: TrainerSessionConfig): Promise<boolean> => {
             disconnect();
             setIsConnecting(true);
             setTranscript([]);
 
             try {
-                const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+                const AudioCtx =
+                    window.AudioContext ||
+                    (window as unknown as { webkitAudioContext: typeof AudioContext })
+                        .webkitAudioContext;
+                const ctx = new AudioCtx({ sampleRate: SAMPLE_RATE });
                 audioContextRef.current = ctx;
-                if (ctx.state === 'suspended') await ctx.resume();
+                // iOS / Safari often start suspended until a user gesture — resume aggressively
+                if (ctx.state === 'suspended') {
+                    try {
+                        await ctx.resume();
+                    } catch {
+                        /* ignore */
+                    }
+                }
+                const unlock = () => {
+                    if (audioContextRef.current?.state === 'suspended') {
+                        void audioContextRef.current.resume();
+                    }
+                };
+                window.addEventListener('touchstart', unlock, { once: true, passive: true });
+                window.addEventListener('click', unlock, { once: true });
+
+                // Mixed recording destination for highlight clips (mic + prospect playback)
+                recordingBlobRef.current = null;
+                recordedChunksRef.current = [];
+                const mixDest = ctx.createMediaStreamDestination();
+                mixDestRef.current = mixDest;
+                try {
+                    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                        ? 'audio/webm;codecs=opus'
+                        : 'audio/webm';
+                    const recorder = new MediaRecorder(mixDest.stream, { mimeType: mime });
+                    mediaRecorderRef.current = recorder;
+                    recorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+                    };
+                    recorder.start(1000);
+                } catch {
+                    mediaRecorderRef.current = null;
+                }
 
                 // Parallel init: start mic capture before WebSocket is ready (xAI best practice)
                 await startMicCapture();
@@ -240,13 +316,32 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                 wsRef.current = ws;
 
                 await new Promise<void>((resolve, reject) => {
+                    let settled = false;
+
+                    const failConnect = (message: string) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timeout);
+                        try {
+                            ws.onopen = null;
+                            ws.onmessage = null;
+                            ws.onerror = null;
+                            ws.onclose = null;
+                            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                                ws.close();
+                            }
+                        } catch {
+                            /* ignore */
+                        }
+                        if (wsRef.current === ws) wsRef.current = null;
+                        reject(new Error(message));
+                    };
+
                     const timeout = setTimeout(() => {
-                        reject(
-                            new Error(
-                                process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL
-                                    ? 'Realtime voice unavailable. Check the Cloudflare Durable Object worker is deployed and NEXT_PUBLIC_TRAINER_REALTIME_URL is correct.'
-                                    : 'Realtime voice unavailable. Start with "npm run dev" (node server.js), or set NEXT_PUBLIC_TRAINER_REALTIME_URL to the Cloudflare worker.'
-                            )
+                        failConnect(
+                            process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL
+                                ? 'Realtime voice unavailable. Check the Cloudflare Durable Object worker is deployed and NEXT_PUBLIC_TRAINER_REALTIME_URL is correct.'
+                                : 'Realtime voice unavailable. Start with "npm run dev" (node server.js), or set NEXT_PUBLIC_TRAINER_REALTIME_URL to the Cloudflare worker.'
                         );
                     }, 8000);
 
@@ -264,6 +359,8 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
 
                         switch (msg.type) {
                             case 'ready':
+                                if (settled) return;
+                                settled = true;
                                 clearTimeout(timeout);
                                 setIsConnected(true);
                                 setIsConnecting(false);
@@ -360,9 +457,15 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                             case 'call.ended':
                                 onCallEnded?.(msg.reason || 'ended');
                                 break;
-                            case 'error':
-                                onError?.(msg.message || 'Realtime session error');
+                            case 'error': {
+                                const errText = msg.message || msg.error || 'Realtime session error';
+                                if (!settled) {
+                                    failConnect(errText);
+                                } else {
+                                    onError?.(errText);
+                                }
                                 break;
+                            }
                             case 'closed':
                                 setIsConnected(false);
                                 break;
@@ -370,23 +473,33 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                     };
 
                     ws.onerror = () => {
-                        clearTimeout(timeout);
-                        reject(
-                            new Error(
-                                'WebSocket connection failed. Use "npm run dev:server" for xAI realtime voice.'
-                            )
+                        failConnect(
+                            'WebSocket connection failed. Use "npm run dev" (node server.js) for realtime voice.'
                         );
                     };
 
                     ws.onclose = () => {
+                        if (!settled) {
+                            failConnect(
+                                process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL
+                                    ? 'Realtime voice unavailable. Check the Cloudflare Durable Object worker is deployed and NEXT_PUBLIC_TRAINER_REALTIME_URL is correct.'
+                                    : 'Realtime voice unavailable. Start with "npm run dev" (node server.js), or set NEXT_PUBLIC_TRAINER_REALTIME_URL to the Cloudflare worker.'
+                            );
+                            return;
+                        }
                         setIsConnected(false);
                         setIsConnecting(false);
                     };
                 });
-            } catch (err: any) {
+                return true;
+            } catch (err: unknown) {
+                const message =
+                    err instanceof Error ? err.message : 'Realtime voice connection failed';
                 disconnect();
                 setIsConnecting(false);
-                throw err;
+                onError?.(message);
+                // Do not rethrow — callers surface via onError / return value
+                return false;
             }
         },
         [disconnect, flushEarlyAudio, interruptPlayback, onCallEnded, onError, playPcm16Chunk, startMicCapture]
@@ -397,6 +510,8 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     return {
         connect,
         disconnect,
+        stopRecording,
+        getRecordingBlob: () => recordingBlobRef.current,
         isConnected,
         isConnecting,
         micEnabled,

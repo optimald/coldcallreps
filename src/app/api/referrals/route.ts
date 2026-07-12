@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { REFERRAL_BONUS_MINUTES } from '@/lib/product';
+import { PLAN, REFERRAL_BONUS_MINUTES, REFERRAL_REWARD_LABEL } from '@/lib/product';
 
 /** GET — your referral code + stats */
 export async function GET() {
@@ -12,11 +12,17 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+    const rewarded = referrals.filter((r) => r.status === 'rewarded').length;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com';
     return NextResponse.json({
       code: profile.referralCode,
       link: `${appUrl}/sign-up?ref=${profile.referralCode}`,
       bonusMinutes: REFERRAL_BONUS_MINUTES,
+      rewardLabel: REFERRAL_REWARD_LABEL,
+      planLabel: PLAN.STARTER.label,
+      planMinutes: PLAN.STARTER.minutes,
+      rewardedCount: rewarded,
+      referredByCode: profile.referredByCode || null,
       referrals,
       minutesRemaining: profile.minutesRemaining,
     });
@@ -28,7 +34,7 @@ export async function GET() {
   }
 }
 
-/** POST — apply a referral code (referee) */
+/** POST — apply a referral code (referee). Idempotent if already applied. */
 export async function POST(req: Request) {
   try {
     const profile = await requireUser();
@@ -38,7 +44,24 @@ export async function POST(req: Request) {
     }
 
     if (profile.referredByCode) {
-      return NextResponse.json({ error: 'Referral already applied' }, { status: 400 });
+      return NextResponse.json({
+        ok: true,
+        idempotent: true,
+        bonusMinutes: 0,
+        message: 'Referral already applied',
+      });
+    }
+
+    const existingRef = await prisma.referral.findUnique({
+      where: { refereeId: profile.id },
+    });
+    if (existingRef) {
+      return NextResponse.json({
+        ok: true,
+        idempotent: true,
+        bonusMinutes: 0,
+        message: 'Referral already applied',
+      });
     }
 
     const normalized = code.trim().toUpperCase();
@@ -53,34 +76,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid referral code' }, { status: 404 });
     }
 
-    await prisma.$transaction([
-      prisma.userProfile.update({
-        where: { id: profile.id },
-        data: {
-          referredByCode: normalized,
-          minutesRemaining: { increment: REFERRAL_BONUS_MINUTES },
-        },
-      }),
-      prisma.userProfile.update({
-        where: { id: referrer.id },
-        data: { minutesRemaining: { increment: REFERRAL_BONUS_MINUTES } },
-      }),
-      prisma.referral.create({
-        data: {
-          referrerId: referrer.id,
-          refereeId: profile.id,
-          code: normalized,
-          status: 'rewarded',
-          bonusMinutes: REFERRAL_BONUS_MINUTES,
-          completedAt: new Date(),
-        },
-      }),
-    ]);
+    try {
+      await prisma.$transaction([
+        prisma.userProfile.update({
+          where: { id: profile.id },
+          data: {
+            referredByCode: normalized,
+            minutesRemaining: { increment: REFERRAL_BONUS_MINUTES },
+          },
+        }),
+        prisma.userProfile.update({
+          where: { id: referrer.id },
+          data: { minutesRemaining: { increment: REFERRAL_BONUS_MINUTES } },
+        }),
+        prisma.referral.create({
+          data: {
+            referrerId: referrer.id,
+            refereeId: profile.id,
+            code: normalized,
+            status: 'rewarded',
+            bonusMinutes: REFERRAL_BONUS_MINUTES,
+            completedAt: new Date(),
+          },
+        }),
+      ]);
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return NextResponse.json({
+          ok: true,
+          idempotent: true,
+          bonusMinutes: 0,
+          message: 'Referral already applied',
+        });
+      }
+      throw err;
+    }
 
     return NextResponse.json({
       ok: true,
       bonusMinutes: REFERRAL_BONUS_MINUTES,
-      message: `+${REFERRAL_BONUS_MINUTES} minutes for you and your referrer`,
+      rewardLabel: REFERRAL_REWARD_LABEL,
+      message: `You and your friend each got ${REFERRAL_REWARD_LABEL}.`,
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

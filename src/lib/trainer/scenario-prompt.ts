@@ -7,6 +7,13 @@ export interface TrainerScenarioOptions {
   difficulty?: 'easy' | 'medium' | 'hard';
   focus?: string;
   hintMode?: boolean;
+  /** Brand Arena product pack — injects ICP / scripts / objections into the scenario */
+  brandId?: string | null;
+  packId?: string | null;
+  /** Agency playbook — injects talk tracks into the scenario */
+  playbookId?: string | null;
+  userId?: string | null;
+  orgId?: string | null;
   /** Inline prospect context when no DB row yet */
   prospectOverride?: {
     companyName?: string;
@@ -96,7 +103,12 @@ Website: ${hasWebsite === false ? 'NONE / broken' : hasWebsite ? 'Has a site' : 
 Hooks: ${hooks.length ? hooks.join(' | ') : 'None'}
 `;
   } else if (options.prospectId) {
-    const prospect = await prisma.prospect.findUnique({ where: { id: options.prospectId } });
+    const prospect = await prisma.prospect.findFirst({
+      where: {
+        id: options.prospectId,
+        ...(options.userId ? { userId: options.userId } : { id: '__deny__' }),
+      },
+    });
     if (prospect) {
       companyName = prospect.companyName;
       decisionMakerName = (prospect.ownerName || decisionMakerName).split(' ')[0];
@@ -117,6 +129,8 @@ Phone: ${prospect.phone || 'Unknown'}
 Website: ${prospect.website || 'NONE'}
 Reviews: ${prospect.reviewRating ?? 'n/a'} (${prospect.reviewCount ?? 0} reviews)
 Hooks: ${hooks.length ? hooks.join(' | ') : 'None'}
+Notes: ${prospect.notes || 'None'}
+Photo: ${prospect.imageUrl ? 'Rep has a photo of this business for context' : 'None'}
 `;
     }
   }
@@ -132,6 +146,70 @@ Hooks: ${hooks.length ? hooks.join(' | ') : 'None'}
   };
 }
 
+async function resolveBrandPackContext(options: TrainerScenarioOptions) {
+  if (!options.packId && !options.brandId) return null;
+
+  const pack = options.packId
+    ? await prisma.productPack.findFirst({
+        where: {
+          id: options.packId,
+          active: true,
+          ...(options.brandId ? { brandId: options.brandId } : {}),
+        },
+        include: { brand: true },
+      })
+    : await prisma.productPack.findFirst({
+        where: { brandId: options.brandId!, active: true },
+        orderBy: { createdAt: 'asc' },
+        include: { brand: true },
+      });
+
+  if (!pack) return null;
+
+  let icp: Record<string, unknown> = {};
+  let scripts: string[] = [];
+  let objections: string[] = [];
+  try {
+    icp = JSON.parse(pack.icpJSON || '{}');
+  } catch {
+    icp = {};
+  }
+  try {
+    scripts = JSON.parse(pack.scriptsJSON || '[]');
+  } catch {
+    scripts = [];
+  }
+  try {
+    objections = JSON.parse(pack.objectionsJSON || '[]');
+  } catch {
+    objections = [];
+  }
+
+  const block = `
+BRAND PRODUCT PACK (sponsored scenario):
+Brand: ${pack.brand.name}
+Pack: ${pack.name}
+ICP: ${JSON.stringify(icp)}
+Talk tracks the rep may use: ${scripts.length ? scripts.join(' | ') : 'None provided'}
+Objections you should raise (vary wording): ${objections.length ? objections.join(' | ') : 'Use realistic product objections'}
+- Stay in character as the prospect for this brand's ICP — not a generic website pitch unless the pack says so.
+- Reward reps who personalize to the ICP and handle pack objections cleanly.
+`.trim();
+
+  return {
+    brandId: pack.brandId,
+    packId: pack.id,
+    brandName: pack.brand.name,
+    packName: pack.name,
+    block,
+  };
+}
+
+function withBrandPack(prompt: string, brandBlock: string | null | undefined) {
+  if (!brandBlock) return prompt;
+  return `${prompt}\n\n${brandBlock}`;
+}
+
 export async function buildTrainerScenarioPrompt(
   options: TrainerScenarioOptions
 ): Promise<TrainerScenarioPrompt> {
@@ -139,6 +217,22 @@ export async function buildTrainerScenarioPrompt(
   const twoStage = focus === 'standard' || focus === 'budget_500';
 
   const ctx = await resolveProspectContext(options);
+  const brandPack = await resolveBrandPackContext(options);
+  let playbookBlock: string | null = null;
+  if (options.playbookId && options.userId) {
+    try {
+      const { resolvePlaybookContext } = await import('@/lib/trainer/playbook-context');
+      const pb = await resolvePlaybookContext({
+        userId: options.userId,
+        orgId: options.orgId,
+        playbookId: options.playbookId,
+      });
+      playbookBlock = pb?.block || null;
+    } catch {
+      playbookBlock = null;
+    }
+  }
+  const brandBlock = [brandPack?.block, playbookBlock].filter(Boolean).join('\n\n') || null;
   const {
     companyName,
     decisionMakerName,
@@ -170,7 +264,7 @@ ${difficultyNotes(difficulty, 'boss')}
 - Keep responses short (1-2 sentences). Do NOT break character.`;
 
     return {
-      systemPrompt,
+      systemPrompt: withBrandPack(systemPrompt, brandBlock),
       companyName: 'Pen Drill',
       decisionMakerName: 'Buyer',
       gatekeeperName: 'N/A',
@@ -187,7 +281,7 @@ ${difficultyNotes(difficulty, 'boss')}
         ? 'This business has NO working website — that is the core pain.'
         : 'They may have a weak/outdated site; the pitch is a fast $500 Lovable site that gets them online and booking.';
 
-    const gatekeeperPrompt = `You are ${gatekeeperName}, a female front-desk gatekeeper at ${companyName}. You answer the phone first — you are NOT the decision maker.
+    const gatekeeperPrompt = withBrandPack(`You are ${gatekeeperName}, a female front-desk gatekeeper at ${companyName}. You answer the phone first — you are NOT the decision maker.
 A cold-calling salesperson is trying to reach ${decisionMakerName} (${decisionMakerTitle}) to pitch a $500 website.
 
 Lead Context:
@@ -216,9 +310,9 @@ CRITICAL — Transfer rules:
 - When they earn it, say a brief hold line and IMMEDIATELY call transfer_to_decision_maker.
 - Do NOT break character.
 ${hintMode ? `
-HINT MODE: After name + one specific website reason, transfer when they politely ask for ${decisionMakerName}.` : ''}`;
+HINT MODE: After name + one specific website reason, transfer when they politely ask for ${decisionMakerName}.` : ''}`, brandBlock);
 
-    const bossPrompt = `You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper transferred a cold call.
+    const bossPrompt = withBrandPack(`You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper transferred a cold call.
 The rep is pitching a $500 Lovable website for local businesses (${PRODUCT.defaultPitch}).
 
 Lead Context:
@@ -234,7 +328,7 @@ ${bossConversationFlow(difficulty)}
 ${speechTagGuide()}
 ${silenceBehavior('boss')}
 ${difficultyNotes(difficulty, 'boss')}
-- Do NOT break character. Stop talking when interrupted.`;
+- Do NOT break character. Stop talking when interrupted.`, brandBlock);
 
     return {
       systemPrompt: gatekeeperPrompt,
@@ -250,7 +344,7 @@ ${difficultyNotes(difficulty, 'boss')}
   }
 
   if (twoStage) {
-    const gatekeeperPrompt = `You are ${gatekeeperName}, a female front-desk gatekeeper at ${companyName}. You answer the phone first — you are NOT the decision maker.
+    const gatekeeperPrompt = withBrandPack(`You are ${gatekeeperName}, a female front-desk gatekeeper at ${companyName}. You answer the phone first — you are NOT the decision maker.
 A cold-calling salesperson is trying to reach ${decisionMakerName} (${decisionMakerTitle}).
 
 Lead Context:
@@ -283,9 +377,9 @@ CRITICAL — Transfer rules:
 - Stop talking immediately when the salesperson interrupts.
 ${hintMode ? `
 HINT MODE (training — still stay in character):
-- Screen on the first 1–2 turns, but if the caller gives their name AND one specific reason tied to ${companyName}, you SHOULD transfer when they politely ask for ${decisionMakerName}.` : ''}`;
+- Screen on the first 1–2 turns, but if the caller gives their name AND one specific reason tied to ${companyName}, you SHOULD transfer when they politely ask for ${decisionMakerName}.` : ''}`, brandBlock);
 
-    const bossPrompt = `You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper just transferred a cold call to you.
+    const bossPrompt = withBrandPack(`You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper just transferred a cold call to you.
 A sales rep is on the line practicing outbound cold calling.
 
 Lead Context:
@@ -300,7 +394,7 @@ ${speechTagGuide()}
 ${silenceBehavior('boss')}
 ${difficultyNotes(difficulty, 'boss')}
 - Do NOT break character. You are ${decisionMakerName}.
-- Stop talking immediately when the salesperson interrupts.`;
+- Stop talking immediately when the salesperson interrupts.`, brandBlock);
 
     return {
       systemPrompt: gatekeeperPrompt,
@@ -336,7 +430,7 @@ ${difficultyNotes(difficulty, 'boss')}
     focusInstructions = 'Scenario Focus: Aggressive rejection recovery. Start dismissive and hard to win over.';
   }
 
-  const systemPrompt = `You are playing the role of a business owner/decision-maker receiving a cold call from an outbound sales rep.
+  const systemPrompt = withBrandPack(`You are playing the role of a business owner/decision-maker receiving a cold call from an outbound sales rep.
 Difficulty: ${difficulty}.
 ${focusInstructions}
 
@@ -349,7 +443,7 @@ ${speechTagGuide()}
 ${silenceBehavior('boss')}
 ${dynamicInstructions}
 - Do NOT break character. You are the prospect.
-- Stop talking immediately when the salesperson interrupts.`;
+- Stop talking immediately when the salesperson interrupts.`, brandBlock);
 
   return {
     systemPrompt,

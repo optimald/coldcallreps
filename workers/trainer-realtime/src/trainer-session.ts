@@ -102,6 +102,7 @@ export class TrainerSession extends DurableObject<Env> {
   private pendingBossGreeting = false;
   private pendingSilenceResponse = false;
   private sessionDifficulty = 'medium';
+  private hintMode = false;
   private prospectSpeaking = false;
   private audioStreamForResponse: string | null = null;
   private activeResponseId: string | null = null;
@@ -504,8 +505,10 @@ export class TrainerSession extends DurableObject<Env> {
       return;
     }
 
-    const minGatekeeperResponses = 2;
-    const minUserTurns = 1;
+    // Align with prompt + TRANSFER_TOOL: ≥3 gatekeeper exchanges and ≥2 user turns.
+    // Hint mode softens to 2 GK / 1 user (matches scenario-prompt HINT MODE).
+    const minGatekeeperResponses = this.hintMode ? 2 : 3;
+    const minUserTurns = this.hintMode ? 1 : 2;
     if (
       this.gatekeeperResponseCount < minGatekeeperResponses ||
       this.userTurnCount < minUserTurns
@@ -531,7 +534,7 @@ export class TrainerSession extends DurableObject<Env> {
           type: 'response.create',
           response: {
             instructions:
-              'Stay as the gatekeeper. Do NOT transfer yet. Continue screening — ask who is calling and what this is regarding.',
+              'Stay as the gatekeeper. Do NOT transfer yet. Continue screening — ask who is calling and what this is regarding. Require their name and a specific business reason before transferring.',
           },
         })
       );
@@ -567,9 +570,13 @@ export class TrainerSession extends DurableObject<Env> {
     const origin = (this.env.APP_ORIGIN || '').replace(/\/$/, '');
     if (!origin) throw new Error('APP_ORIGIN is not configured');
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.env.TRAINER_INTERNAL_SECRET) {
+      headers['x-trainer-internal'] = this.env.TRAINER_INTERNAL_SECRET;
+    }
     const res = await fetch(`${origin}/api/trainer/prompt`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(config),
       signal: AbortSignal.timeout(15000),
     });
@@ -853,12 +860,58 @@ export class TrainerSession extends DurableObject<Env> {
     const voice = msg.voice as string | undefined;
     const msgGatekeeperVoice = msg.gatekeeperVoice as string | undefined;
     const msgBossVoice = msg.bossVoice as string | undefined;
+    const brandId = msg.brandId as string | undefined;
+    const packId = msg.packId as string | undefined;
+    const playbookId = msg.playbookId as string | undefined;
+    const gateToken = msg.gateToken as string | undefined;
+    let userId = msg.userId as string | undefined;
+    let orgId = msg.orgId as string | undefined;
     const prospectOverride = msg.prospectOverride as
       | Record<string, unknown>
       | undefined;
     this.sessionDifficulty = difficulty;
+    this.hintMode = hintMode;
 
     try {
+      // Minutes hard-stop: require a signed gate token verified against the Next.js app
+      if (!gateToken) {
+        sendJson(this.browserWs, {
+          type: 'error',
+          error: 'Session gate required. Refresh and try again.',
+        });
+        this.cleanup();
+        this.browserWs.close();
+        return;
+      }
+      const origin = (this.env.APP_ORIGIN || '').replace(/\/$/, '');
+      if (!origin) {
+        sendJson(this.browserWs, {
+          type: 'error',
+          error: 'Voice worker misconfigured (APP_ORIGIN). Contact support.',
+        });
+        this.cleanup();
+        this.browserWs.close();
+        return;
+      }
+      const gateRes = await fetch(
+        `${origin}/api/trainer/session-gate?token=${encodeURIComponent(gateToken)}`
+      );
+      if (!gateRes.ok) {
+        sendJson(this.browserWs, {
+          type: 'error',
+          error: 'No practice minutes left or gate expired. Upgrade to continue.',
+        });
+        this.cleanup();
+        this.browserWs.close();
+        return;
+      }
+      const gateData = (await gateRes.json().catch(() => ({}))) as {
+        userId?: string;
+        minutesRemaining?: number;
+      };
+      // Prefer signed gate identity over client-supplied userId
+      if (gateData.userId) userId = gateData.userId;
+
       const [scenarioResult, connectedWs] = await Promise.all([
         this.fetchTrainerPrompt({
           leadId,
@@ -867,6 +920,11 @@ export class TrainerSession extends DurableObject<Env> {
           focus,
           hintMode,
           prospectOverride,
+          brandId,
+          packId,
+          playbookId,
+          userId,
+          orgId,
         }),
         connectXaiRealtime(this.env.XAI_API_KEY),
       ]);

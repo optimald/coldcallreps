@@ -1,58 +1,108 @@
 # ColdCallReps provisioning status
 
-## Done
+## Product
+- Vanity profiles: `coldcallreps.com/{handle}` (legacy `/r/` and `/t/` redirect)
+- Pooled Team minutes via `OrgMinutePool` (members draw from org pool first)
+- Minute packs (one-time overage top-up): 60 min / $9, 200 min / $25
+- Audio highlights → Cloudflare R2 bucket `coldcallreps-clips`
+- CRM: workspace-link only (OAuth held)
 
-### Clerk
-- App: **Cold Call Reps** (`app_3GFbEkiK88APAKxy7On4Yr6cfq6`)
-- Dev instance: `ins_3GFbEn5HJVVHBRsoGyrb908E6Qt`
-- Linked + keys in `.env.local` (`pk_test_…` / `sk_test_…`)
-- Production instance: **not created yet** (needed for `clerk.*` / `accounts.*` DNS on coldcallreps.com)
+## Minute tracker & overage
+- **Tracker:** yes — personal `minutesRemaining` + org pool; shown in trainer/billing/dashboard
+- **Hard stop:** session gate + scorecard 402 when balance is 0
+- **Overage:** not automatic metered billing — buy minute packs when empty
 
-### Resend
-- Domain `coldcallreps.com` **verified** (DKIM/SPF already on Cloudflare)
-- API key created: `ColdCallReps App` (sending_access, scoped to domain)
-- Written to `.env.local` as `RESEND_API_KEY`
-- From: `reps@coldcallreps.com`
+## Infra checklist
+### Done
+- **Turso (libSQL)** — Prisma `sqlite` + `@prisma/adapter-libsql`; app uses `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (`.env.local`); CLI uses `DATABASE_URL=file:./prisma/dev.db`. Push: `npm run db:push:turso`
+- Clerk live keys + Organizations
+- Stripe webhook + Recruiter/Team prices + minute pack prices
+- R2 bucket `coldcallreps-clips` created
+- Voice worker deployed with gate fail-closed
 
-### Stripe (products)
-| Item | ID |
-|------|-----|
-| Starter product | `prod_UqqkXqKrQtWEz1` |
-| Starter price $5/mo | `price_1Tr93IIhMqnu89aE7Ow538NS` |
-| Pro product | `prod_UqqkkWtuyoWI55` |
-| Pro price $29/mo | `price_1Tr93SIhMqnu89aEVNi3NtDC` |
+### REQUIRED — Clerk production DNS (fixes blank /sign-in + /sign-up)
+Publishable key points at `clerk.coldcallreps.com`, but that host is **NXDOMAIN**.
+DNS is on Cloudflare (`sharon.ns` / `brett.ns`). Add **DNS only** (grey cloud):
 
-Still need: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, webhook secret.
+```
+Type: CNAME
+Name: clerk
+Target: frontend-api.clerk.services
+Proxy: Off (DNS only)
+```
 
-### xAI
-- `XAI_API_KEY` in `.env.local`
+Optional: `accounts` → `accounts.clerk.services` (DNS only).
+Then Clerk Dashboard → Domains → **Deploy certificates**.
+(Local `CLOUDFLARE_API_TOKEN` is invalid/expired — cannot automate this.)
 
-### Cloudflare
-- Zone `coldcallreps.com` active (`25b23fd7cda7c56c570a5990709acb13`)
-- OAuth has **zone:read only** — cannot create/edit DNS records via API
-- Resend DNS already verified (email records exist)
-- For Clerk production CNAMEs: need a token with **Zone → DNS → Edit**, or add records manually from Clerk Dashboard after production deploy
+### Done — clips R2 via Worker binding (no S3 API token needed)
+- Worker: `https://coldcallreps-clips-r2.ezhalloween.workers.dev` → bucket `coldcallreps-clips`
+- Env on Vercel + `.env.local`: `CLIPS_WORKER_URL`, `CLIPS_UPLOAD_SECRET`
+- App uploads with `PUT /upload` + `x-clips-secret`; playback via `GET /object?key=…`
+- Legacy `R2_*` S3 keys may still exist but are unused when worker env is set
 
-### Supabase
-- Project: https://supabase.com/dashboard/project/fepsjnnluksgwgpxnzqt
-- Need `DATABASE_URL` for `prisma db push`
+### Done — Google Analytics
+- Measurement ID `G-4KW9LFF6MZ` (`NEXT_PUBLIC_GA_MEASUREMENT_ID`) live on coldcallreps.com
 
-### Vercel
-- Team `optimaldev` (`team_QpWnQysFyvZdtdPny9xP7SRB`) connected as user `optimald`
-- Hosting target: **Next.js on Vercel** (not Render Node)
-- **Blocked:** Team hit fair-use limits (`402` on `vercel link`) — unblock at https://vercel.link/fair-use before deploy
-- `vercel.json` added (Next.js + prisma generate)
+## Maps leads (optional bonus)
+- **API:** RapidAPI **[Maps Data](https://rapidapi.com/alexanderxbx/api/maps-data)** — host `maps-data.p.rapidapi.com`, endpoint `GET /searchmaps.php`
+- Not Google Places official API; third-party Maps scrape via RapidAPI marketplace
+- Optional in Trainer (collapsed under Advanced). Prefer-no-website filter is opt-in
+- Requires `RAPIDAPI_MAPS_KEY` (+ `RAPIDAPI_MAPS_HOST=maps-data.p.rapidapi.com`) on Vercel + `.env.local`
 
-### Cloudflare Durable Objects
-- Worker **deployed**: https://coldcallreps-trainer-realtime.ezhalloween.workers.dev
-- Health: `GET /health` → `{ ok: true }`
-- Class: `TrainerSession` — one DO per call; browser WS + outbound xAI WS
-- Secret `XAI_API_KEY` set; `APP_ORIGIN` var = `https://coldcallreps.com` (update after Vercel URL exists)
-- Frontend `.env.local`: `NEXT_PUBLIC_TRAINER_REALTIME_URL=wss://coldcallreps-trainer-realtime.ezhalloween.workers.dev/api/trainer/realtime`
+## Brand / affiliate admin (honest status)
+- **Have:** BRAND role, create brand + product packs, bounties, sponsored boards, certifications from high scores
+- **Have (campaign payouts):** Stripe Connect onboarding for SDRs (`/api/billing/connect`), destination-charge Checkout when brand pays an approved application (`/api/campaigns/[id]/payouts`), ~20% `platformFeeBps`, `CampaignPayout` ledger
+- **Missing for classic affiliate programs:** commission rates, click/referral attribution to brand offers, promo codes, affiliate dashboards
+- User referrals today = minute bonuses (`/api/referrals`), not brand affiliate commissions
+- Schema patch: `npm run db:patch:connect` (Turso) + `npx prisma db push` (local)
+- Dual-mode desks (SDR ↔ Brand): `npm run db:patch:role-modes` (Turso) + `npx prisma db push` (local) + `npx prisma generate` (restart dev server)
 
-## Next actions
-1. Unblock Vercel team fair-use → `vercel link` + `vercel --prod` + env vars
-2. Paste Supabase `DATABASE_URL` → `prisma db push`
-3. After Vercel URL: `wrangler secret put APP_ORIGIN` (or update `[vars]`) to the real Next origin
-4. Create Clerk production → CNAMEs on Cloudflare (**DNS only**)
-5. Stripe webhook → production Vercel URL
+## Manual smoke
+1. Set `RAPIDAPI_MAPS_KEY` → Search Maps → pick a “(no site)” prospect → practice call
+2. Practice call → score → audio on session page + `/h/{id}`
+3. Team subscribe → org pool tops up → member call draws from pool
+4. Billing → buy 60-min pack → minutes credit
+
+## Audit fixes (Wave 1–3)
+### Wave 1 — Money & integrity
+- Gate token binds `brandId`/`packId` + `MinuteHold` (1-min soft reserve); scorecard rejects client mismatch
+- Atomic minute deduct (`updateMany` WHERE balance ≥ N) before/with session create; scorecard idempotent returns fresh minutes
+- Bounty awards unique per user (`BountyAward`); Stripe `event.id` idempotency (`StripeEvent`)
+- Referral unique on `refereeId` + idempotent apply
+- Prospect IDOR: scenario prompt loads only user-owned prospects
+- Direct Connect: no credit burn on Resend failure
+- Account delete cancels Stripe subscription before clearing IDs
+- Clip complete verifies R2 object (HEAD); media via `/api/clips/media?clipId=`
+- Recruiter GET candidates gated on paid access
+- Auto-verify only counts clean (no integrity flags) sessions
+- `lastPaymentFailedAt` on payment_failed; webhook profile lookup by email/customer
+- Outbound webhooks store `lastAttemptAt` / `lastError`
+
+### Wave 2 — Funnel & roles
+- GrowthBootstrap / SignUpClient honor `?role=` and `?plan=` (all plans); bootstrap on all app routes
+- Role gates: recruiter upgrade CTA, admin forbidden, jobs/new + tournaments create gated via `/api/me`
+- Integrations copy: workspace-link / coach memory only (not OAuth sync)
+- Arena → trainer `?brandId=&packId=`; TrainerView preselects pack from URL
+- Developers API keys gated to Pro/Recruiter/Team
+- Job/brand detail: not-found UI (no infinite Loading)
+- Playbook editor: loading + fetch errors; save blocked until loaded
+- Billing “Manage subscription” only when `hasSubscription`
+- Account delete → Clerk `signOut` → `/`
+- Superadmin can open any session for review
+- Direct Connect: sent on recruiter desk; inbox on hiring page
+
+### Wave 3 — Polish & ops
+- Visible load errors on settings / hiring / billing / arena
+- AppNav mobile hamburger drawer
+- Homepage live weekly leaderboard (sample fallback); testimonials marked illustrative
+- Copy uses `/{slug}` not `/t/` `/r/`
+- Unified open-to-work: “Open to work — appear on the hiring board”
+- Maps prospects upsert by `userId` + `mapsPlaceId`
+- Public brands GET strips pack scripts/objections; full content when authenticated
+- Academy members: validate user exists; prefer email invite
+- Playbooks: org-scoped create requires Team (`canManageTeam`); personal OK for all
+- Leaderboard sessions bounded (`take: 2000`)
+- Rate-limit documented as best-effort in-memory per instance
+- Trainer Maps errors surfaced as friendly messages
+- Clip upload failure feedback after score

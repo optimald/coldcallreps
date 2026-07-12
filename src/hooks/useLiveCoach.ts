@@ -5,182 +5,205 @@ import type { TrainerPhase, TrainerTranscriptEntry } from '@/hooks/useXaiTrainer
 import { getCoachForwardFallback, getInstantSayNext } from '@/lib/trainer/gatekeeper-hints';
 
 export interface CoachLogEntry {
-    atSeconds: number;
-    prospectEntryId: number;
-    prospectText: string;
-    suggestion: string;
-    source: 'instant' | 'llm';
+  atSeconds: number;
+  prospectEntryId: number;
+  prospectText: string;
+  suggestion: string;
+  source: 'instant' | 'llm';
 }
 
 export interface UseLiveCoachOptions {
-    enabled: boolean;
-    active: boolean;
-    transcript: TrainerTranscriptEntry[];
-    phase: TrainerPhase;
-    gatekeeperName: string;
-    decisionMakerName: string;
-    companyName: string;
-    difficulty: string;
-    isProspectSpeaking: boolean;
-    isUserSpeaking: boolean;
-    callTimer?: number;
-    onSuggestion?: (entry: CoachLogEntry) => void;
+  enabled: boolean;
+  active: boolean;
+  transcript: TrainerTranscriptEntry[];
+  phase: TrainerPhase;
+  gatekeeperName: string;
+  decisionMakerName: string;
+  companyName: string;
+  difficulty: string;
+  isProspectSpeaking: boolean;
+  isUserSpeaking: boolean;
+  callTimer?: number;
+  playbookId?: string;
+  /** When true (default), always refine with LLM after showing instant hint. */
+  preferLlm?: boolean;
+  onSuggestion?: (entry: CoachLogEntry) => void;
 }
 
 function stripQuotes(text: string): string {
-    return text.replace(/^["']|["']$/g, '').trim();
+  return text.replace(/^["']|["']$/g, '').trim();
 }
 
 function wordOverlap(a: string, b: string): number {
-    const wordsA = a.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-    const wordsB = new Set(b.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
-    if (!wordsA.length || !wordsB.size) return 0;
-    let shared = 0;
-    for (const w of wordsA) if (wordsB.has(w)) shared += 1;
-    return shared / Math.min(wordsA.length, wordsB.size);
+  const wordsA = a
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 3);
+  const wordsB = new Set(
+    b
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3)
+  );
+  if (!wordsA.length || !wordsB.size) return 0;
+  let shared = 0;
+  for (const w of wordsA) if (wordsB.has(w)) shared += 1;
+  return shared / Math.min(wordsA.length, wordsB.size);
 }
 
 export function useLiveCoach(options: UseLiveCoachOptions) {
-    const {
-        enabled,
-        active,
-        transcript,
-        phase,
-        gatekeeperName,
-        decisionMakerName,
-        companyName,
-        difficulty,
-        isProspectSpeaking,
-        isUserSpeaking,
-        callTimer = 0,
-        onSuggestion,
-    } = options;
+  const {
+    enabled,
+    active,
+    transcript,
+    phase,
+    gatekeeperName,
+    decisionMakerName,
+    companyName,
+    difficulty,
+    isProspectSpeaking,
+    isUserSpeaking,
+    callTimer = 0,
+    playbookId,
+    preferLlm = true,
+    onSuggestion,
+  } = options;
 
-    const [sayNext, setSayNext] = useState('');
-    const lockedEntryIdRef = useRef<number | null>(null);
-    const lockedInstantRef = useRef('');
-    const priorSuggestionsRef = useRef<string[]>([]);
-    const onSuggestionRef = useRef(onSuggestion);
-    const abortRef = useRef<AbortController | null>(null);
-    onSuggestionRef.current = onSuggestion;
+  const [sayNext, setSayNext] = useState('');
+  const [source, setSource] = useState<'instant' | 'llm' | ''>('');
+  const lockedEntryIdRef = useRef<number | null>(null);
+  const lockedInstantRef = useRef('');
+  const priorSuggestionsRef = useRef<string[]>([]);
+  const onSuggestionRef = useRef(onSuggestion);
+  const abortRef = useRef<AbortController | null>(null);
+  onSuggestionRef.current = onSuggestion;
 
-    const fetchLlmHint = useCallback(
-        async (entryId: number, snapshot: TrainerTranscriptEntry[], instantLine: string) => {
-            abortRef.current?.abort();
-            const controller = new AbortController();
-            abortRef.current = controller;
+  const fetchLlmHint = useCallback(
+    async (entryId: number, snapshot: TrainerTranscriptEntry[], instantLine: string) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-            try {
-                const res = await fetch('/api/trainer/hint', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                        transcript: snapshot.map((e) => ({ role: e.role, text: e.text })),
-                        phase,
-                        gatekeeperName,
-                        decisionMakerName,
-                        companyName: companyName || 'the business',
-                        difficulty,
-                        priorSuggestions: priorSuggestionsRef.current.slice(-4),
-                    }),
-                });
-
-                const data = await res.json();
-                if (!res.ok || controller.signal.aborted) return;
-                if (lockedEntryIdRef.current !== entryId) return;
-
-                const line = stripQuotes(String(data.hint?.sayNext || ''));
-                if (!line) return;
-
-                const lastUser = [...snapshot].reverse().find((e) => e.role === 'user')?.text || '';
-                if (lastUser && wordOverlap(line, lastUser) >= 0.35) return;
-                if (wordOverlap(line, instantLine) >= 0.45) return;
-
-                setSayNext(line);
-                onSuggestionRef.current?.({
-                    atSeconds: callTimer,
-                    prospectEntryId: entryId,
-                    prospectText: snapshot[snapshot.length - 1]?.text || '',
-                    suggestion: line,
-                    source: 'llm',
-                });
-            } catch (err: any) {
-                if (err.name === 'AbortError') return;
-            }
-        },
-        [phase, gatekeeperName, decisionMakerName, companyName, difficulty, callTimer]
-    );
-
-    useEffect(() => {
-        if (!enabled || !active) {
-            abortRef.current?.abort();
-            lockedEntryIdRef.current = null;
-            priorSuggestionsRef.current = [];
-            setSayNext('');
-            return;
-        }
-
-        if (isProspectSpeaking || isUserSpeaking) return;
-
-        const last = transcript[transcript.length - 1];
-        if (!last || last.role === 'user') return;
-        if (last.id === lockedEntryIdRef.current) return;
-
-        lockedEntryIdRef.current = last.id;
-
-        const instant = getInstantSayNext({
+      try {
+        const res = await fetch('/api/trainer/hint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            transcript: snapshot.map((e) => ({ role: e.role, text: e.text })),
             phase,
-            transcript,
             gatekeeperName,
             decisionMakerName,
-            companyName: companyName || undefined,
-            priorSuggestions: priorSuggestionsRef.current,
+            companyName: companyName || 'the business',
+            difficulty,
+            priorSuggestions: priorSuggestionsRef.current.slice(-4),
+            playbookId: playbookId || undefined,
+          }),
         });
 
-        const lastUser = transcript.filter((e) => e.role === 'user').pop()?.text || '';
-        const instantEchoesUser = lastUser && wordOverlap(instant, lastUser) >= 0.42;
-        const suggestion = instantEchoesUser
-            ? getCoachForwardFallback({
-                  gatekeeperName,
-                  decisionMakerName,
-                  companyName: companyName || undefined,
-              })
-            : instant;
+        const data = await res.json();
+        if (!res.ok || controller.signal.aborted) return;
+        if (lockedEntryIdRef.current !== entryId) return;
 
-        lockedInstantRef.current = suggestion;
-        priorSuggestionsRef.current.push(suggestion);
-        setSayNext(suggestion);
+        const line = stripQuotes(String(data.hint?.sayNext || ''));
+        if (!line) return;
+
+        const lastUser = [...snapshot].reverse().find((e) => e.role === 'user')?.text || '';
+        if (lastUser && wordOverlap(line, lastUser) >= 0.35) return;
+        // Allow LLM to replace instant even when similar — only skip near-identical
+        if (wordOverlap(line, instantLine) >= 0.85) return;
+
+        setSayNext(line);
+        setSource('llm');
+        priorSuggestionsRef.current.push(line);
         onSuggestionRef.current?.({
-            atSeconds: callTimer,
-            prospectEntryId: last.id,
-            prospectText: last.text,
-            suggestion,
-            source: 'instant',
+          atSeconds: callTimer,
+          prospectEntryId: entryId,
+          prospectText: snapshot[snapshot.length - 1]?.text || '',
+          suggestion: line,
+          source: 'llm',
         });
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    },
+    [phase, gatekeeperName, decisionMakerName, companyName, difficulty, callTimer, playbookId]
+  );
 
-        if (instantEchoesUser) {
-            void fetchLlmHint(last.id, transcript, suggestion);
-        }
-    }, [
-        enabled,
-        active,
-        transcript,
-        phase,
-        gatekeeperName,
-        decisionMakerName,
-        companyName,
-        difficulty,
-        isProspectSpeaking,
-        isUserSpeaking,
-        callTimer,
-        fetchLlmHint,
-    ]);
+  useEffect(() => {
+    if (!enabled || !active) {
+      abortRef.current?.abort();
+      lockedEntryIdRef.current = null;
+      priorSuggestionsRef.current = [];
+      setSayNext('');
+      setSource('');
+      return;
+    }
 
-    useEffect(() => () => abortRef.current?.abort(), []);
+    if (isProspectSpeaking || isUserSpeaking) return;
 
-    return {
-        sayNext: active ? sayNext : '',
-        visible: active && !!sayNext && !isProspectSpeaking,
-    };
+    const last = transcript[transcript.length - 1];
+    if (!last || last.role === 'user') return;
+    if (last.id === lockedEntryIdRef.current) return;
+
+    lockedEntryIdRef.current = last.id;
+
+    const instant = getInstantSayNext({
+      phase,
+      transcript,
+      gatekeeperName,
+      decisionMakerName,
+      companyName: companyName || undefined,
+      priorSuggestions: priorSuggestionsRef.current,
+    });
+
+    const lastUser = transcript.filter((e) => e.role === 'user').pop()?.text || '';
+    const instantEchoesUser = lastUser && wordOverlap(instant, lastUser) >= 0.42;
+    const suggestion = instantEchoesUser
+      ? getCoachForwardFallback({
+          gatekeeperName,
+          decisionMakerName,
+          companyName: companyName || undefined,
+        })
+      : instant;
+
+    lockedInstantRef.current = suggestion;
+    priorSuggestionsRef.current.push(suggestion);
+    setSayNext(suggestion);
+    setSource('instant');
+    onSuggestionRef.current?.({
+      atSeconds: callTimer,
+      prospectEntryId: last.id,
+      prospectText: last.text,
+      suggestion,
+      source: 'instant',
+    });
+
+    // Hybrid: show instant immediately, then always refine with LLM (world-class coach path)
+    if (preferLlm || instantEchoesUser) {
+      void fetchLlmHint(last.id, transcript, suggestion);
+    }
+  }, [
+    enabled,
+    active,
+    transcript,
+    phase,
+    gatekeeperName,
+    decisionMakerName,
+    companyName,
+    difficulty,
+    isProspectSpeaking,
+    isUserSpeaking,
+    callTimer,
+    preferLlm,
+    fetchLlmHint,
+  ]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  return {
+    sayNext: active ? sayNext : '',
+    source: active ? source : '',
+    visible: active && !!sayNext && !isProspectSpeaking,
+  };
 }

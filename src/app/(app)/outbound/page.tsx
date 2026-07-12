@@ -1,0 +1,156 @@
+import Link from 'next/link';
+import { requireUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { campaignLeadWhere, dialableBrandCampaigns } from '@/lib/brand-leads';
+import { effectiveRole } from '@/lib/roles';
+import { EmptyState, PageHeader } from '@/components/ui/PagePrimitives';
+import OutboundDialer from '@/components/OutboundDialer';
+
+/** Cold Call desk — real campaign dials only (Twilio + brand pool CID). */
+export default async function OutboundPage() {
+  const profile = await requireUser();
+  const role = effectiveRole(profile);
+
+  if (role !== 'REP' && role !== 'MANAGER' && role !== 'SUPERADMIN') {
+    return (
+      <main className="app-page">
+        <PageHeader
+          eyebrow="Cold Call"
+          title="Cold Call workspace"
+          description="This workspace is for SDRs running campaign dials."
+        />
+        <EmptyState
+          title="Wrong role"
+          description="As a Brand, load leads under Leads and manage phone pools on the brand desk."
+          action={
+            <Link href="/leads" className="btn" style={{ marginTop: '1rem' }}>
+              Brand leads
+            </Link>
+          }
+        />
+      </main>
+    );
+  }
+
+  const campaigns = await dialableBrandCampaigns(profile.id);
+  const brandIds = [...new Set(campaigns.map((c) => c.brandId))];
+  const campaignIds = campaigns.map((c) => c.id);
+
+  const [apps, brandLeads] = await Promise.all([
+    prisma.campaignApplication.findMany({
+      where: {
+        userId: profile.id,
+        status: { in: ['ACCEPTED', 'ACTIVE', 'APPLIED'] },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 30,
+      include: {
+        campaign: {
+          include: {
+            brand: { select: { name: true, slug: true } },
+            pack: { select: { id: true } },
+            playbook: { select: { id: true } },
+          },
+        },
+      },
+    }),
+    brandIds.length
+      ? prisma.prospect.findMany({
+          where: campaignLeadWhere({
+            OR: [
+              { campaignId: { in: campaignIds } },
+              { brandId: { in: brandIds }, campaignId: null },
+            ],
+          }),
+          orderBy: { updatedAt: 'desc' },
+          take: 80,
+          select: {
+            id: true,
+            companyName: true,
+            phone: true,
+            ownerName: true,
+            ownerTitle: true,
+            city: true,
+            status: true,
+            website: true,
+            hooksJSON: true,
+            notes: true,
+            brand: { select: { name: true, slug: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const active = apps.filter((a) => a.status === 'ACCEPTED' || a.status === 'ACTIVE');
+  const applied = apps.filter((a) => a.status === 'APPLIED');
+  const primary = active[0];
+  const primaryCampaignId = primary?.campaignId ?? null;
+  const hasAcceptedCampaign = active.length > 0;
+
+  const campaignDialList = brandLeads.map((l) => ({
+    id: l.id,
+    companyName: l.companyName,
+    phone: l.phone,
+    ownerName: l.ownerName,
+    ownerTitle: l.ownerTitle,
+    city: l.city,
+    status: l.status,
+    website: l.website,
+    hooksJSON: l.hooksJSON,
+    notes: l.notes,
+    brandName: l.brand?.name ?? null,
+    brandSlug: l.brand?.slug ?? null,
+  }));
+
+  const activeGigs = active.map((a) => ({
+    id: a.id,
+    campaignId: a.campaignId,
+    title: a.campaign.title,
+    brandName: a.campaign.brand?.name || 'Brand',
+    brandSlug: a.campaign.brand?.slug,
+    status: a.status,
+    packId: a.campaign.pack?.id ?? null,
+    playbookId: a.campaign.playbook?.id ?? null,
+  }));
+
+  const pendingApps = applied.map((a) => ({
+    id: a.id,
+    campaignId: a.campaignId,
+    title: a.campaign.title,
+    brandName: a.campaign.brand?.name || 'Brand',
+    status: a.status,
+  }));
+
+  return (
+    <main className="app-page app-page--desk">
+      <PageHeader
+        compact
+        eyebrow="Workspace"
+        title="Cold Call"
+        description={
+          hasAcceptedCampaign
+            ? 'Campaign dials use the brand’s number pool — never your personal phone.'
+            : 'Dials unlock after a brand accepts you. Warm up on Trainer anytime.'
+        }
+        actions={
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Link href="/trainer" className="btn-ghost">
+              Trainer
+            </Link>
+            <Link href="/gigs" className="btn">
+              Browse gigs
+            </Link>
+          </div>
+        }
+      />
+
+      <OutboundDialer
+        campaignProspects={campaignDialList}
+        campaignId={primaryCampaignId}
+        activeGigs={activeGigs}
+        pendingApps={pendingApps}
+        hasAcceptedCampaign={hasAcceptedCampaign}
+      />
+    </main>
+  );
+}
