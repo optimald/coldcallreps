@@ -6,21 +6,27 @@ export function PageHeader({
   description,
   actions,
   eyebrow,
+  leading,
   compact = false,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
   eyebrow?: string;
+  /** Optional mark (e.g. brand logo) beside the title block. */
+  leading?: ReactNode;
   /** Tighter title block for viewport-fit desks (Trainer / Cold Call). */
   compact?: boolean;
 }) {
   return (
     <header className={`page-header${compact ? ' page-header--compact' : ''}`}>
-      <div className="page-header__copy">
-        {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
-        <h1 className="page-title">{title}</h1>
-        {description ? <p className="page-desc">{description}</p> : null}
+      <div className="page-header__main">
+        {leading ? <div className="page-header__leading">{leading}</div> : null}
+        <div className="page-header__copy">
+          {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
+          <h1 className="page-title">{title}</h1>
+          {description ? <p className="page-desc">{description}</p> : null}
+        </div>
       </div>
       {actions ? <div className="page-header__actions">{actions}</div> : null}
     </header>

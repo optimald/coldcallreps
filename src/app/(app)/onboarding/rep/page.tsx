@@ -66,7 +66,7 @@ export default function OnboardingRepPage() {
         return;
       }
       setMsg('SDR mode unlocked. Connect Stripe when you are ready for payouts.');
-      router.replace(data.redirectTo || '/dashboard');
+      window.location.href = data.redirectTo || '/dashboard';
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Could not finish onboarding');
     } finally {

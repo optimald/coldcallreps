@@ -85,6 +85,8 @@ export async function POST(req: Request) {
       saved: result.count,
       outreachReady: result.results.filter((r) => 'outreachReady' in r && r.outreachReady).length,
       results: result.results,
+      creditBlocked: Boolean(result.creditBlocked),
+      creditsRemaining: result.creditsRemaining ?? null,
     });
   } catch (e: unknown) {
     if (e instanceof Error && e.message === 'UNAUTHORIZED') {

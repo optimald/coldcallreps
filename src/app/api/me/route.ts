@@ -149,7 +149,15 @@ export async function PATCH(req: Request) {
 
     const switchMode = modeFromRole(requested);
     if (switchMode) {
-      const onboarded = isModeOnboarded(switchMode, profile);
+      let onboarded = isModeOnboarded(switchMode, profile);
+      // Owning a brand counts as Brand onboarded (legacy accounts / skipped flag).
+      if (!onboarded && switchMode === 'BRAND') {
+        const { prisma } = await import('@/lib/prisma');
+        const owned = await prisma.brand.count({
+          where: { ownerId: profile.id },
+        });
+        if (owned > 0) onboarded = true;
+      }
       if (!onboarded) {
         return NextResponse.json(
           {
@@ -174,6 +182,10 @@ export async function PATCH(req: Request) {
       data: {
         platformRole: requested as 'REP' | 'RECRUITER' | 'BRAND' | 'MANAGER',
         unlockedRolesJSON: serializeUnlockedRoles(nextUnlocked),
+        // Heal legacy brand owners who never got brandOnboardedAt stamped.
+        ...(requested === 'BRAND' || requested === 'RECRUITER'
+          ? { brandOnboardedAt: profile.brandOnboardedAt || new Date() }
+          : {}),
       },
     });
 

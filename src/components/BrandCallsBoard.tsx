@@ -114,10 +114,12 @@ export default function BrandCallsBoard({
   brandName: string;
 }) {
   const { mode, hydrated } = useBrandDeskMode();
-  const isDemo = hydrated && mode === 'demo';
-  const [data, setData] = useState<BoardData | null>(null);
+  const isDemo = mode === 'demo';
+  const [data, setData] = useState<BoardData | null>(() =>
+    mode === 'demo' ? (getDemoCallsBoard(brandKey, brandName) as BoardData) : null
+  );
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => mode !== 'demo');
   const [campaignFilter, setCampaignFilter] = useState('');
   const [repFilter, setRepFilter] = useState('');
 
@@ -204,10 +206,10 @@ export default function BrandCallsBoard({
           {loading && !data
             ? 'Loading…'
             : isDemo
-              ? brandName
+              ? 'Demo sample'
               : data
                 ? `Updated ${formatWhen(data.polledAt)} · polls every 5s`
-                : brandName}
+                : null}
         </p>
         <div className="calls-board__filters">
           <label className="calls-board__filter">

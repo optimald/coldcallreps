@@ -1,8 +1,8 @@
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import BrandSubNav from '@/components/BrandSubNav';
-import { optionalUserId } from '@/lib/auth';
+import { BRAND_DESK_MODE_COOKIE } from '@/lib/brand-context';
+import { canonicalDemoBrandBySlug } from '@/lib/demo/canonical-brands';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
 
 export default async function BrandScopedLayout({
   children,
@@ -14,26 +14,14 @@ export default async function BrandScopedLayout({
   const { id } = await params;
   const brand = await prisma.brand.findFirst({
     where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
+    select: { id: true },
   });
-  if (!brand) notFound();
-
-  const userId = await optionalUserId();
-  let canManage = false;
-  if (userId) {
-    const profile = await prisma.userProfile.findUnique({
-      where: { id: userId },
-      select: { id: true, platformRole: true, email: true },
-    });
-    if (profile) canManage = canManageBrand(profile, brand.ownerId);
+  if (!brand) {
+    // Demo desk can navigate to canonical demo-* brands before seed runs.
+    const deskDemo =
+      (await cookies()).get(BRAND_DESK_MODE_COOKIE)?.value === 'demo';
+    if (!(deskDemo && canonicalDemoBrandBySlug(id))) notFound();
   }
 
-  return (
-    <div className="brand-scope">
-      {canManage ? (
-        <BrandSubNav brand={{ id: brand.id, slug: brand.slug, name: brand.name }} />
-      ) : null}
-      {children}
-    </div>
-  );
+  return <div className="brand-scope">{children}</div>;
 }

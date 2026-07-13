@@ -12,10 +12,10 @@ import {
   matchStageCopy,
 } from '@/lib/brand-lead-match';
 import {
-  DEMO_CAMPAIGNS,
-  DEMO_LEADS,
   DEMO_MSG,
-  DEMO_PIPELINE_JOBS,
+  getDemoCampaigns,
+  getDemoLeads,
+  getDemoPipelineJobs,
   type DemoPipelineJob,
 } from '@/lib/demo/brand-demo-data';
 
@@ -80,31 +80,34 @@ export default function BrandPipelineClient({
   campaigns: CampaignOpt[];
 }) {
   const { mode, hydrated } = useBrandDeskMode();
-  const isLive = hydrated && mode === 'live';
-  const isDemo = hydrated && mode === 'demo';
+  const isLive = mode === 'live';
+  const isDemo = mode === 'demo';
   const brandId = brands[0]?.id || '';
   const brandKey = brands[0]?.slug || brands[0]?.id || '';
   const searchParams = useSearchParams();
 
   const brandCampaigns = useMemo(() => {
     if (isLive) return campaigns.filter((c) => c.brandId === brandId);
-    return DEMO_CAMPAIGNS.map((c) => ({
+    return getDemoCampaigns(brandKey).map((c) => ({
       id: c.id,
       title: c.title,
       brandId: brandId || 'demo',
     }));
-  }, [isLive, campaigns, brandId]);
+  }, [isLive, campaigns, brandId, brandKey]);
 
   const [jobs, setJobs] = useState<JobRow[]>([]);
-  const [leadsPool, setLeadsPool] = useState(DEMO_LEADS);
+  const [leadsPool, setLeadsPool] = useState(() => getDemoLeads(brandKey || 'demo-meridianops'));
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
-  const [mapsQuery, setMapsQuery] = useState('athletic retailers');
-  const [mapsLocation, setMapsLocation] = useState('Portland, OR');
+  const [mapsQuery, setMapsQuery] = useState('independent life insurance agencies');
+  const [mapsLocation, setMapsLocation] = useState('Austin, TX');
   const [mapsCampaignId, setMapsCampaignId] = useState('');
+  const [geoMode, setGeoMode] = useState<'city' | 'state' | 'nationwide'>('city');
+  const [maxResults, setMaxResults] = useState(10);
   const [noWebsiteOnly, setNoWebsiteOnly] = useState(true);
   const [mapsBusy, setMapsBusy] = useState(false);
+  const [creditsLeft, setCreditsLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (searchParams.get('find') === '1') setFindOpen(true);
@@ -115,8 +118,8 @@ export default function BrandPipelineClient({
     setLoading(true);
     try {
       if (mode === 'demo') {
-        setJobs(demoJobsToRows(DEMO_PIPELINE_JOBS));
-        setLeadsPool(DEMO_LEADS);
+        setJobs(demoJobsToRows(getDemoPipelineJobs(brandKey)));
+        setLeadsPool(getDemoLeads(brandKey));
         return;
       }
       if (!brandId) return;
@@ -131,11 +134,24 @@ export default function BrandPipelineClient({
     } finally {
       setLoading(false);
     }
-  }, [hydrated, mode, brandId]);
+  }, [hydrated, mode, brandId, brandKey]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!findOpen || !brandId || isDemo) {
+      setCreditsLeft(isDemo ? 100 : null);
+      return;
+    }
+    void fetch(`/api/brands/${encodeURIComponent(brandId)}/billing`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.credits?.totalRemaining != null) setCreditsLeft(d.credits.totalRemaining);
+      })
+      .catch(() => setCreditsLeft(null));
+  }, [findOpen, brandId, isDemo]);
 
   const matchKpis = useMemo(() => matchProgressOf(leadsPool), [leadsPool]);
   const matchStage = useMemo(() => activeMatchStage(matchKpis), [matchKpis]);
@@ -144,12 +160,16 @@ export default function BrandPipelineClient({
   async function findLeads(e?: FormEvent) {
     e?.preventDefault();
     if (!mapsQuery.trim() || !mapsLocation.trim()) {
-      setMsg('Vertical and location are required');
+      setMsg('Keyword and geo area are required');
       return;
     }
+    const location =
+      geoMode === 'nationwide'
+        ? mapsLocation.trim() || 'United States'
+        : mapsLocation.trim();
     if (isDemo) {
       setMsg(
-        `Demo: would scout “${mapsQuery.trim()}” in ${mapsLocation.trim()} → P1→P2→P3.`
+        `Demo: scrape plan “${mapsQuery.trim()}” · ${geoMode} · ${location} (credits not deducted).`
       );
       setFindOpen(false);
       return;
@@ -165,21 +185,30 @@ export default function BrandPipelineClient({
           brandId,
           campaignId: mapsCampaignId || null,
           query: mapsQuery.trim(),
-          location: mapsLocation.trim(),
-          maxResults: 10,
+          keyword: mapsQuery.trim(),
+          location,
+          geo: location,
+          maxResults,
           noWebsiteOnly,
           async: false,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Scout failed');
-      setMsg(
-        `Job finished · ${data.saved || 0} saved · ${data.outreachReady || 0} dial-ready`
-      );
+      if (!res.ok) throw new Error(data.error || 'Scrape failed');
+      if (data.creditBlocked) {
+        setMsg(
+          `Credits exhausted mid-run · ${data.saved || 0} saved. Upgrade on Billing to continue.`
+        );
+      } else {
+        setMsg(
+          `Job finished · ${data.saved || 0} saved · ${data.outreachReady || 0} dial-ready` +
+            (data.creditsRemaining != null ? ` · ${data.creditsRemaining} credits left` : '')
+        );
+      }
       setFindOpen(false);
       await load();
     } catch (err: unknown) {
-      setMsg(err instanceof Error ? err.message : 'Scout failed');
+      setMsg(err instanceof Error ? err.message : 'Scrape failed');
     } finally {
       setMapsBusy(false);
     }
@@ -190,12 +219,13 @@ export default function BrandPipelineClient({
       <div className="brand-pipeline__toolbar">
         <div>
           <p className="muted small" style={{ margin: 0 }}>
-            Scout and condition phone-ready leads. Jobs run P1→P2→P3 then stop.
+            Scrape jobs are the main queue. New scrape plan opens as a popup — Maps keyword + geo →
+            enrich (1 credit / saved lead).
           </p>
         </div>
         <div className="brand-leads__actions" style={{ marginLeft: 'auto' }}>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setFindOpen(true)}>
-            Find leads
+            New scrape plan
           </button>
           <button
             type="button"
@@ -210,6 +240,9 @@ export default function BrandPipelineClient({
               View leads
             </Link>
           ) : null}
+          <Link href="/billing" className="btn btn-ghost btn-sm">
+            Lead credits
+          </Link>
         </div>
       </div>
 
@@ -280,7 +313,7 @@ export default function BrandPipelineClient({
 
       <div className="brand-leads__panel">
         <div className="brand-pipeline__jobs-head">
-          <h2 className="brand-pipeline__jobs-title">Scout jobs</h2>
+          <h2 className="brand-pipeline__jobs-title">Scrape jobs</h2>
         </div>
         {loading && jobs.length === 0 ? (
           <div className="brand-leads__empty">
@@ -288,9 +321,9 @@ export default function BrandPipelineClient({
           </div>
         ) : jobs.length === 0 ? (
           <div className="brand-leads__empty">
-            <p className="muted">No scout jobs yet. Find leads to start the pipeline.</p>
+            <p className="muted">No scrape jobs yet. Create a scrape plan to start.</p>
             <button type="button" className="btn btn-primary" onClick={() => setFindOpen(true)}>
-              Find leads
+              New scrape plan
             </button>
           </div>
         ) : (
@@ -339,52 +372,96 @@ export default function BrandPipelineClient({
       <Modal
         open={findOpen}
         onClose={() => !mapsBusy && setFindOpen(false)}
-        title="Find leads"
+        title="New scrape plan"
         wide
       >
         <form className="stack gap-sm" onSubmit={findLeads}>
           <p className="muted small">
-            Define vertical and location. The job scrapes Maps, conditions phones, then drops
-            dial-ready leads into your directory.
+            Free-form Maps keyword + geo. Local brands use city; nationwide brands can set state or
+            United States. Each newly saved lead costs 1 credit (imports stay free).
           </p>
+          <label className="field-label">
+            Keyword (Google Maps query)
+            <input
+              className="field"
+              value={mapsQuery}
+              onChange={(e) => setMapsQuery(e.target.value)}
+              placeholder="e.g. independent life insurance agencies"
+              required
+              autoFocus
+            />
+          </label>
           <div className="grid-2">
             <label className="field-label">
-              Trade / vertical
-              <input
+              Geo scope
+              <select
                 className="field"
-                value={mapsQuery}
-                onChange={(e) => setMapsQuery(e.target.value)}
-                placeholder="e.g. plumbers"
-                required
-                autoFocus
-              />
+                value={geoMode}
+                onChange={(e) => {
+                  const v = e.target.value as 'city' | 'state' | 'nationwide';
+                  setGeoMode(v);
+                  if (v === 'nationwide') setMapsLocation('United States');
+                }}
+              >
+                <option value="city">City / metro</option>
+                <option value="state">State / region</option>
+                <option value="nationwide">Nationwide</option>
+              </select>
             </label>
             <label className="field-label">
-              City / area
+              Geo area
               <input
                 className="field"
                 value={mapsLocation}
                 onChange={(e) => setMapsLocation(e.target.value)}
-                placeholder="e.g. Austin, TX"
+                placeholder={
+                  geoMode === 'city'
+                    ? 'e.g. Austin, TX'
+                    : geoMode === 'state'
+                      ? 'e.g. Texas'
+                      : 'United States'
+                }
                 required
               />
             </label>
           </div>
-          <label className="field-label">
-            Assign campaign (optional)
-            <select
-              className="field"
-              value={mapsCampaignId}
-              onChange={(e) => setMapsCampaignId(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {brandCampaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="grid-2">
+            <label className="field-label">
+              Batch count
+              <input
+                className="field"
+                type="number"
+                min={1}
+                max={25}
+                value={maxResults}
+                onChange={(e) => setMaxResults(Math.min(25, Math.max(1, Number(e.target.value) || 1)))}
+              />
+            </label>
+            <label className="field-label">
+              Assign campaign (optional)
+              <select
+                className="field"
+                value={mapsCampaignId}
+                onChange={(e) => setMapsCampaignId(e.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {brandCampaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="muted small" style={{ margin: 0 }}>
+            Preview query:{' '}
+            <strong>
+              {mapsQuery.trim() || '…'}
+              {mapsLocation.trim() && !mapsQuery.toLowerCase().includes(mapsLocation.toLowerCase())
+                ? ` in ${mapsLocation.trim()}`
+                : ''}
+            </strong>
+          </p>
           <Toggle
             compact
             checked={noWebsiteOnly}
@@ -392,6 +469,14 @@ export default function BrandPipelineClient({
             label="Prefer no-website leads"
             description="Often stronger phone-first outreach"
           />
+          {creditsLeft != null && creditsLeft <= 0 ? (
+            <p className="msg-err">
+              No lead credits left.{' '}
+              <Link href="/billing" className="soft-link">
+                Upgrade or buy a pack →
+              </Link>
+            </p>
+          ) : null}
           <div className="row gap-sm" style={{ justifyContent: 'flex-end' }}>
             <button
               type="button"
@@ -401,8 +486,12 @@ export default function BrandPipelineClient({
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={mapsBusy}>
-              {mapsBusy ? 'Scouting…' : isDemo ? 'Scout (demo)' : 'Start job'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={mapsBusy || (creditsLeft != null && creditsLeft <= 0 && isLive)}
+            >
+              {mapsBusy ? 'Executing…' : isDemo ? 'Execute (demo)' : 'Execute scrape'}
             </button>
           </div>
           {isDemo ? <p className="muted small">{DEMO_MSG}</p> : null}

@@ -7,6 +7,7 @@ import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheet
 import FloatingCallWidget, { type CallDisposition } from '@/components/FloatingCallWidget';
 import CallWrapUpPanel from '@/components/CallWrapUpPanel';
 import { useTwilioCall } from '@/hooks/useTwilioCall';
+import { MAX_DIAL_ATTEMPTS } from '@/lib/lead-queue';
 import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
 
 export type OutboundProspect = {
@@ -22,6 +23,9 @@ export type OutboundProspect = {
   notes?: string | null;
   brandName?: string | null;
   brandSlug?: string | null;
+  attemptCount?: number;
+  nextCallAt?: string | null;
+  lastDisposition?: string | null;
 };
 
 export type ColdCallGig = {
@@ -33,6 +37,11 @@ export type ColdCallGig = {
   status: string;
   packId?: string | null;
   playbookId?: string | null;
+  goalType?: string | null;
+  bookingLink?: string | null;
+  meetingDurationMinutes?: number | null;
+  payoutCents?: number | null;
+  qualifiedPayoutCents?: number | null;
 };
 
 export type ColdCallPendingApp = {
@@ -109,6 +118,12 @@ export default function OutboundDialer({
   const [lastEnded, setLastEnded] = useState<{ duration: number; callLogId: string | null } | null>(
     null
   );
+  const [bookingStarting, setBookingStarting] = useState(false);
+  const [bookingToken, setBookingToken] = useState<string | null>(null);
+  const [bookingEmbedUrl, setBookingEmbedUrl] = useState<string | null>(null);
+  const [bookingProvider, setBookingProvider] = useState<string | undefined>();
+  const [bookingBooked, setBookingBooked] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const router = useRouter();
   const [cheatOpen, setCheatOpen] = useState(false);
   const [cheatSections, setCheatSections] = useState<CheatSheetSection[]>([]);
@@ -134,8 +149,70 @@ export default function OutboundDialer({
     setSelectedId(first?.id ?? null);
   }, [campaignProspects, withPhone, selectedId]);
 
+  // Hot-potato checkout when SDR selects a lead
+  useEffect(() => {
+    if (!hasAcceptedCampaign || !selectedId) return;
+    let cancelled = false;
+    void fetch(`/api/prospects/${selectedId}/checkout`, { method: 'POST' })
+      .then(async (r) => {
+        if (cancelled || r.ok) return;
+        const data = await r.json().catch(() => ({}));
+        if (data.error) console.warn('[checkout]', data.error);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, hasAcceptedCampaign]);
+
   const primaryGig = activeGigs[0] ?? null;
   const canManualDial = hasAcceptedCampaign;
+  const meetingsEnabled =
+    Boolean(primaryGig?.bookingLink) &&
+    (primaryGig?.goalType === 'BOOKED_MEETING' || primaryGig?.goalType === 'BOTH');
+
+  function resetBookingState() {
+    setBookingStarting(false);
+    setBookingToken(null);
+    setBookingEmbedUrl(null);
+    setBookingProvider(undefined);
+    setBookingBooked(false);
+    setBookingError(null);
+  }
+
+  async function startMeetingBooking() {
+    if (!primaryGig?.campaignId || !meetingsEnabled) {
+      setBookingError('This campaign has no booking link configured.');
+      return;
+    }
+    setBookingStarting(true);
+    setBookingError(null);
+    try {
+      const res = await fetch('/api/bookings/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId: primaryGig.campaignId,
+          callLogId: lastEnded?.callLogId || undefined,
+          prospectId: selected?.id || activeProspectId || undefined,
+          prospectName: selected?.ownerName || selected?.companyName || undefined,
+          notes: wrapNotes.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBookingError(data.error || 'Could not start booking');
+        return;
+      }
+      setBookingToken(data.token);
+      setBookingEmbedUrl(data.embedUrl);
+      setBookingProvider(data.provider);
+    } catch (e: unknown) {
+      setBookingError(e instanceof Error ? e.message : 'Could not start booking');
+    } finally {
+      setBookingStarting(false);
+    }
+  }
 
   const {
     isConnected,
@@ -170,6 +247,7 @@ export default function OutboundDialer({
     setLastEnded(null);
     setWrapNotes('');
     setWrapDisposition(null);
+    resetBookingState();
     setActiveProspectId(prospectId || null);
     if (prospectId) setSelectedId(prospectId);
     await makeCall(phone, prospectId, undefined, campaignId || undefined);
@@ -177,9 +255,14 @@ export default function OutboundDialer({
 
   async function saveOutboundWrap() {
     if (!wrapDisposition) return;
+    if (wrapDisposition === 'appointment_set' && meetingsEnabled && !bookingBooked) {
+      setBookingError('Confirm the calendar booking before saving.');
+      return;
+    }
     if (!lastEnded?.callLogId && !currentCallLogId) {
       setLastEnded(null);
       setActiveProspectId(null);
+      resetBookingState();
       return;
     }
     setWrapSaving(true);
@@ -199,6 +282,7 @@ export default function OutboundDialer({
       setWrapNotes('');
       setWrapDisposition(null);
       setActiveProspectId(null);
+      resetBookingState();
     } finally {
       setWrapSaving(false);
     }
@@ -209,6 +293,7 @@ export default function OutboundDialer({
     setWrapNotes('');
     setWrapDisposition(null);
     setActiveProspectId(null);
+    resetBookingState();
   }
 
   function openLeadRecord() {
@@ -284,7 +369,7 @@ export default function OutboundDialer({
         {/* Left: campaign queue */}
         <section className="cc-desk__col cc-desk__queue" aria-label="Call queue">
           <div className="cc-desk__col-head">
-            <strong>Campaign leads</strong>
+            <strong>Dial queue</strong>
             <span
               className="cc-desk__tab-count"
               title={hasAcceptedCampaign ? undefined : 'Locked until a brand accepts you'}
@@ -353,6 +438,9 @@ export default function OutboundDialer({
                           <span className="cc-desk__row-meta">
                             {p.ownerName || '—'}
                             {p.city ? ` · ${p.city}` : ''}
+                            {typeof p.attemptCount === 'number'
+                              ? ` · try ${p.attemptCount + 1}/${MAX_DIAL_ATTEMPTS}`
+                              : ''}
                           </span>
                           <span className="cc-desk__row-phone">{p.phone}</span>
                         </span>
@@ -415,12 +503,34 @@ export default function OutboundDialer({
                 notes={wrapNotes}
                 onNotesChange={setWrapNotes}
                 disposition={wrapDisposition}
-                onDisposition={setWrapDisposition}
+                onDisposition={(id) => {
+                  setWrapDisposition(id);
+                  if (id !== 'appointment_set') resetBookingState();
+                }}
                 onSave={() => void saveOutboundWrap()}
                 onSkip={skipOutboundWrap}
                 onEditLead={selected ? openLeadRecord : undefined}
                 saving={wrapSaving}
                 mode="outbound"
+                meetingBooking={
+                  meetingsEnabled
+                    ? {
+                        enabled: true,
+                        token: bookingToken,
+                        embedUrl: bookingEmbedUrl,
+                        provider: bookingProvider,
+                        meetingDurationMinutes: primaryGig?.meetingDurationMinutes,
+                        starting: bookingStarting,
+                        booked: bookingBooked,
+                        error: bookingError,
+                        onStart: () => void startMeetingBooking(),
+                        onBooked: () => {
+                          setBookingBooked(true);
+                          setBookingError(null);
+                        },
+                      }
+                    : null
+                }
               />
             ) : (
               <>
@@ -525,7 +635,7 @@ export default function OutboundDialer({
                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem' }}
                 onClick={openLeadRecord}
               >
-                Open record
+                Lead details
               </button>
             ) : null}
           </div>

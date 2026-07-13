@@ -4,6 +4,12 @@ import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import { isApplicationStatus, practiceHref } from '@/lib/campaigns';
 import type { CampaignApplicationStatus } from '@prisma/client';
+import {
+  defaultAcceptMessage,
+  defaultRejectMessage,
+  notifyAsync,
+  parseBrandDefaults,
+} from '@/lib/notifications';
 
 /** Brand manager lists applicants. */
 export async function GET(
@@ -47,6 +53,7 @@ export async function GET(
         id: a.id,
         status: a.status,
         message: a.message,
+        brandDecisionMessage: a.brandDecisionMessage,
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,
         payout: a.payout
@@ -87,8 +94,7 @@ export async function GET(
 
 /**
  * PATCH — brand accepts / rejects / activates applicant.
- * Body: { applicationId, status }
- * Accepting APPLIED → ACCEPTED or ACTIVE (ACTIVE is the “go work” state).
+ * Body: { applicationId, status, message?, sendEmail?, saveAsDefault? }
  */
 export async function PATCH(
   req: Request,
@@ -99,7 +105,18 @@ export async function PATCH(
     const { id } = await params;
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { brand: { select: { ownerId: true } } },
+      include: {
+        brand: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            ownerId: true,
+            logoUrl: true,
+            notificationDefaultsJSON: true,
+          },
+        },
+      },
     });
     if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageBrand(profile, campaign.brand.ownerId)) {
@@ -116,26 +133,124 @@ export async function PATCH(
       );
     }
 
-    // Brand-driven transitions: prefer ACTIVE when accepting
     if (status === 'ACCEPTED') status = 'ACTIVE';
 
     const app = await prisma.campaignApplication.findFirst({
       where: { id: applicationId, campaignId: id },
+      include: {
+        user: {
+          select: { id: true, email: true, displayName: true },
+        },
+      },
     });
     if (!app) return NextResponse.json({ error: 'Application not found' }, { status: 404 });
 
+    const defaults = parseBrandDefaults(campaign.brand.notificationDefaultsJSON);
+    let decisionMessage =
+      body.message != null ? String(body.message).slice(0, 4000) : null;
+
+    if (status === 'ACTIVE' && !decisionMessage?.trim()) {
+      decisionMessage =
+        defaults.acceptMessage ||
+        defaultAcceptMessage({
+          brandName: campaign.brand.name,
+          campaignTitle: campaign.title,
+        });
+    }
+    if (status === 'REJECTED' && !decisionMessage?.trim()) {
+      decisionMessage =
+        defaults.rejectMessage ||
+        defaultRejectMessage({
+          brandName: campaign.brand.name,
+          campaignTitle: campaign.title,
+        });
+    }
+
+    if (body.saveAsDefault && decisionMessage && (status === 'ACTIVE' || status === 'REJECTED')) {
+      const nextDefaults = {
+        ...defaults,
+        ...(status === 'ACTIVE'
+          ? { acceptMessage: decisionMessage }
+          : { rejectMessage: decisionMessage }),
+      };
+      await prisma.brand.update({
+        where: { id: campaign.brand.id },
+        data: { notificationDefaultsJSON: JSON.stringify(nextDefaults) },
+      });
+    }
+
     const updated = await prisma.campaignApplication.update({
       where: { id: applicationId },
-      data: { status },
+      data: {
+        status,
+        ...(status === 'ACTIVE' || status === 'REJECTED'
+          ? {
+              brandDecisionMessage: decisionMessage,
+              brandDecidedAt: new Date(),
+            }
+          : {}),
+      },
     });
+
+    const sendEmail = body.sendEmail !== false;
+    const brandCtx = {
+      id: campaign.brand.id,
+      name: campaign.brand.name,
+      slug: campaign.brand.slug,
+      logoUrl: campaign.brand.logoUrl,
+    };
+
+    if (sendEmail && status === 'ACTIVE') {
+      notifyAsync({
+        event: 'campaign.application.accepted',
+        recipient: {
+          userId: app.user.id,
+          email: app.user.email,
+          displayName: app.user.displayName,
+        },
+        brand: brandCtx,
+        fromUserId: profile.id,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: campaign.id,
+          applicationId: app.id,
+          customMessage: decisionMessage || undefined,
+          ctaUrl: '/gigs',
+        },
+        idempotencyKey: `campaign.application.accepted:${app.id}:${updated.updatedAt.toISOString()}`,
+      });
+    }
+
+    if (sendEmail && status === 'REJECTED') {
+      notifyAsync({
+        event: 'campaign.application.rejected',
+        recipient: {
+          userId: app.user.id,
+          email: app.user.email,
+          displayName: app.user.displayName,
+        },
+        brand: brandCtx,
+        fromUserId: profile.id,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: campaign.id,
+          applicationId: app.id,
+          customMessage: decisionMessage || undefined,
+          ctaUrl: '/gigs',
+        },
+        idempotencyKey: `campaign.application.rejected:${app.id}:${updated.updatedAt.toISOString()}`,
+      });
+    }
 
     return NextResponse.json({
       application: updated,
       practiceHref: practiceHref(campaign),
       notice:
         status === 'ACTIVE'
-          ? 'Applicant activated — they can practice the brand pack and start the brand deal.'
-          : `Marked ${status}.`,
+          ? 'Applicant activated — email notification queued.'
+          : status === 'REJECTED'
+            ? 'Applicant rejected — email notification queued.'
+            : `Marked ${status}.`,
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

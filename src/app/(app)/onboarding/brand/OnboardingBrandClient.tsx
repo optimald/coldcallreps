@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageHeader, Panel } from '@/components/ui/PagePrimitives';
 import { CAMPAIGN_TIERS } from '@/lib/campaign-tiers';
+import { fileToLogoDataUrl } from '@/lib/brand-logo-upload';
 
 type MePrefill = {
   displayName?: string | null;
@@ -16,11 +17,17 @@ type MePrefill = {
 export default function OnboardingBrandClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const fileInputId = useId();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<'accept' | 'setup'>('accept');
   const [accepted, setAccepted] = useState(false);
   const [brandName, setBrandName] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoSource, setLogoSource] = useState<'auto' | 'upload' | null>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
   const [campaignTitle, setCampaignTitle] = useState('');
   const [pricingTier, setPricingTier] = useState('TIER2');
   const [fundWallet, setFundWallet] = useState(true);
@@ -40,7 +47,7 @@ export default function OnboardingBrandClient() {
       .then((d: MePrefill | null) => {
         if (!d) return;
         if (d.roleMode?.modes?.BRAND?.onboarded) {
-          router.replace('/brands');
+          router.replace('/dashboard');
           return;
         }
         if (d.displayName) {
@@ -50,7 +57,73 @@ export default function OnboardingBrandClient() {
       .catch(() => {});
   }, [router]);
 
+  useEffect(() => {
+    if (step !== 'setup') return;
+    const trimmed = websiteUrl.trim();
+    if (!trimmed || trimmed.length < 4) {
+      if (logoSource !== 'upload') {
+        setLogoUrl(null);
+        setLogoSource(null);
+        setLogoBroken(false);
+      }
+      return;
+    }
+    if (logoSource === 'upload') return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLogoBusy(true);
+      fetch('/api/brands/logo-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteUrl: trimmed }),
+        signal: controller.signal,
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d?.logoUrl) return;
+          setLogoUrl(d.logoUrl);
+          setLogoSource('auto');
+          setLogoBroken(false);
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+        })
+        .finally(() => setLogoBusy(false));
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [websiteUrl, step, logoSource === 'upload']);
+
+  async function onPickFile(file: File | null) {
+    if (!file) return;
+    setMsg('');
+    try {
+      const dataUrl = await fileToLogoDataUrl(file);
+      setLogoUrl(dataUrl);
+      setLogoSource('upload');
+      setLogoBroken(false);
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Could not read image');
+    }
+  }
+
   async function submit() {
+    if (!brandName.trim()) {
+      setMsg('Add a brand name first.');
+      return;
+    }
+    if (!websiteUrl.trim()) {
+      setMsg('Add your company website URL so we can pull the logo.');
+      return;
+    }
+    if (!description.trim()) {
+      setMsg('Add a short description of what you sell.');
+      return;
+    }
     setBusy(true);
     setMsg('');
     try {
@@ -60,8 +133,9 @@ export default function OnboardingBrandClient() {
         body: JSON.stringify({
           accept: true,
           brandName,
-          logoUrl: logoUrl.trim() || null,
-          description,
+          websiteUrl: websiteUrl.trim(),
+          description: description.trim(),
+          logoUrl: logoUrl || undefined,
           campaignTitle: campaignTitle.trim() || undefined,
           pricingTier,
           fundWalletCents: fundWallet ? 10000 : 0,
@@ -76,13 +150,15 @@ export default function OnboardingBrandClient() {
         window.location.href = data.walletFundUrl;
         return;
       }
-      router.replace(data.redirectTo || '/brands');
+      window.location.href = data.redirectTo || '/dashboard';
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Could not finish onboarding');
     } finally {
       setBusy(false);
     }
   }
+
+  const showPreview = Boolean(logoUrl) && !logoBroken;
 
   return (
     <main className="app-page app-page--narrow">
@@ -133,45 +209,112 @@ export default function OnboardingBrandClient() {
       {step === 'setup' && (
         <Panel
           title="Brand setup"
-          description="Creates your brand, a draft campaign, and a starter playbook."
+          description="Logo auto-fills from your website. Creates a draft campaign and starter playbook."
         >
           <div className="stack" style={{ gap: '0.75rem' }}>
-            <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-              Brand name
-              <input
-                className="field"
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                placeholder="Acme Outreach"
-                required
-                style={{ marginTop: '0.35rem' }}
-              />
-            </label>
-            <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-              Logo URL
-              <input
-                className="field"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://… or /brands/logo.svg"
-                style={{ marginTop: '0.35rem' }}
-              />
-            </label>
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl}
-                alt=""
-                width={48}
-                height={48}
-                style={{
-                  objectFit: 'contain',
-                  borderRadius: 8,
-                  border: '1px solid var(--line)',
-                  background: 'var(--bg-elevated)',
-                }}
-              />
-            ) : null}
+            <div className="brand-create-row">
+              <div className="brand-create-fields">
+                <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+                  Brand name
+                  <input
+                    className="field"
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    placeholder="Acme Outreach"
+                    required
+                    style={{ marginTop: '0.35rem' }}
+                  />
+                </label>
+                <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+                  Website URL
+                  <input
+                    className="field"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://acme.com"
+                    inputMode="url"
+                    required
+                    style={{ marginTop: '0.35rem' }}
+                  />
+                </label>
+              </div>
+
+              <div className="brand-create-logo">
+                <span className="muted" style={{ fontSize: '0.85rem' }}>
+                  Logo
+                </span>
+                <input
+                  ref={fileRef}
+                  id={fileInputId}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  className="sr-only"
+                  onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+                />
+                <label
+                  htmlFor={fileInputId}
+                  className={`brand-logo-field${showPreview ? ' is-filled' : ''}${logoBusy ? ' is-loading' : ''}`}
+                  title="Upload logo or wait for auto-fill from URL"
+                >
+                  {showPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoUrl!}
+                      alt=""
+                      className="brand-logo-field__img"
+                      onError={() => setLogoBroken(true)}
+                    />
+                  ) : (
+                    <span className="brand-logo-field__placeholder">
+                      {logoBusy ? '…' : '+'}
+                    </span>
+                  )}
+                </label>
+                <div className="brand-logo-field__meta">
+                  {logoSource === 'auto' ? (
+                    <button
+                      type="button"
+                      className="soft-link"
+                      style={{
+                        fontSize: '0.75rem',
+                        background: 'none',
+                        border: 0,
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      Replace
+                    </button>
+                  ) : logoSource === 'upload' ? (
+                    <button
+                      type="button"
+                      className="soft-link"
+                      style={{
+                        fontSize: '0.75rem',
+                        background: 'none',
+                        border: 0,
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => {
+                        setLogoSource(null);
+                        setLogoUrl(null);
+                        setLogoBroken(false);
+                        if (fileRef.current) fileRef.current.value = '';
+                      }}
+                    >
+                      Use URL logo
+                    </button>
+                  ) : (
+                    <span className="muted" style={{ fontSize: '0.72rem' }}>
+                      From URL
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
               Short description
               <textarea
@@ -180,6 +323,7 @@ export default function OnboardingBrandClient() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What you sell and who you dial"
+                required
                 style={{ marginTop: '0.35rem' }}
               />
             </label>
@@ -233,7 +377,7 @@ export default function OnboardingBrandClient() {
               <button
                 type="button"
                 className="btn"
-                disabled={busy || !brandName.trim()}
+                disabled={busy || !brandName.trim() || !websiteUrl.trim() || !description.trim()}
                 onClick={submit}
               >
                 {busy ? 'Creating…' : fundWallet ? 'Create & fund wallet' : 'Unlock Brand mode'}

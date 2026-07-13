@@ -11,6 +11,7 @@ import { isLeadOutreachReady, prospectToQcRecord } from '@/lib/enrichment-qc';
 import { fetchAndScanWebsite } from '@/lib/pipeline/webscan-phones';
 import { runEnrichmentWaterfall } from '@/lib/pipeline/enrichment-waterfall';
 import { serializeHooksPayload } from '@/lib/prospect-intel';
+import { deductLeadCreditOnSave, ensureLeadCreditPeriod } from '@/lib/lead-credits';
 
 export type ScoutCampaignPayload = {
   brandId: string;
@@ -22,14 +23,28 @@ export type ScoutCampaignPayload = {
   noWebsiteOnly?: boolean;
 };
 
-/** Phase 1 — Maps scrape into Prospect rows. */
+/** Phase 1 — Maps scrape into Prospect rows. Deducts 1 lead credit per newly saved lead. */
 export async function runScraperPhase(payload: ScoutCampaignPayload) {
-  const maxResults = Math.min(25, Math.max(1, payload.maxResults ?? 10));
+  const creditSnap = await ensureLeadCreditPeriod(payload.brandId);
+  if (creditSnap.totalRemaining <= 0) {
+    return {
+      prospectIds: [] as string[],
+      count: 0,
+      creditBlocked: true as const,
+      creditsRemaining: 0,
+    };
+  }
+
+  const maxResults = Math.min(
+    25,
+    Math.max(1, Math.min(payload.maxResults ?? 10, creditSnap.totalRemaining))
+  );
   const results = await searchMapsProspects(payload.query, payload.location, maxResults, {
     noWebsiteOnly: payload.noWebsiteOnly,
   });
 
   const saved: string[] = [];
+  let creditBlocked = false;
   for (const r of results) {
     const placeId = r.placeId || null;
     if (placeId) {
@@ -55,6 +70,12 @@ export async function runScraperPhase(payload: ScoutCampaignPayload) {
       }
     }
 
+    const deduct = await deductLeadCreditOnSave(payload.brandId);
+    if (!deduct.ok) {
+      creditBlocked = true;
+      break;
+    }
+
     const row = await prisma.prospect.create({
       data: {
         userId: payload.ownerUserId,
@@ -78,10 +99,16 @@ export async function runScraperPhase(payload: ScoutCampaignPayload) {
         outreachReady: false,
       },
     });
+    // Attach prospect id on ledger via a follow-up note is optional; credit already deducted.
     saved.push(row.id);
   }
 
-  return { prospectIds: saved, count: saved.length };
+  return {
+    prospectIds: saved,
+    count: saved.length,
+    creditBlocked,
+    creditsRemaining: (await ensureLeadCreditPeriod(payload.brandId)).totalRemaining,
+  };
 }
 
 /** Phase 2 — phone/booking webscan. */
@@ -237,7 +264,8 @@ export async function runScoutCampaignPipeline(payload: ScoutCampaignPayload) {
   });
 
   try {
-    const { prospectIds, count } = await runScraperPhase(payload);
+    const scrape = await runScraperPhase(payload);
+    const { prospectIds, count, creditBlocked, creditsRemaining } = scrape;
     const results = [];
     for (const id of prospectIds) {
       results.push({ id, ...(await runPipelineForProspect(id)) });
@@ -246,13 +274,14 @@ export async function runScoutCampaignPipeline(payload: ScoutCampaignPayload) {
     await prisma.pipelineJob.update({
       where: { id: job.id },
       data: {
-        status: 'completed',
+        status: creditBlocked && count === 0 ? 'failed' : 'completed',
         savedCount: count,
         readyCount,
+        errorMessage: creditBlocked && count === 0 ? 'No lead credits remaining' : null,
         completedAt: new Date(),
       },
     });
-    return { count, results, jobId: job.id };
+    return { count, results, jobId: job.id, creditBlocked, creditsRemaining };
   } catch (e) {
     await prisma.pipelineJob.update({
       where: { id: job.id },

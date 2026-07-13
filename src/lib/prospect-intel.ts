@@ -7,7 +7,7 @@
  * Field map (Trojan SalesLeadsView → CCR):
  *   digitalGravityScore → intel.score ("Trojan")
  *   siteHealthScore     → intel.health
- *   webevoOverallScore  → intel.webEvoScore (heuristic grade proxy — not uilensai)
+ *   webevoOverallScore  → intel.webEvoScore (uilensai when scanned; else heuristic proxy)
  *   copyrightYear       → intel.copyrightYear ("© Year")
  *   cmsUsed             → intel.cms
  *   LeadSignals pills   → intel.signals[]
@@ -18,7 +18,8 @@
  *   REAL: CMS detect, © year, HTTPS, viewport/mobile, booking, pixels/GA/ads/schema/OG,
  *         review rating/count (from Maps on Prospect), talking-point hooks
  *   HEURISTIC: health, score (Trojan), webEvoScore — lightweight HTML signals only
- *   UNAVAILABLE in 1-step: real WebEvo pro-scan, DNS/SEO full health, lastGoogleReviewDate
+ *   REAL WebEvo: POST /api/prospects/[id]/webevo → @optimald/uilensai (opt-in, not in P1–P3)
+ *   UNAVAILABLE in 1-step: DNS/SEO full health, lastGoogleReviewDate
  */
 
 export type ProspectIntel = {
@@ -26,8 +27,27 @@ export type ProspectIntel = {
   score?: number | null;
   /** siteHealthScore proxy — Health column. */
   health?: number | null;
-  /** webevoOverallScore proxy — letter grade (not real WebEvo). */
+  /** webevoOverallScore — letter grade column. */
   webEvoScore?: number | null;
+  /** 'uilensai' when from @optimald/uilensai; else heuristic HTML proxy. */
+  webEvoSource?: 'uilensai' | 'heuristic' | null;
+  /** Excellent | Good | Fair | Poor from UILensAI. */
+  webEvoRating?: string | null;
+  /** Module scores from UILensAI (0–100). */
+  webEvoModules?: {
+    ui?: number | null;
+    performance?: number | null;
+    seo?: number | null;
+    security?: number | null;
+    privacy?: number | null;
+    compatibility?: number | null;
+    marketing?: number | null;
+    conversion?: number | null;
+    accessibility?: number | null;
+    siteHealth?: number | null;
+  } | null;
+  /** CF / UILensAI screenshots by viewport. */
+  screenshots?: { viewport: string; url: string }[] | null;
   /** Trojan copyrightYear (footer ©), not founding year. */
   copyrightYear?: number | null;
   /** cmsUsed */
@@ -40,6 +60,15 @@ export type ProspectIntel = {
   mobile?: boolean | null;
   bookingSystem?: string | null;
   hasWebsite?: boolean | null;
+  /** Geo / Maps */
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
+  /** Google Business Profile-ish */
+  googleCategory?: string | null;
+  googlePhone?: string | null;
+  googleMapsUrl?: string | null;
+  openingHours?: string | null;
 };
 
 export type HooksPayloadV2 = {
@@ -160,3 +189,116 @@ export function formatRelativeReview(iso?: string | null): string | null {
   if (days < 365) return `${Math.floor(days / 30)}mo ago`;
   return `${Math.floor(days / 365)}y ago`;
 }
+
+function hashName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function modScore(h: number, shift: number, base: number, span: number) {
+  return base + ((h >> shift) % span);
+}
+
+/**
+ * Demo enrichment vitals when training hooks are still a legacy string[].
+ * Matches Lead Detail so Practice Lead Intel shows the same enrichment surface.
+ */
+export function synthesizeTrainingIntel(p: {
+  companyName?: string | null;
+  website?: string | null;
+  phone?: string | null;
+}): ProspectIntel {
+  const name = String(p.companyName || 'x');
+  const h = hashName(name);
+  const health = 55 + (h % 35);
+  const webEvo = 40 + ((h >> 3) % 50);
+  const score = 50 + ((h >> 5) % 40);
+  const lat = Math.round((41.88 + ((h % 100) - 50) * 0.001) * 10000) / 10000;
+  const lon = Math.round((-87.63 + (((h >> 4) % 100) - 50) * 0.001) * 10000) / 10000;
+  const company = String(p.companyName || 'Business');
+  const phone = String(p.phone || '(312) 555-0142');
+  const streetNo = 100 + (h % 800);
+  const label = encodeURIComponent(company.slice(0, 18) || 'Site');
+
+  return {
+    hasWebsite: Boolean(p.website),
+    https: true,
+    mobile: true,
+    health,
+    webEvoScore: webEvo,
+    webEvoSource: 'heuristic',
+    score,
+    cms: ['Webflow', 'WordPress', 'HubSpot CMS', 'Next.js'][h % 4],
+    copyrightYear: 2019 + (h % 6),
+    bookingSystem: h % 3 === 0 ? 'Calendly' : null,
+    signals: [
+      'Mobile',
+      h % 2 === 0 ? 'Schema' : 'OG',
+      h % 3 === 0 ? 'Meta Pixel' : 'GA',
+      h % 4 === 0 ? 'Calendly' : 'Chat',
+    ],
+    lastReviewAt: new Date(Date.now() - ((h % 90) + 5) * 86400000).toISOString(),
+    latitude: lat,
+    longitude: lon,
+    address: `${streetNo} W Madison St`,
+    googleCategory: [
+      'Marketing Agency',
+      'Business Consultant',
+      'Software Company',
+      'Advertising Agency',
+    ][h % 4],
+    googlePhone: phone,
+    googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+    openingHours: 'Mon–Fri 9:00 AM – 6:00 PM',
+    webEvoModules: {
+      ui: modScore(h, 1, 45, 50),
+      performance: modScore(h, 2, 40, 55),
+      seo: modScore(h, 3, 35, 55),
+      security: modScore(h, 4, 50, 45),
+      privacy: modScore(h, 5, 40, 50),
+      compatibility: modScore(h, 6, 55, 40),
+      marketing: modScore(h, 7, 30, 60),
+      conversion: modScore(h, 8, 35, 55),
+      accessibility: modScore(h, 9, 40, 50),
+      siteHealth: health,
+    },
+    screenshots: [
+      {
+        viewport: 'desktop',
+        url: `https://placehold.co/1280x800/1a1a1a/e8e8e8?text=${label}+Desktop`,
+      },
+      {
+        viewport: 'tablet',
+        url: `https://placehold.co/768x1024/1a1a1a/e8e8e8?text=${label}+Tablet`,
+      },
+      {
+        viewport: 'mobile',
+        url: `https://placehold.co/375x812/1a1a1a/e8e8e8?text=${label}+Mobile`,
+      },
+    ],
+  };
+}
+
+/** Prefer stored v2 intel; for training leads, synthesize enrichment vitals. */
+export function resolveProspectIntel(
+  hooksJSON: string | null | undefined,
+  opts?: {
+    purpose?: 'training' | 'brand' | string | null;
+    companyName?: string | null;
+    website?: string | null;
+    phone?: string | null;
+  }
+): ProspectIntel | null {
+  const stored = parseIntel(hooksJSON);
+  if (stored) return stored;
+  if (opts?.purpose === 'training') {
+    return synthesizeTrainingIntel({
+      companyName: opts.companyName,
+      website: opts.website,
+      phone: opts.phone,
+    });
+  }
+  return null;
+}
+

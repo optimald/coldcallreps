@@ -35,6 +35,6 @@ export async function redirectBrandToScoped(
   if (role !== 'BRAND' && role !== 'RECRUITER' && role !== 'SUPERADMIN') return;
 
   const brand = await resolveOwnedBrandForRedirect(profile);
-  if (!brand) redirect('/brands');
+  if (!brand) redirect('/dashboard');
   redirect(brandHref(brand, ...segments));
 }

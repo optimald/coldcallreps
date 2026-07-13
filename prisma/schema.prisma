@@ -60,6 +60,8 @@ model UserProfile {
   hiringHeadline       String?
   hiringBio            String?
   badges               String       @default("[]") // JSON string[]
+  /** JSON opt-outs: { mutedEvents?: string[], emailEnabled?: boolean } */
+  notificationPrefsJSON String      @default("{}")
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
@@ -95,6 +97,8 @@ model UserProfile {
   campaignPayoutsEarned CampaignPayout[]   @relation("PayoutRep")
   callLogs            CallLog[]
   callbackLocks       Prospect[]           @relation("CallbackLock")
+  leadCheckouts       Prospect[]           @relation("LeadCheckout")
+  notificationLogs    NotificationLog[]
 
   @@index([orgId])
   @@index([totalPoints])
@@ -144,6 +148,16 @@ model Prospect {
   imageR2Key     String?
   source         String      @default("manual") // manual | maps | url | import | training
   mapsPlaceId    String?
+  /** Hot-potato checkout — short lock while SDR works this lead. */
+  checkedOutByUserId String?
+  checkedOutBy       UserProfile? @relation("LeadCheckout", fields: [checkedOutByUserId], references: [id], onDelete: SetNull)
+  checkedOutUntil    DateTime?
+  /** Voice attempts toward max (default 5) before archive. */
+  attemptCount       Int      @default(0)
+  /** System-scheduled next dial window (cooling / time-shift). */
+  nextCallAt         DateTime?
+  /** Last outbound wrap disposition. */
+  lastDisposition    String?
   /** 48h inbound callback routing — last SDR who dialed this lead on a campaign. */
   callbackLockedUntil    DateTime?
   callbackLockedByUserId String?
@@ -162,6 +176,8 @@ model Prospect {
   @@index([brandId, campaignId])
   @@index([brandId, outreachReady])
   @@index([callbackLockedByUserId, callbackLockedUntil])
+  @@index([checkedOutByUserId, checkedOutUntil])
+  @@index([campaignId, nextCallAt, outreachReady])
 }
 
 /** Browser→PSTN call log + post-call AI audit fields. */
@@ -443,6 +459,8 @@ model Brand {
   name        String
   slug        String      @unique
   description String?
+  /** Company website used to auto-resolve logoUrl on create. */
+  websiteUrl  String?
   logoUrl     String?
   /** Founder / central line when locked SDR is offline for inbound callbacks. */
   fallbackPhoneE164 String?
@@ -465,9 +483,49 @@ model Brand {
   wallet          BrandWallet?
   productHuntImports ProductHuntImport[]
   pipelineJobs    PipelineJob[]
+  leadCreditLedger BrandLeadCreditLedger[]
+  /** JSON: { acceptMessage?, rejectMessage?, replyToEmail? } */
+  notificationDefaultsJSON String @default("{}")
+
+  /**
+   * Brand lead-credit plan (Maps scrape + enrichment).
+   * FREE | LEAD_MONTHLY | LEAD_ANNUAL
+   */
+  leadPlan                 String    @default("FREE")
+  /** Remaining allotment for current billing/calendar period (plan or free 100). */
+  leadCreditsAllotment     Int       @default(100)
+  /** Purchased pack balance — burned after allotment hits 0. */
+  leadCreditsPack          Int       @default(0)
+  /** Pack credits expire 12 months after last pack grant. */
+  leadPackExpiresAt        DateTime?
+  /** End of current paid plan period (null on FREE). */
+  leadPlanPeriodEnd        DateTime?
+  /** When allotment was last reset (calendar month for FREE; invoice for paid). */
+  leadAllotmentResetAt     DateTime?
+  leadCreditsUsedPeriod    Int       @default(0)
+  stripeLeadSubscriptionId String?
 
   @@index([slug])
   @@index([twilioPhoneE164])
+  @@index([leadPlan])
+}
+
+/** Brand lead-credit movements (allotment grants, pack buys, save deductions). */
+model BrandLeadCreditLedger {
+  id           String   @id @default(cuid())
+  brandId      String
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  /** GRANT_ALLOTMENT | GRANT_PACK | DEDUCT_SAVE | ADJUSTMENT | EXPIRE_PACK */
+  type         String
+  amount       Int
+  allotmentAfter Int
+  packAfter      Int
+  note         String?
+  prospectId   String?
+  stripeSessionId String?
+  createdAt    DateTime @default(now())
+
+  @@index([brandId, createdAt])
 }
 
 /** Brand-owned Twilio DID pool (local presence). Platform Twilio account, tagged to brand. */
@@ -696,6 +754,7 @@ model Playbook {
 enum CampaignGoalType {
   QUALIFIED_LEAD
   BOOKED_MEETING
+  BOTH
 }
 
 enum CampaignStatus {
@@ -725,7 +784,10 @@ model Campaign {
   description      String          
   icpText          String?         
   goalType         CampaignGoalType @default(BOOKED_MEETING)
+  /** Meeting / primary outcome bounty (brand charged per verified result). */
   payoutCents      Int
+  /** Optional qualified-lead bounty when goalType is BOTH (or secondary path). */
+  qualifiedPayoutCents Int?
   /** Productized tier: TIER1 | TIER2 | TIER3 */
   pricingTier      String           @default("TIER2")
   platformFeeBps   Int              @default(2000) // 20% platform fee
@@ -739,11 +801,19 @@ model Campaign {
   playbookId       String?
   playbook         Playbook?        @relation(fields: [playbookId], references: [id], onDelete: SetNull)
   budgetCents      Int?
+  /** OVERALL = budgetCents total spend cap; DAILY = dailyBudgetCents per calendar day (UTC). */
+  budgetMode       String           @default("OVERALL") // OVERALL | DAILY
+  dailyBudgetCents Int?
+  /** Campaign dial window — null startsAt means immediately; null endsAt means ongoing. */
+  startsAt         DateTime?
+  endsAt           DateTime?
   /** Capital locked from BrandWallet while campaign is OPEN. */
   escrowLockedCents Int             @default(0)
   maxAwards        Int?
-  /** Founder's Cal.com / Calendly booking URL for SDR embed. */
+  /** Founder's Cal.com / Calendly / Google Appointment URL for SDR embed. */
   bookingLink      String?
+  /** Expected meeting length when goal includes booked meetings. */
+  meetingDurationMinutes Int?
   /** Scout parameters for the 3-phase pipeline. */
   targetVertical   String?
   targetLocation   String?
@@ -799,6 +869,9 @@ model CampaignApplication {
   user       UserProfile                @relation(fields: [userId], references: [id], onDelete: Cascade)
   status     CampaignApplicationStatus  @default(APPLIED)
   message    String?                   
+  /** Brand message sent with accept/reject decision. */
+  brandDecisionMessage String?
+  brandDecidedAt       DateTime?
   createdAt  DateTime                   @default(now())
   updatedAt  DateTime                   @updatedAt
 
@@ -864,9 +937,14 @@ model AppointmentClaim {
   application     CampaignApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   repUserId       String
   callLogId       String?
+  prospectId      String?
   calendarEventId String?
+  /** Opaque token for /book/[token] attribution without dual entry. */
+  attributionToken String?               @unique
   prospectName    String?
   meetingAt       DateTime?
+  meetingDurationMinutes Int?
+  bookedVia       String? // calendly | calcom | redirect | google
   notes           String?
   transcriptSnippet String?
   status          AppointmentClaimStatus @default(PENDING_AUDIT)
@@ -881,6 +959,7 @@ model AppointmentClaim {
   @@index([campaignId, status])
   @@index([applicationId])
   @@index([repUserId, createdAt])
+  @@index([prospectId])
 }
 
 /** Product Hunt launch ingest → founder prospect pipeline. */
@@ -978,4 +1057,27 @@ model WebhookEndpoint {
   createdAt     DateTime    @default(now())
 
   @@index([userId])
+}
+
+/** Durable log of transactional notifications (email-first). */
+model NotificationLog {
+  id           String       @id @default(cuid())
+  eventKey     String
+  userId       String?
+  user         UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  brandId      String?
+  emailTo      String?
+  subject      String?
+  status       String       @default("queued") // queued | sent | skipped | failed
+  channel      String       @default("email") // email | in_app
+  providerId   String?
+  idempotency  String?      @unique
+  error        String?
+  payloadJSON  String       @default("{}")
+  createdAt    DateTime     @default(now())
+
+  @@index([eventKey, createdAt])
+  @@index([userId, createdAt])
+  @@index([brandId, createdAt])
+  @@index([status, createdAt])
 }

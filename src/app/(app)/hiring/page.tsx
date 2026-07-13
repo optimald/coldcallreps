@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/PagePrimitives';
 import { useUnsavedForm } from '@/hooks/useUnsavedForm';
 import { repPublicPath } from '@/lib/public-urls';
+import { useShell } from '@/components/ShellProvider';
 
 type HandleStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
 
@@ -54,10 +55,11 @@ const EMPTY_RESUME: ResumeForm = {
 };
 
 export default function HiringPage() {
-  const [role, setRole] = useState<string>('REP');
+  const shell = useShell();
+  const [role, setRole] = useState<string>(() => shell?.role || 'REP');
   const [displayName, setDisplayName] = useState('');
-  const [points, setPoints] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [points, setPoints] = useState(() => shell?.metrics.totalPoints || 0);
+  const [streak, setStreak] = useState(() => shell?.metrics.currentStreak || 0);
   const [badges, setBadges] = useState<string[]>([]);
 
   const { values, update, dirty, hydrate, markSaved, reset } =

@@ -6,6 +6,7 @@ import { useClerk } from '@clerk/nextjs';
 import { PLAN, REFERRAL_BONUS_MINUTES, REFERRAL_REWARD_LABEL } from '@/lib/product';
 import { PageHeader, Panel, SoftLink } from '@/components/ui/PagePrimitives';
 import { repPublicPath } from '@/lib/public-urls';
+import { useShell } from '@/components/ShellProvider';
 
 type ReferralState = {
   code?: string;
@@ -18,6 +19,7 @@ type ReferralState = {
 
 export default function SettingsPage() {
   const { signOut } = useClerk();
+  const shell = useShell();
   const [referral, setReferral] = useState<ReferralState>({});
   const [me, setMe] = useState<{
     plan?: string;
@@ -27,7 +29,12 @@ export default function SettingsPage() {
     bountyCredits?: number;
     profileSlug?: string | null;
     referredByCode?: string | null;
-  }>({ plan: 'FREE' });
+  }>(() => ({
+    plan: shell?.metrics.plan || 'FREE',
+    minutesRemaining: shell?.metrics.minutesRemaining ?? undefined,
+    platformRole: shell?.role,
+    profileSlug: shell?.metrics.profileSlug,
+  }));
   const [applyCode, setApplyCode] = useState('');
   const [msg, setMsg] = useState('');
   const [msgTone, setMsgTone] = useState<'ok' | 'err'>('ok');
@@ -35,7 +42,33 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [applying, setApplying] = useState(false);
 
-  const role = me.platformRole || 'REP';
+  const [emailOn, setEmailOn] = useState(true);
+  const [emailBusy, setEmailBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/notifications/prefs')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.prefs) setEmailOn(d.prefs.emailEnabled !== false);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveEmailPrefs(next: boolean) {
+    setEmailBusy(true);
+    setEmailOn(next);
+    try {
+      await fetch('/api/notifications/prefs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailEnabled: next }),
+      });
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  const role = me.platformRole || shell?.role || 'REP';
   const isBrand = role === 'BRAND' || role === 'RECRUITER';
   const isRepFacing = role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN';
   const bonusMinutes = referral.bonusMinutes ?? REFERRAL_BONUS_MINUTES;
@@ -92,7 +125,7 @@ export default function SettingsPage() {
     if (res.ok) {
       setMe((m) => ({ ...m, platformRole: data.platformRole }));
       window.location.href =
-        data.redirectTo || (platformRole === 'BRAND' ? '/brands' : '/dashboard');
+        data.redirectTo || '/dashboard';
       return;
     }
     if (res.status === 402 && data.requiredPlan) {
@@ -428,6 +461,24 @@ export default function SettingsPage() {
       </Panel>
       ) : null}
 
+      <Panel
+        title="Email notifications"
+        description="Transactional emails for applications, campaigns, bookings, and payouts. Brand emails come from “Brand via ColdCallReps”."
+      >
+        <label
+          className="muted"
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.9rem' }}
+        >
+          <input
+            type="checkbox"
+            checked={emailOn}
+            disabled={emailBusy}
+            onChange={(e) => void saveEmailPrefs(e.target.checked)}
+          />
+          Receive platform & brand emails
+        </label>
+      </Panel>
+
       {isRepFacing && (
         <Panel
           title="Weekly Top Reps digest"
@@ -446,9 +497,9 @@ export default function SettingsPage() {
             </>
           )}
           {isBrand && <SoftLink href="/leads">Leads →</SoftLink>}
-          {isBrand && <SoftLink href="/brands">Brands →</SoftLink>}
+          {isBrand && <SoftLink href="/brands">My brands →</SoftLink>}
           <SoftLink href="/developers">Developer API →</SoftLink>
-          {role === 'SUPERADMIN' && <SoftLink href="/admin">Superadmin console →</SoftLink>}
+          {role === 'SUPERADMIN' && <SoftLink href="/admin">Superadmin command center →</SoftLink>}
         </div>
       </Panel>
 

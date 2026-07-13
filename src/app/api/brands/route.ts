@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { requireUser, optionalUserId } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { effectiveRole, isSuperadmin } from '@/lib/roles';
+import {
+  normalizeWebsiteUrl,
+  resolveBrandLogoFromWebsite,
+} from '@/lib/fetch-brand-logo';
+import { normalizeLogoUrlInput } from '@/lib/brand-logo-upload';
 
 function stripPackSecrets<T extends { scriptsJSON?: string; objectionsJSON?: string; icpJSON?: string }>(
   pack: T,
@@ -33,7 +38,8 @@ export async function GET(req: Request) {
     const forcePractice = searchParams.get('practice') === '1';
 
     const userId = await optionalUserId();
-    let where: { ownerId?: string } | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let where: any;
 
     if (userId) {
       const profile = await prisma.userProfile.findUnique({
@@ -47,12 +53,19 @@ export async function GET(req: Request) {
           (!forcePractice && (role === 'BRAND' || role === 'RECRUITER'));
         if (wantsMine && !isSuperadmin(profile)) {
           where = { ownerId: profile.id };
+        } else if (forcePractice || role === 'REP' || role === 'MANAGER') {
+          // Trainer / hiring catalog: platform demos + any brands the user owns
+          where = {
+            OR: [{ slug: { startsWith: 'demo-' } }, { ownerId: profile.id }],
+          };
         }
-        // Superadmin + practice / SDR catalog: no owner filter
+        // Superadmin without mine/practice: no filter (all brands)
       }
     } else if (!forcePractice) {
       // Anonymous: do not dump every company's brand list
       return NextResponse.json({ brands: [] });
+    } else {
+      where = { slug: { startsWith: 'demo-' } };
     }
 
     const brands = await prisma.brand.findMany({
@@ -85,6 +98,20 @@ export async function POST(req: Request) {
     const body = await req.json();
     const name = String(body.name || '').trim();
     if (!name) return NextResponse.json({ error: 'name required' }, { status: 400 });
+
+    const description = body.description ? String(body.description).trim().slice(0, 1000) : '';
+    if (!description) {
+      return NextResponse.json({ error: 'description required' }, { status: 400 });
+    }
+
+    const websiteUrl = normalizeWebsiteUrl(String(body.websiteUrl || body.website || ''));
+    if (!websiteUrl) {
+      return NextResponse.json(
+        { error: 'A valid website URL is required (we use it to fetch your logo)' },
+        { status: 400 }
+      );
+    }
+
     const slug =
       String(body.slug || name)
         .toLowerCase()
@@ -111,8 +138,14 @@ export async function POST(req: Request) {
 
     let logoUrl: string | null = null;
     if (body.logoUrl != null && String(body.logoUrl).trim()) {
-      const raw = String(body.logoUrl).trim().slice(0, 500);
-      if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) logoUrl = raw;
+      const parsed = normalizeLogoUrlInput(body.logoUrl);
+      if (parsed.error) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      logoUrl = parsed.logoUrl;
+    }
+    if (!logoUrl) {
+      logoUrl = await resolveBrandLogoFromWebsite(websiteUrl);
     }
 
     const brand = await prisma.brand.create({
@@ -120,7 +153,8 @@ export async function POST(req: Request) {
         ownerId: profile.id,
         name: name.slice(0, 120),
         slug,
-        description: body.description ? String(body.description).slice(0, 1000) : null,
+        description,
+        websiteUrl,
         logoUrl,
         packs: body.pack
           ? {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SoftLink } from '@/components/ui/PagePrimitives';
+import { useShell } from '@/components/ShellProvider';
 
 type CalendarMeta = {
   googleConfigured?: boolean;
@@ -27,18 +28,19 @@ function StatusChip({ tone, label }: { tone: StatusTone; label: string }) {
 
 export default function IntegrationsPage() {
   const search = useSearchParams();
+  const shell = useShell();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
   const [calendar, setCalendar] = useState<CalendarMeta>({});
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(() => shell?.role || null);
 
   async function load() {
     setLoading(true);
     try {
-      const [intRes, meRes] = await Promise.all([fetch('/api/integrations'), fetch('/api/me')]);
+      const intRes = await fetch('/api/integrations');
       const data = await intRes.json();
       if (!intRes.ok) {
         setErr(data.error || 'Could not load integrations.');
@@ -46,10 +48,7 @@ export default function IntegrationsPage() {
       }
       setConnections(data.connections || []);
       setCalendar(data.calendar || {});
-      if (meRes.ok) {
-        const me = await meRes.json().catch(() => null);
-        setRole(me?.platformRole || null);
-      }
+      if (!role && shell?.role) setRole(shell.role);
     } catch {
       setErr('Could not load integrations.');
     } finally {
@@ -58,7 +57,12 @@ export default function IntegrationsPage() {
   }
 
   useEffect(() => {
-    load();
+    void load();
+    // Mount-only — OAuth query params handled below without refetching /api/me.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const connected = search.get('connected');
     const error = search.get('error');
     if (connected === 'google_calendar') {

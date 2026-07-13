@@ -14,7 +14,8 @@ import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheet
 import FloatingCallWidget, { type CallDisposition } from '@/components/FloatingCallWidget';
 import CallWrapUpPanel from '@/components/CallWrapUpPanel';
 import SessionTranscript from '@/components/SessionTranscript';
-import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
+import { useShell } from '@/components/ShellProvider';
+import { parseHooks as parseHooksPayload, resolveProspectIntel, getGrade, formatRelativeReview, scoreTone, healthTone, signalTone } from '@/lib/prospect-intel';
 import {
   TRAINER_VOICES,
   trainerVoiceLabel,
@@ -24,7 +25,7 @@ import {
 type Difficulty = 'easy' | 'medium' | 'hard';
 type LeadTab = 'training' | 'brand';
 
-const TRAINING_PAGE_SIZE = 20;
+const TRAINING_PAGE_SIZE = 7;
 
 interface ProspectRow {
   id: string;
@@ -44,6 +45,11 @@ interface ProspectRow {
   brandSlug?: string | null;
   brandId?: string | null;
   purpose?: 'training' | 'brand';
+  enrichmentStatus?: string | null;
+  reviewRating?: number | null;
+  reviewCount?: number | null;
+  bookingUrlFound?: string | null;
+  outreachReady?: boolean | null;
 }
 
 interface Scorecard {
@@ -79,12 +85,20 @@ function mapLead(raw: Record<string, unknown>, purpose: 'training' | 'brand'): P
     brandName: brand?.name ?? (raw.brandName as string | null) ?? null,
     brandSlug: brand?.slug ?? (raw.brandSlug as string | null) ?? null,
     purpose,
+    enrichmentStatus: (raw.enrichmentStatus as string | null) ?? null,
+    reviewRating:
+      typeof raw.reviewRating === 'number' ? raw.reviewRating : null,
+    reviewCount: typeof raw.reviewCount === 'number' ? raw.reviewCount : null,
+    bookingUrlFound: (raw.bookingUrlFound as string | null) ?? null,
+    outreachReady:
+      typeof raw.outreachReady === 'boolean' ? raw.outreachReady : null,
   };
 }
 
 export default function TrainerView() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const shell = useShell();
   const [focus, setFocus] = useState<FocusArea>('budget_500');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [gatekeeperVoice, setGatekeeperVoice] = useState<TrainerVoiceId>('ara');
@@ -92,13 +106,10 @@ export default function TrainerView() {
   const [soloVoice, setSoloVoice] = useState<TrainerVoiceId>('leo');
   const [coachOn, setCoachOn] = useState(true);
   const [trainingLeads, setTrainingLeads] = useState<ProspectRow[]>([]);
-  const [trainingHasMore, setTrainingHasMore] = useState(false);
   const [trainingTotal, setTrainingTotal] = useState<number | null>(null);
-  const [trainingLoadingMore, setTrainingLoadingMore] = useState(false);
   const [brandLeads, setBrandLeads] = useState<ProspectRow[]>([]);
   const [leadTab, setLeadTab] = useState<LeadTab>('training');
   const [prospectId, setProspectId] = useState<string>('');
-  const trainingSentinelRef = useRef<HTMLLIElement | null>(null);
   const [brandPacks, setBrandPacks] = useState<
     {
       brandId: string;
@@ -128,7 +139,9 @@ export default function TrainerView() {
   const [bountiesCleared, setBountiesCleared] = useState<string[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gateHoldId, setGateHoldId] = useState<string | null>(null);
-  const [minutesRemaining, setMinutesRemaining] = useState<number | null>(null);
+  const [minutesRemaining, setMinutesRemaining] = useState<number | null>(
+    () => shell?.metrics.minutesRemaining ?? null
+  );
   const [scriptSections, setScriptSections] = useState<CheatSheetSection[]>([]);
   const [cheatProductUrl, setCheatProductUrl] = useState<string | undefined>();
   const [cheatTrainingImages, setCheatTrainingImages] = useState<string[]>([]);
@@ -210,7 +223,7 @@ export default function TrainerView() {
   const loadLeads = useCallback(async () => {
     const [trainingRes, brandRes] = await Promise.all([
       fetch(`/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0`),
-      fetch('/api/prospects?dialable=1&limit=80'),
+      fetch(`/api/prospects?dialable=1&limit=${TRAINING_PAGE_SIZE}`),
     ]);
 
     if (trainingRes.ok) {
@@ -218,24 +231,24 @@ export default function TrainerView() {
       setTrainingLeads(
         (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
       );
-      setTrainingHasMore(Boolean(data.hasMore));
       setTrainingTotal(typeof data.total === 'number' ? data.total : null);
     } else {
       const legacy = await fetch('/api/prospects/search');
       if (legacy.ok) {
         const data = await legacy.json();
-        const rows = (data.prospects || []).map((p: Record<string, unknown>) =>
-          mapLead(p, 'training')
-        );
+        const rows = (data.prospects || [])
+          .map((p: Record<string, unknown>) => mapLead(p, 'training'))
+          .slice(0, TRAINING_PAGE_SIZE);
         setTrainingLeads(rows);
-        setTrainingHasMore(false);
         setTrainingTotal(rows.length);
       }
     }
 
     if (brandRes.ok) {
       const data = await brandRes.json();
-      const rows = (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'brand'));
+      const rows = (data.prospects || [])
+        .map((p: Record<string, unknown>) => mapLead(p, 'brand'))
+        .slice(0, TRAINING_PAGE_SIZE);
       setBrandLeads(rows);
       if (rows.length > 0 && searchParams.get('tab') === 'brand') {
         setLeadTab('brand');
@@ -243,49 +256,9 @@ export default function TrainerView() {
     }
   }, [searchParams]);
 
-  const loadMoreTrainingLeads = useCallback(async () => {
-    if (trainingLoadingMore || !trainingHasMore) return;
-    setTrainingLoadingMore(true);
-    try {
-      const skip = trainingLeads.length;
-      const res = await fetch(
-        `/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=${skip}`
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      const next = (data.prospects || []).map((p: Record<string, unknown>) =>
-        mapLead(p, 'training')
-      ) as ProspectRow[];
-      setTrainingLeads((prev) => {
-        const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...next.filter((p) => !seen.has(p.id))];
-      });
-      setTrainingHasMore(Boolean(data.hasMore));
-      if (typeof data.total === 'number') setTrainingTotal(data.total);
-    } finally {
-      setTrainingLoadingMore(false);
-    }
-  }, [trainingHasMore, trainingLoadingMore, trainingLeads.length]);
-
   useEffect(() => {
     void loadLeads();
   }, [loadLeads]);
-
-  useEffect(() => {
-    if (leadTab !== 'training' || !trainingHasMore) return;
-    const node = trainingSentinelRef.current;
-    if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          void loadMoreTrainingLeads();
-        }
-      },
-      { root: node.closest('.cc-desk__col-body'), rootMargin: '80px', threshold: 0 }
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [leadTab, trainingHasMore, trainingLeads.length, loadMoreTrainingLeads]);
 
   useEffect(() => {
     const fromUrl = searchParams.get('prospectId');
@@ -393,7 +366,9 @@ export default function TrainerView() {
       .then((d) => {
         if (!d) return;
         if (typeof d.minutesRemaining === 'number') {
-          setMinutesRemaining(d.minutesRemaining);
+          setMinutesRemaining((current) =>
+            current === d.minutesRemaining ? current : d.minutesRemaining
+          );
         }
         if (d.id) setUserId(String(d.id));
         if (d.orgId) setOrgId(String(d.orgId));
@@ -864,6 +839,16 @@ export default function TrainerView() {
   }
 
   const hooks = parseHooks(selected?.hooksJSON);
+  const intel = selected
+    ? resolveProspectIntel(selected.hooksJSON, {
+        purpose: selected.purpose,
+        companyName: selected.companyName,
+        website: selected.website,
+        phone: selected.phone,
+      })
+    : null;
+  const webGrade = getGrade(intel?.webEvoScore);
+  const lastReview = formatRelativeReview(intel?.lastReviewAt);
   const liveOnLead = realtime.isConnected && selected?.id === prospectId;
   const focusLabel = FOCUS_LABELS[focus] || focus;
   const voiceSummary =
@@ -1217,15 +1202,6 @@ export default function TrainerView() {
                     </li>
                   );
                 })}
-                {leadTab === 'training' && trainingHasMore ? (
-                  <li
-                    ref={trainingSentinelRef}
-                    className="cc-desk__load-more muted"
-                    aria-hidden={!trainingLoadingMore}
-                  >
-                    {trainingLoadingMore ? 'Loading more…' : '\u00a0'}
-                  </li>
-                ) : null}
               </ul>
             )}
           </div>
@@ -1364,7 +1340,7 @@ export default function TrainerView() {
                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem' }}
                 onClick={openLeadRecord}
               >
-                Open record
+                Lead details
               </button>
             ) : null}
           </div>
@@ -1382,9 +1358,15 @@ export default function TrainerView() {
                       </dd>
                     </div>
                     <div>
+                      <dt>Phone</dt>
+                      <dd>{selected.phone || intel?.googlePhone || '—'}</dd>
+                    </div>
+                    <div>
                       <dt>Location</dt>
                       <dd>
-                        {[selected.city, selected.state].filter(Boolean).join(', ') || '—'}
+                        {[selected.city, selected.state].filter(Boolean).join(', ') ||
+                          intel?.address ||
+                          '—'}
                       </dd>
                     </div>
                     {selected.industry && (
@@ -1414,6 +1396,98 @@ export default function TrainerView() {
                   </dl>
                 </div>
 
+                {intel ? (
+                  <div className="cc-desk__ctx-block">
+                    <h4 className="cc-desk__ctx-label">Enrichment</h4>
+                    <div className="cc-desk__enrich-scores" aria-label="Enrichment scores">
+                      <div
+                        className={`cc-desk__enrich-chip cc-desk__enrich-chip--${scoreTone(intel.score)}`}
+                      >
+                        <span>Trojan</span>
+                        <strong>
+                          {intel.score != null ? Math.round(intel.score) : '—'}
+                        </strong>
+                      </div>
+                      <div
+                        className={`cc-desk__enrich-chip cc-desk__enrich-chip--${healthTone(intel.health)}`}
+                      >
+                        <span>Health</span>
+                        <strong>
+                          {intel.health != null ? Math.round(intel.health) : '—'}
+                        </strong>
+                      </div>
+                      <div
+                        className={`cc-desk__enrich-chip cc-desk__enrich-chip--${webGrade.tone === 'warn' ? 'mid' : webGrade.tone}`}
+                      >
+                        <span>WebEvo</span>
+                        <strong>
+                          {intel.webEvoScore != null
+                            ? `${webGrade.grade} ${Math.round(intel.webEvoScore)}`
+                            : '—'}
+                        </strong>
+                      </div>
+                    </div>
+                    <dl className="cc-desk__ctx-dl cc-desk__ctx-dl--dense">
+                      {intel.cms ? (
+                        <div>
+                          <dt>CMS</dt>
+                          <dd>{intel.cms}</dd>
+                        </div>
+                      ) : null}
+                      {intel.copyrightYear ? (
+                        <div>
+                          <dt>© Year</dt>
+                          <dd>{intel.copyrightYear}</dd>
+                        </div>
+                      ) : null}
+                      {(selected.reviewRating != null || selected.reviewCount != null) && (
+                        <div>
+                          <dt>Reviews</dt>
+                          <dd>
+                            {selected.reviewRating != null
+                              ? `${selected.reviewRating.toFixed(1)}★`
+                              : '—'}
+                            {selected.reviewCount != null
+                              ? ` · ${selected.reviewCount}`
+                              : ''}
+                            {lastReview ? ` · ${lastReview}` : ''}
+                          </dd>
+                        </div>
+                      )}
+                      {!selected.reviewRating && lastReview ? (
+                        <div>
+                          <dt>Last review</dt>
+                          <dd>{lastReview}</dd>
+                        </div>
+                      ) : null}
+                      {(intel.bookingSystem || selected.bookingUrlFound) && (
+                        <div>
+                          <dt>Booking</dt>
+                          <dd>{intel.bookingSystem || 'Link found'}</dd>
+                        </div>
+                      )}
+                      {selected.enrichmentStatus ? (
+                        <div>
+                          <dt>Status</dt>
+                          <dd>{selected.enrichmentStatus}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    {intel.signals && intel.signals.length > 0 ? (
+                      <div className="cc-desk__signals">
+                        {intel.signals.slice(0, 6).map((s) => (
+                          <span
+                            key={s}
+                            className={`cc-desk__signal cc-desk__signal--${signalTone(s)}`}
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {hooks.length > 0 && (
                   <div className="cc-desk__ctx-block">
                     <h4 className="cc-desk__ctx-label">Hooks</h4>
@@ -1436,7 +1510,7 @@ export default function TrainerView() {
               <div className="cc-desk__gate">
                 <p className="cc-desk__gate-title">No lead selected</p>
                 <p className="cc-desk__gate-desc">
-                  Select a queue row to see contact details and hooks.
+                  Select a queue row to see enrichment vitals and hooks.
                 </p>
               </div>
             )}

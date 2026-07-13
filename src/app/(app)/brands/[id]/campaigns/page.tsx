@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import CreateCampaignModal from '@/components/CreateCampaignModal';
 import { brandHref } from '@/lib/brand-context';
-import { DEMO_CAMPAIGNS, DEMO_MSG } from '@/lib/demo/brand-demo-data';
+import { DEMO_MSG, getDemoCampaigns } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { EmptyState, PageHeader, Panel } from '@/components/ui/PagePrimitives';
 
@@ -20,6 +20,10 @@ type CampaignRow = {
   bookingLink?: string | null;
   escrowLabel?: string | null;
   escrowLockedCents?: number | null;
+  dateRangeLabel?: string | null;
+  budgetLabel?: string | null;
+  activateOn?: boolean;
+  dialEligible?: boolean;
 };
 
 type BrandMeta = {
@@ -30,38 +34,62 @@ type BrandMeta = {
   playbooks?: { id: string; title: string }[];
 };
 
+function statusChipClass(status: string) {
+  switch (status) {
+    case 'OPEN':
+      return 'brand-campaign-row__chip brand-campaign-row__chip--open';
+    case 'PAUSED':
+      return 'brand-campaign-row__chip brand-campaign-row__chip--paused';
+    case 'DRAFT':
+      return 'brand-campaign-row__chip brand-campaign-row__chip--draft';
+    case 'CLOSED':
+      return 'brand-campaign-row__chip brand-campaign-row__chip--closed';
+    default:
+      return 'brand-campaign-row__chip';
+  }
+}
+
 export default function BrandCampaignsPage() {
   const params = useParams();
   const brandKey = String(params.id || '');
-  const { mode, hydrated } = useBrandDeskMode();
-  const isDemo = hydrated && mode === 'demo';
+  const { mode } = useBrandDeskMode();
+  const isDemo = mode === 'demo';
   const [brand, setBrand] = useState<BrandMeta | null>(null);
-  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>(() =>
+    mode === 'demo' ? getDemoCampaigns(brandKey) : []
+  );
+  const [loading, setLoading] = useState(() => mode !== 'demo');
   const [createOpen, setCreateOpen] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!brandKey || !hydrated) return;
+    if (!brandKey) return;
 
     let cancelled = false;
 
     async function load() {
-      setLoading(true);
+      if (mode === 'demo') {
+        setCampaigns(getDemoCampaigns(brandKey));
+        setLoading(false);
+        // Still resolve brand meta for create modal
+      } else {
+        setLoading(true);
+      }
       try {
         const brandRes = await fetch(`/api/brands/${brandKey}`);
         const brandData = await brandRes.json().catch(() => ({}));
         if (cancelled) return;
         if (!brandRes.ok || !brandData.brand) {
           setBrand(null);
-          setCampaigns([]);
+          if (mode !== 'demo') setCampaigns([]);
           return;
         }
         const b = brandData.brand as BrandMeta;
         setBrand(b);
 
         if (mode === 'demo') {
-          setCampaigns(DEMO_CAMPAIGNS);
+          setCampaigns(getDemoCampaigns(brandKey));
           return;
         }
 
@@ -78,7 +106,7 @@ export default function BrandCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [brandKey, hydrated, mode]);
+  }, [brandKey, mode]);
 
   async function reloadLive() {
     if (!brand?.id || mode === 'demo') return;
@@ -87,7 +115,34 @@ export default function BrandCampaignsPage() {
     if (campRes.ok) setCampaigns(campData.campaigns || []);
   }
 
-  if (!hydrated || loading) {
+  async function toggleActivate(c: CampaignRow, next: boolean) {
+    if (isDemo) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    if (c.status === 'CLOSED') return;
+    setTogglingId(c.id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/campaigns/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activateOn: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || 'Could not update activate');
+        return;
+      }
+      setCampaigns((prev) =>
+        prev.map((row) => (row.id === c.id ? { ...row, ...data.campaign } : row))
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  if (loading) {
     return (
       <main className="app-page">
         <p className="muted">Loading…</p>
@@ -107,14 +162,13 @@ export default function BrandCampaignsPage() {
   }
 
   const campBase = brandHref(brand, 'campaigns');
-  const display = isDemo ? DEMO_CAMPAIGNS : campaigns;
+  const display = isDemo ? getDemoCampaigns(brandKey) : campaigns;
 
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="Campaigns"
-        description="Post paid outcome campaigns for SDRs — qualified leads or booked meetings. You pay per approved result (~20% platform fee); SDRs receive the rest after they connect payouts."
+        description="Paid outcome campaigns for SDRs. Activate gates new dials only — in-flight calls keep going."
         actions={
           <button
             type="button"
@@ -138,11 +192,11 @@ export default function BrandCampaignsPage() {
         </p>
       ) : null}
 
-      <Panel title="Campaigns" description="OPEN campaigns appear on Brand deals for SDRs.">
+      <Panel title="Campaigns" description="Active campaigns appear on Brand deals for SDRs.">
         {display.length === 0 ? (
           <EmptyState
             title="No campaigns yet"
-            description="Create an OPEN campaign so reps can find it on Brand deals."
+            description="Create and activate a campaign so reps can find it on Brand deals."
             action={
               <button
                 type="button"
@@ -161,50 +215,67 @@ export default function BrandCampaignsPage() {
             }
           />
         ) : (
-          <div className="page-grid page-grid--wide">
-            {display.map((c) => (
-              <Link key={c.id} href={`${campBase}/${c.id}`} className="card-tile">
-                <h2 className="card-tile__title">{c.title}</h2>
-                <p className="card-tile__meta">
-                  {c.payoutLabel} / {c.goalLabel?.toLowerCase() || 'result'} · {c.status}
-                  {c.applicationCount != null ? ` · ${c.applicationCount} applicants` : ''}
-                </p>
-                <p className="card-tile__meta">
-                  {c.description.slice(0, 120)}
-                  {c.description.length > 120 ? '…' : ''}
-                </p>
-                <p className="card-tile__meta brand-campaign__badges">
-                  {(() => {
-                    const escrowLabel =
-                      'escrowLabel' in c && c.escrowLabel
-                        ? c.escrowLabel
-                        : 'escrowLockedCents' in c &&
-                            typeof c.escrowLockedCents === 'number' &&
-                            c.escrowLockedCents > 0
-                          ? `$${(c.escrowLockedCents / 100).toFixed(0)} escrow`
-                          : null;
-                    return (
-                      <>
-                        {escrowLabel ? (
-                          <span className="brand-campaign__badge">{escrowLabel}</span>
-                        ) : null}
-                        {c.bookingLink ? (
-                          <span className="brand-campaign__badge brand-campaign__badge--ok">
-                            Booking link
-                          </span>
-                        ) : (
-                          <span className="brand-campaign__badge brand-campaign__badge--muted">
-                            No booking link
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                </p>
-                <span className="card-tile__footer">Manage →</span>
-              </Link>
-            ))}
-          </div>
+          <ul className="brand-campaign-rows">
+            {display.map((c) => {
+              const activateOn = c.activateOn ?? c.status === 'OPEN';
+              const canToggle = c.status !== 'CLOSED';
+              const escrowLabel =
+                c.escrowLabel ||
+                ('escrowLockedCents' in c &&
+                typeof c.escrowLockedCents === 'number' &&
+                c.escrowLockedCents > 0
+                  ? `$${(c.escrowLockedCents / 100).toFixed(0)} escrow`
+                  : '—');
+              return (
+                <li key={c.id} className="brand-campaign-row">
+                  <div className="brand-campaign-row__main">
+                    <Link href={`${campBase}/${c.id}`} className="brand-campaign-row__left">
+                      <div className="brand-campaign-row__title-line">
+                        <span className="brand-campaign-row__title">{c.title}</span>
+                        <span className={statusChipClass(c.status)}>{c.status}</span>
+                      </div>
+                      <p className="brand-campaign-row__meta">
+                        {c.goalLabel}
+                        {c.dateRangeLabel ? ` · ${c.dateRangeLabel}` : ''}
+                      </p>
+                    </Link>
+                    <div className="brand-campaign-row__vitals">
+                      <label className="brand-campaign-row__activate">
+                        <span className="brand-campaign-row__vital-label">Activate</span>
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          checked={activateOn}
+                          disabled={!canToggle || togglingId === c.id || isDemo}
+                          onChange={(e) => void toggleActivate(c, e.target.checked)}
+                        />
+                      </label>
+                      <div className="brand-campaign-row__vital">
+                        <span className="brand-campaign-row__vital-label">Budget</span>
+                        <span className="brand-campaign-row__vital-value">
+                          {c.budgetLabel || '—'}
+                        </span>
+                      </div>
+                      <div className="brand-campaign-row__vital">
+                        <span className="brand-campaign-row__vital-label">Payout</span>
+                        <span className="brand-campaign-row__vital-value">{c.payoutLabel}</span>
+                      </div>
+                      <div className="brand-campaign-row__vital">
+                        <span className="brand-campaign-row__vital-label">Apps</span>
+                        <span className="brand-campaign-row__vital-value">
+                          {c.applicationCount ?? 0}
+                        </span>
+                      </div>
+                      <div className="brand-campaign-row__vital">
+                        <span className="brand-campaign-row__vital-label">Escrow</span>
+                        <span className="brand-campaign-row__vital-value">{escrowLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </Panel>
 

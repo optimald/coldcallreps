@@ -27,11 +27,19 @@ export default function CreateCampaignModal({
   const [description, setDescription] = useState('');
   const [icpText, setIcpText] = useState('');
   const [bookingLink, setBookingLink] = useState('');
+  const [meetingDuration, setMeetingDuration] = useState('15');
   const [targetVertical, setTargetVertical] = useState('');
   const [targetLocation, setTargetLocation] = useState('');
-  const [payoutDollars, setPayoutDollars] = useState('30');
-  const [goalType, setGoalType] = useState('QUALIFIED_LEAD');
+  const [payoutDollars, setPayoutDollars] = useState('40');
+  const [qualifiedPayoutDollars, setQualifiedPayoutDollars] = useState('25');
+  const [goalType, setGoalType] = useState('BOOKED_MEETING');
   const [status, setStatus] = useState('OPEN');
+  const [budgetMode, setBudgetMode] = useState('OVERALL');
+  const [budgetDollars, setBudgetDollars] = useState('400');
+  const [dailyBudgetDollars, setDailyBudgetDollars] = useState('100');
+  const [startsAt, setStartsAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endsAt, setEndsAt] = useState('');
+  const [ongoing, setOngoing] = useState(true);
   const [packId, setPackId] = useState('');
   const [playbookId, setPlaybookId] = useState('');
   const [packs, setPacks] = useState<PackOpt[]>(packsProp || []);
@@ -73,10 +81,34 @@ export default function CreateCampaignModal({
       setMsg('Title and description are required.');
       return;
     }
+    const wantsMeeting = goalType === 'BOOKED_MEETING' || goalType === 'BOTH';
+    if (wantsMeeting && !bookingLink.trim()) {
+      setMsg('Meeting campaigns need a Cal.com / Calendly / Google Appointment link.');
+      return;
+    }
+    if (wantsMeeting && (!meetingDuration || Number(meetingDuration) < 5)) {
+      setMsg('Set meeting duration (minutes).');
+      return;
+    }
+    if (budgetMode === 'DAILY' && (!dailyBudgetDollars || Number(dailyBudgetDollars) <= 0)) {
+      setMsg('Set a daily budget when using daily mode.');
+      return;
+    }
     setBusy(true);
     setMsg('');
     try {
       const payoutCents = Math.round(Number(payoutDollars) * 100);
+      const qualifiedPayoutCents =
+        goalType === 'BOTH' || goalType === 'QUALIFIED_LEAD'
+          ? Math.round(Number(qualifiedPayoutDollars || payoutDollars) * 100)
+          : undefined;
+      const budgetCents = budgetDollars
+        ? Math.round(Number(budgetDollars) * 100)
+        : undefined;
+      const dailyBudgetCents =
+        budgetMode === 'DAILY' && dailyBudgetDollars
+          ? Math.round(Number(dailyBudgetDollars) * 100)
+          : undefined;
       const res = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,11 +118,20 @@ export default function CreateCampaignModal({
           description: description.trim(),
           icpText: icpText || undefined,
           bookingLink: bookingLink.trim() || undefined,
+          meetingDurationMinutes: wantsMeeting ? Math.round(Number(meetingDuration)) : undefined,
           targetVertical: targetVertical.trim() || undefined,
           targetLocation: targetLocation.trim() || undefined,
           payoutCents,
+          qualifiedPayoutCents:
+            goalType === 'BOTH' ? qualifiedPayoutCents : goalType === 'QUALIFIED_LEAD' ? payoutCents : undefined,
           goalType,
           status,
+          budgetMode,
+          budgetCents,
+          dailyBudgetCents,
+          startsAt: startsAt ? new Date(`${startsAt}T00:00:00`).toISOString() : undefined,
+          endsAt:
+            ongoing || !endsAt ? null : new Date(`${endsAt}T23:59:59`).toISOString(),
           packId: packId || undefined,
           playbookId: playbookId || undefined,
         }),
@@ -195,42 +236,141 @@ export default function CreateCampaignModal({
           </label>
         </div>
         <label className="field-label">
-          Booking link (Cal.com / Calendly)
+          Booking link (Cal.com / Calendly / Google Appointment)
           <input
             className="field"
             value={bookingLink}
             onChange={(e) => setBookingLink(e.target.value)}
             placeholder="https://cal.com/you/intro"
+            required={goalType === 'BOOKED_MEETING' || goalType === 'BOTH'}
           />
         </label>
         <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
+          <label className="field-label" style={{ flex: '0 1 140px', maxWidth: 160 }}>
+            Meeting min
+            <input
+              className="field"
+              value={meetingDuration}
+              onChange={(e) => setMeetingDuration(e.target.value)}
+              placeholder="15"
+              inputMode="numeric"
+              disabled={goalType === 'QUALIFIED_LEAD'}
+            />
+          </label>
           <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
-            Payout ($)
+            {goalType === 'BOTH' ? 'Meeting $' : 'Payout ($)'}
             <input
               className="field"
               value={payoutDollars}
               onChange={(e) => setPayoutDollars(e.target.value)}
-              placeholder="30"
+              placeholder="40"
               inputMode="decimal"
             />
           </label>
-          <label className="field-label" style={{ flex: '1 1 140px' }}>
+          {goalType === 'BOTH' ? (
+            <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
+              Qualified $
+              <input
+                className="field"
+                value={qualifiedPayoutDollars}
+                onChange={(e) => setQualifiedPayoutDollars(e.target.value)}
+                placeholder="25"
+                inputMode="decimal"
+              />
+            </label>
+          ) : null}
+          <label className="field-label" style={{ flex: '1 1 160px' }}>
             Outcome
             <select className="field" value={goalType} onChange={(e) => setGoalType(e.target.value)}>
               <option value="QUALIFIED_LEAD">Qualified lead</option>
               <option value="BOOKED_MEETING">Booked meeting</option>
+              <option value="BOTH">Both (meeting pays more)</option>
             </select>
           </label>
           <label className="field-label" style={{ flex: '1 1 120px' }}>
-            Status
+            Activate
             <select className="field" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="DRAFT">Draft</option>
-              <option value="OPEN">Open</option>
-              <option value="PAUSED">Paused</option>
-              <option value="CLOSED">Closed</option>
+              <option value="OPEN">On (open now)</option>
+              <option value="DRAFT">Off (save as draft)</option>
             </select>
           </label>
         </div>
+        <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0, gap: '0.65rem' }}>
+          <label className="field-label" style={{ flex: '0 1 140px' }}>
+            Start date
+            <input
+              className="field"
+              type="date"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+            />
+          </label>
+          <label className="field-label" style={{ flex: '0 1 140px' }}>
+            End date
+            <input
+              className="field"
+              type="date"
+              value={endsAt}
+              onChange={(e) => {
+                setEndsAt(e.target.value);
+                if (e.target.value) setOngoing(false);
+              }}
+              disabled={ongoing}
+            />
+          </label>
+          <label
+            className="field-label"
+            style={{ flex: '0 0 auto', display: 'flex', alignItems: 'flex-end', gap: '0.4rem', paddingBottom: '0.35rem' }}
+          >
+            <input
+              type="checkbox"
+              checked={ongoing}
+              onChange={(e) => {
+                setOngoing(e.target.checked);
+                if (e.target.checked) setEndsAt('');
+              }}
+            />
+            Ongoing
+          </label>
+        </div>
+        <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0, gap: '0.65rem' }}>
+          <label className="field-label" style={{ flex: '1 1 140px' }}>
+            Budget mode
+            <select
+              className="field"
+              value={budgetMode}
+              onChange={(e) => setBudgetMode(e.target.value)}
+            >
+              <option value="OVERALL">Overall spend cap</option>
+              <option value="DAILY">Daily spend cap</option>
+            </select>
+          </label>
+          <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
+            Overall $
+            <input
+              className="field"
+              value={budgetDollars}
+              onChange={(e) => setBudgetDollars(e.target.value)}
+              placeholder="400"
+              inputMode="decimal"
+            />
+          </label>
+          {budgetMode === 'DAILY' ? (
+            <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
+              Daily $
+              <input
+                className="field"
+                value={dailyBudgetDollars}
+                onChange={(e) => setDailyBudgetDollars(e.target.value)}
+                placeholder="100"
+                inputMode="decimal"
+              />
+            </label>
+          ) : null}
+        </div>
+        <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+          Budgets cap verified payouts. Pausing later only blocks new dials — live calls keep going.
+        </p>
         <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
           <label className="field-label" style={{ flex: '1 1 160px' }}>
             Pack

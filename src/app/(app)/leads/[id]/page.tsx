@@ -29,8 +29,15 @@ export default async function LeadDetailPage({
         : '/leads';
   const backLabel = fromPractice ? 'Practice' : fromColdCalls ? 'Cold Call' : 'Leads';
 
-  let tab: 'identity' | 'calls' | 'audit' =
-    sp.tab === 'calls' || sp.tab === 'audit' || sp.tab === 'identity' ? sp.tab : 'identity';
+  let tab: 'identity' | 'intel' | 'preview' | 'pipeline' | 'calls' | 'audit' =
+    sp.tab === 'calls' ||
+    sp.tab === 'audit' ||
+    sp.tab === 'identity' ||
+    sp.tab === 'intel' ||
+    sp.tab === 'preview' ||
+    sp.tab === 'pipeline'
+      ? sp.tab
+      : 'identity';
   if (tab === 'audit' && !showAudit) tab = 'identity';
 
   return (

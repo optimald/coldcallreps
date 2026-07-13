@@ -42,6 +42,7 @@ export async function dialableBrandCampaigns(userId: string) {
     where: {
       userId,
       status: { in: ['ACCEPTED', 'ACTIVE'] },
+      campaign: { status: 'OPEN' },
     },
     select: {
       campaignId: true,
@@ -52,10 +53,27 @@ export async function dialableBrandCampaigns(userId: string) {
           title: true,
           packId: true,
           playbookId: true,
+          status: true,
+          startsAt: true,
+          endsAt: true,
+          budgetCents: true,
+          budgetMode: true,
+          dailyBudgetCents: true,
           brand: { select: { name: true } },
         },
       },
     },
   });
-  return apps.map((a) => a.campaign);
+
+  const { isCampaignDialEligible } = await import('@/lib/campaigns');
+  const { loadCampaignSpendStats } = await import('@/lib/campaign-spend');
+  const spend = await loadCampaignSpendStats(apps.map((a) => a.campaign.id));
+  const now = new Date();
+
+  return apps
+    .filter((a) => {
+      const s = spend.get(a.campaign.id) || { spentCents: 0, spentTodayCents: 0 };
+      return isCampaignDialEligible({ ...a.campaign, ...s }, now).ok;
+    })
+    .map((a) => a.campaign);
 }

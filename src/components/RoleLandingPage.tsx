@@ -75,13 +75,48 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
           <p className="lp-kicker">Pricing</p>
           <h2 className="lp-h2">{role.pricingHeadline}</h2>
           <p className="lp-lead">{role.pricingNote}</p>
+          {role.pricingCards && role.pricingCards.length > 0 ? (
+            <div
+              className="auto-fit-grid"
+              style={{ gap: '1rem', marginTop: '1.5rem', marginBottom: '1.5rem' }}
+            >
+              {role.pricingCards.map((card) => (
+                <article
+                  key={card.label}
+                  className="lp-pillar"
+                  style={{
+                    border: card.highlight
+                      ? '1px solid rgba(var(--accent-rgb), 0.45)'
+                      : undefined,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    {card.label}
+                  </p>
+                  <h3 style={{ margin: '0.35rem 0', fontSize: '1.5rem' }}>{card.price}</h3>
+                  <p style={{ margin: 0 }}>{card.detail}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <div className="lp-cta-row">
             <Link href={role.planHref} className="lp-btn-primary">
               {role.primaryCta.label}
             </Link>
-            {role.key !== 'brands' ? (
-              <Link href="/pricing" className="lp-btn-secondary">
-                Compare all plans
+            <Link href="/pricing" className="lp-btn-secondary">
+              Compare all plans
+            </Link>
+            {role.key === 'brands' ? (
+              <Link href="/billing" className="lp-btn-secondary">
+                Brand billing
               </Link>
             ) : null}
           </div>

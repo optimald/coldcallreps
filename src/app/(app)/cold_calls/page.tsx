@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { campaignLeadWhere, dialableBrandCampaigns } from '@/lib/brand-leads';
+import { dialableBrandCampaigns } from '@/lib/brand-leads';
+import { DIAL_QUEUE_SIZE, listQueueLeads } from '@/lib/lead-queue';
 import { effectiveRole } from '@/lib/roles';
 import { EmptyState, PageHeader } from '@/components/ui/PagePrimitives';
 import OutboundDialer from '@/components/OutboundDialer';
 
-/** Cold Call desk — real campaign dials only (Twilio + brand pool CID). */
+/** Cold Call desk — hot-potato queue of 6 outreach-ready leads. */
 export default async function OutboundPage() {
   const profile = await requireUser();
   const role = effectiveRole(profile);
@@ -54,29 +55,12 @@ export default async function OutboundPage() {
         },
       },
     }),
-    brandIds.length
-      ? prisma.prospect.findMany({
-          where: campaignLeadWhere({
-            OR: [
-              { campaignId: { in: campaignIds } },
-              { brandId: { in: brandIds }, campaignId: null },
-            ],
-          }),
-          orderBy: { updatedAt: 'desc' },
-          take: 80,
-          select: {
-            id: true,
-            companyName: true,
-            phone: true,
-            ownerName: true,
-            ownerTitle: true,
-            city: true,
-            status: true,
-            website: true,
-            hooksJSON: true,
-            notes: true,
-            brand: { select: { name: true, slug: true } },
-          },
+    campaignIds.length
+      ? listQueueLeads({
+          campaignIds,
+          brandIds,
+          userId: profile.id,
+          take: DIAL_QUEUE_SIZE,
         })
       : Promise.resolve([]),
   ]);
@@ -100,6 +84,9 @@ export default async function OutboundPage() {
     notes: l.notes,
     brandName: l.brand?.name ?? null,
     brandSlug: l.brand?.slug ?? null,
+    attemptCount: l.attemptCount,
+    nextCallAt: l.nextCallAt?.toISOString() ?? null,
+    lastDisposition: l.lastDisposition,
   }));
 
   const activeGigs = active.map((a) => ({
@@ -111,6 +98,11 @@ export default async function OutboundPage() {
     status: a.status,
     packId: a.campaign.pack?.id ?? null,
     playbookId: a.campaign.playbook?.id ?? null,
+    goalType: a.campaign.goalType,
+    bookingLink: a.campaign.bookingLink ?? null,
+    meetingDurationMinutes: a.campaign.meetingDurationMinutes ?? null,
+    payoutCents: a.campaign.payoutCents,
+    qualifiedPayoutCents: a.campaign.qualifiedPayoutCents ?? null,
   }));
 
   const pendingApps = applied.map((a) => ({
@@ -129,7 +121,7 @@ export default async function OutboundPage() {
         title="Cold Call"
         description={
           hasAcceptedCampaign
-            ? 'Campaign dials use the brand’s number pool — never your personal phone.'
+            ? 'Up to 6 outreach-ready leads. Select one to check it out for 10 minutes.'
             : 'Dials unlock after a brand accepts you. Warm up on Practice anytime.'
         }
         actions={

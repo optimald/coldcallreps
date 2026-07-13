@@ -7,6 +7,7 @@ import {
   resolveCampaignCallerId,
   setCallbackLock,
 } from '@/lib/brand-phone';
+import { applyDispositionFollowUp } from '@/lib/lead-queue';
 
 /** POST — create call log before Device.connect; resolve brand pool CallerId for campaigns. */
 export async function POST(request: NextRequest) {
@@ -58,6 +59,23 @@ export async function POST(request: NextRequest) {
       if (campaignId || prospect.campaignId || prospect.brandId) {
         const lock = await assertCallbackLockAllowsDial(prospectId, profile.id);
         if ('error' in lock) {
+          const { notifyAsync } = await import('@/lib/notifications');
+          notifyAsync({
+            event: 'campaign.callback.locked',
+            recipient: {
+              userId: profile.id,
+              email: profile.email,
+              displayName: profile.displayName,
+            },
+            payload: {
+              companyName: prospect.companyName,
+              campaignId: campaignId || prospect.campaignId || undefined,
+              reason: lock.error,
+              ctaUrl: '/cold_calls',
+              forAudience: 'sdr',
+            },
+            idempotencyKey: `campaign.callback.locked:${prospectId}:${profile.id}`,
+          });
           return NextResponse.json({ error: lock.error }, { status: lock.status });
         }
       }
@@ -75,6 +93,51 @@ export async function POST(request: NextRequest) {
     let brandName: string | null = null;
 
     if (campaignId) {
+      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+      if (!campaign) {
+        return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      }
+      const { isCampaignDialEligible } = await import('@/lib/campaigns');
+      const { loadOneCampaignSpend } = await import('@/lib/campaign-spend');
+      const spend = await loadOneCampaignSpend(campaignId);
+      const eligible = isCampaignDialEligible({ ...campaign, ...spend });
+      if (!eligible.ok) {
+        const brand = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: {
+            title: true,
+            brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
+          },
+        });
+        const { notifyAsync } = await import('@/lib/notifications');
+        if (brand?.brand) {
+          notifyAsync({
+            event: 'campaign.dial.blocked',
+            recipient: {
+              userId: profile.id,
+              email: profile.email,
+              displayName: profile.displayName,
+            },
+            brand: brand.brand,
+            payload: {
+              campaignTitle: brand.title,
+              campaignId,
+              reason: eligible.reason,
+              ctaUrl: '/gigs',
+              forAudience: 'sdr',
+            },
+            idempotencyKey: `campaign.dial.blocked:${campaignId}:${profile.id}:${eligible.reason || 'x'}`,
+          });
+        }
+        return NextResponse.json(
+          {
+            error: eligible.reason || 'Campaign is not accepting new dials',
+            code: 'CAMPAIGN_NOT_ELIGIBLE',
+          },
+          { status: 400 }
+        );
+      }
+
       // Server resolves brand pool DID — ignore client-supplied personal CallerId
       const resolved = await resolveCampaignCallerId({
         userId: profile.id,
@@ -165,17 +228,20 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    if (existing.prospectId && (status === 'completed' || typeof duration === 'number')) {
-      await prisma.prospect
-        .update({
-          where: { id: existing.prospectId },
-          data: { status: outcome === 'interested' || outcome === 'callback' ? 'warming' : 'done' },
-        })
-        .catch(() => {});
+    if (existing.prospectId && outcome) {
+      await applyDispositionFollowUp({
+        prospectId: existing.prospectId,
+        userId: profile.id,
+        outcome: String(outcome),
+        campaignId: existing.campaignId,
+      }).catch(() => null);
+    } else if (existing.prospectId && (status === 'completed' || typeof duration === 'number')) {
+      // Duration-only updates — leave lifecycle alone
     }
 
-    // Refresh lock on wrap-up if this was a campaign dial
-    if (existing.prospectId && existing.campaignId) {
+    // Affinity refresh is handled inside applyDispositionFollowUp for cooling outcomes;
+    // still refresh on any campaign wrap without outcome (legacy).
+    if (existing.prospectId && existing.campaignId && !outcome) {
       await setCallbackLock(existing.prospectId, profile.id).catch(() => {});
     }
 

@@ -37,6 +37,9 @@ const isPublicRoute = createRouteMatcher([
   // Twilio voice webhooks (server-to-server signature checked in route)
   '/api/twilio/voice(.*)',
   '/api/twilio/inbound(.*)',
+  // Meeting attribution: prospect lands on Cal success redirect (token is the credential)
+  '/book(.*)',
+  '/api/bookings/(.*)',
 ]);
 
 /** Single-segment vanity handles like /jane — not reserved app routes. */
@@ -52,10 +55,16 @@ function isVanityPublicPath(pathname: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isPublicRoute(req) || isVanityPublicPath(req.nextUrl.pathname)) {
-    return NextResponse.next();
+  if (!(isPublicRoute(req) || isVanityPublicPath(req.nextUrl.pathname))) {
+    await auth.protect();
   }
-  await auth.protect();
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-ccr-pathname', req.nextUrl.pathname);
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 });
 
 export const config = {

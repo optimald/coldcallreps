@@ -33,7 +33,14 @@ export default async function BrandLeadDetailPage({
   }
 
   const tab =
-    sp.tab === 'calls' || sp.tab === 'audit' || sp.tab === 'identity' ? sp.tab : 'identity';
+    sp.tab === 'calls' ||
+    sp.tab === 'audit' ||
+    sp.tab === 'identity' ||
+    sp.tab === 'intel' ||
+    sp.tab === 'preview' ||
+    sp.tab === 'pipeline'
+      ? sp.tab
+      : 'identity';
 
   return (
     <LeadDetailClient

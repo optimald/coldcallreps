@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { ownedBrandIds } from '@/lib/brand-leads';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand, effectiveRole } from '@/lib/roles';
+import { canAccessBrandDesk, effectiveRole } from '@/lib/roles';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import BrandPipelineClient from '@/components/BrandPipelineClient';
 
@@ -16,13 +17,8 @@ export default async function BrandPipelinePage({
   const role = effectiveRole(profile);
   const { id } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-
-  if (!canManageBrand(profile, brand.ownerId) && role !== 'SUPERADMIN') {
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode) && role !== 'SUPERADMIN') {
     redirect('/practice');
   }
 
@@ -37,7 +33,7 @@ export default async function BrandPipelinePage({
 
   return (
     <main className="app-page brand-pipeline-page">
-      <PageHeader compact eyebrow={brand.name} title="Pipeline" />
+      <PageHeader compact title="Pipeline" />
       <Suspense fallback={<p className="muted">Loading pipeline…</p>}>
         <BrandPipelineClient
           brands={brands.length ? brands : [{ id: brand.id, name: brand.name, slug: brand.slug }]}

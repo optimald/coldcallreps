@@ -6,21 +6,34 @@ import {
   writeBrandDeskMode,
   type BrandDeskMode,
 } from '@/lib/brand-context';
+import { useShellDeskMode } from '@/components/ShellProvider';
 
 /**
  * Subscribe to brand Live / Demo desk mode (sidebar + desk pages).
  *
- * `mode` defaults to `'live'` until the first client effect reads localStorage.
- * Consumers that fetch must wait for `hydrated === true` before loading — otherwise
- * a pre-hydrate Live fetch can finish after Demo fixtures are applied and wipe them.
+ * Inside AppShell, mode comes from SSR-seeded ShellProvider — hydrated immediately.
+ * Outside the shell (rare), falls back to localStorage after mount.
  */
-export function useBrandDeskMode() {
-  const [mode, setMode] = useState<BrandDeskMode>('live');
-  const [hydrated, setHydrated] = useState(false);
+export function useBrandDeskMode(initial?: BrandDeskMode) {
+  const fromShell = useShellDeskMode();
+  const [mode, setMode] = useState<BrandDeskMode>(
+    () => fromShell?.mode || initial || 'live'
+  );
+  const [hydrated, setHydrated] = useState(
+    () => Boolean(fromShell) || Boolean(initial)
+  );
 
   useEffect(() => {
-    setMode(readBrandDeskMode());
+    if (fromShell) {
+      setMode(fromShell.mode);
+      setHydrated(true);
+      return;
+    }
+    const stored = readBrandDeskMode();
+    setMode(stored);
+    writeBrandDeskMode(stored);
     setHydrated(true);
+
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'ccr-brand-desk-mode') {
         setMode(e.newValue === 'demo' ? 'demo' : 'live');
@@ -36,11 +49,24 @@ export function useBrandDeskMode() {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('ccr-brand-desk-mode', onCustom);
     };
-  }, []);
+  }, [fromShell]);
 
   function setDeskMode(next: BrandDeskMode) {
+    if (fromShell) {
+      fromShell.setDeskMode(next);
+      setMode(next);
+      return;
+    }
     writeBrandDeskMode(next);
     setMode(next);
+  }
+
+  if (fromShell) {
+    return {
+      mode: fromShell.mode,
+      setDeskMode: fromShell.setDeskMode,
+      hydrated: true as const,
+    };
   }
 
   return { mode, setDeskMode, hydrated };

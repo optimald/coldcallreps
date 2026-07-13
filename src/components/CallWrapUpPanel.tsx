@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { CALL_DISPOSITIONS, type CallDisposition } from '@/components/FloatingCallWidget';
+import BookingAttributionEmbed from '@/components/BookingAttributionEmbed';
 import { formatDuration } from '@/lib/trainer/session-utils';
 
-/** Post-call wrap-up: disposition + notes. Lead edits live on the lead record. */
+/** Post-call wrap-up: disposition + notes. Appointment Set embeds brand calendar. */
 export default function CallWrapUpPanel({
   companyName,
   durationSecs,
@@ -17,6 +19,7 @@ export default function CallWrapUpPanel({
   onEditLead,
   saving,
   mode,
+  meetingBooking,
 }: {
   companyName: string;
   durationSecs: number;
@@ -30,7 +33,35 @@ export default function CallWrapUpPanel({
   onEditLead?: () => void;
   saving?: boolean;
   mode: 'practice' | 'outbound';
+  /** When set, Appointment Set requires a successful booking attribution. */
+  meetingBooking?: {
+    enabled: boolean;
+    token: string | null;
+    embedUrl: string | null;
+    provider?: string;
+    meetingDurationMinutes?: number | null;
+    starting?: boolean;
+    booked?: boolean;
+    onStart: () => void;
+    onBooked: (info: { meetingAt: string; claimId: string }) => void;
+    error?: string | null;
+  } | null;
 }) {
+  const needsBooking =
+    mode === 'outbound' &&
+    disposition === 'appointment_set' &&
+    meetingBooking?.enabled;
+
+  const canSave =
+    Boolean(disposition) &&
+    (!needsBooking || Boolean(meetingBooking?.booked));
+
+  useEffect(() => {
+    if (needsBooking && !meetingBooking?.token && !meetingBooking?.starting) {
+      meetingBooking?.onStart();
+    }
+  }, [needsBooking, meetingBooking]);
+
   return (
     <div className="cc-wrap-up" role="region" aria-label="Call wrap-up">
       <header className="cc-wrap-up__head">
@@ -64,6 +95,33 @@ export default function CallWrapUpPanel({
         </div>
       </div>
 
+      {needsBooking ? (
+        <div className="cc-wrap-up__section">
+          {meetingBooking.starting || !meetingBooking.token || !meetingBooking.embedUrl ? (
+            <p className="muted" style={{ margin: 0 }}>
+              {meetingBooking.error || 'Preparing booking link…'}
+            </p>
+          ) : (
+            <BookingAttributionEmbed
+              token={meetingBooking.token}
+              embedUrl={meetingBooking.embedUrl}
+              provider={meetingBooking.provider}
+              meetingDurationMinutes={meetingBooking.meetingDurationMinutes}
+              onBooked={meetingBooking.onBooked}
+              onError={(m) => {
+                /* surfaced via parent error if needed */
+                console.warn('[booking]', m);
+              }}
+            />
+          )}
+          {meetingBooking.error ? (
+            <p className="msg-err" style={{ marginTop: '0.5rem' }}>
+              {meetingBooking.error}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="cc-wrap-up__section">
         <span className="cc-wrap-up__label">Call notes</span>
         <textarea
@@ -72,19 +130,23 @@ export default function CallWrapUpPanel({
           placeholder="What happened? Next step?"
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
-          autoFocus
+          autoFocus={!needsBooking}
         />
       </div>
 
       {onEditLead ? (
         <button type="button" className="btn-ghost cc-wrap-up__edit-lead" onClick={onEditLead}>
-          Open lead record →
+          Lead details →
         </button>
       ) : null}
 
       <div className="cc-wrap-up__actions">
-        <button type="button" className="btn" onClick={onSave} disabled={saving || !disposition}>
-          {saving ? 'Saving…' : 'Save & close'}
+        <button type="button" className="btn" onClick={onSave} disabled={saving || !canSave}>
+          {saving
+            ? 'Saving…'
+            : needsBooking && !meetingBooking?.booked
+              ? 'Book meeting to continue'
+              : 'Save & close'}
         </button>
         <button type="button" className="btn-ghost" onClick={onSkip} disabled={saving}>
           Skip wrap-up

@@ -5,11 +5,14 @@ import { prisma } from '@/lib/prisma';
 type Ctx = { params: Promise<{ id: string }> };
 
 const OUTCOMES = new Set([
+  'appointment_set',
+  'not_interested',
+  'no_answer',
+  'gatekeeper_blocked',
+  // legacy
   'interested',
   'callback',
-  'not_interested',
   'voicemail',
-  'no_answer',
 ]);
 
 /** PATCH — save practice wrap disposition + notes onto a scored session. */

@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { brandHref, brandPathKey } from '@/lib/brand-context';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canAccessBrandDesk } from '@/lib/roles';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import BrandSdrTeamClient from '@/components/BrandSdrTeamClient';
 
@@ -14,12 +15,8 @@ export default async function BrandSdrTeamPage({
 }) {
   const profile = await requireUser();
   const { id } = await params;
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-  if (!canManageBrand(profile, brand.ownerId)) redirect('/dashboard');
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode)) redirect('/dashboard');
 
   const campaigns = await prisma.campaign.findMany({
     where: { brandId: brand.id },
@@ -94,7 +91,6 @@ export default async function BrandSdrTeamPage({
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="SDR team"
         description="Accepted and active SDRs across your campaigns, with dial activity."
         actions={

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { brandHref } from '@/lib/brand-context';
 import { formatPayout } from '@/lib/campaigns';
-import { DEMO_KPIS, DEMO_MSG, DEMO_PAYOUTS } from '@/lib/demo/brand-demo-data';
+import { DEMO_MSG, getDemoKpis, getDemoPayouts } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { EmptyState, Panel } from '@/components/ui/PagePrimitives';
 
@@ -29,18 +29,18 @@ export default function BrandSdrPayoutsClient({
   initial: PayoutRow[];
   escrowLabel: string;
 }) {
-  const { mode, hydrated } = useBrandDeskMode();
-  const isDemo = hydrated && mode === 'demo';
+  const { mode } = useBrandDeskMode();
+  const isDemo = mode === 'demo';
   const [rows, setRows] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    setRows(isDemo ? DEMO_PAYOUTS : initial);
-  }, [isDemo, initial]);
+    setRows(isDemo ? getDemoPayouts(brandKey) : initial);
+  }, [isDemo, initial, brandKey]);
 
-  const displayEscrow = isDemo ? DEMO_KPIS.escrowLabel : escrowLabel;
-  const displayRows = isDemo ? DEMO_PAYOUTS : rows;
+  const displayEscrow = isDemo ? getDemoKpis(brandKey).escrowLabel : escrowLabel;
+  const displayRows = isDemo ? getDemoPayouts(brandKey) : rows;
 
   async function fundEscrow() {
     if (isDemo) {

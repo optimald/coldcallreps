@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { brandHref, brandPathKey } from '@/lib/brand-context';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canAccessBrandDesk } from '@/lib/roles';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import PracticeCallsList from '@/components/PracticeCallsList';
 
@@ -14,12 +15,8 @@ export default async function BrandPracticeCallsPage({
 }) {
   const profile = await requireUser();
   const { id } = await params;
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-  if (!canManageBrand(profile, brand.ownerId)) redirect('/dashboard');
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode)) redirect('/dashboard');
 
   const key = brandPathKey(brand);
   const detailQuery = `from=brand&brand=${encodeURIComponent(key)}`;
@@ -27,13 +24,12 @@ export default async function BrandPracticeCallsPage({
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="Practice calls"
         description="Scored trainer sessions for this brand — filter by rep or scenario, then open any call for transcript and playback."
         actions={
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <Link href={brandHref(brand, 'calls')} className="btn-ghost">
-              Live calls
+              Calls
             </Link>
             <Link href="/practice" className="btn-ghost">
               Open trainer
@@ -46,7 +42,7 @@ export default async function BrandPracticeCallsPage({
         detailQuery={detailQuery}
         showRepFilter
         emptyHref={brandHref(brand, 'calls')}
-        emptyLabel="View live calls →"
+        emptyLabel="View calls →"
         title="Brand practice history"
         description="Filter by SDR or campaign/scenario. Click a row for the full detail view."
       />

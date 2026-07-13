@@ -1,8 +1,9 @@
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand, effectiveRole } from '@/lib/roles';
+import { canAccessBrandDesk, effectiveRole } from '@/lib/roles';
 import { brandHref } from '@/lib/brand-context';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import BrandLeadAuditClient from '@/components/BrandLeadAuditClient';
@@ -16,20 +17,14 @@ export default async function BrandLeadAuditPage({
   const role = effectiveRole(profile);
   const { id } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-
-  if (!canManageBrand(profile, brand.ownerId) && role !== 'SUPERADMIN') {
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode) && role !== 'SUPERADMIN') {
     redirect('/practice');
   }
 
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="Lead audit log"
         description="Every edit to brand leads — who changed what and when."
         actions={

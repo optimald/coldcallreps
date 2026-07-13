@@ -26,6 +26,7 @@ import { useLiveCoach, type CoachLogEntry } from '@/hooks/useLiveCoach';
 import { FOCUS_LABELS, type FocusArea } from '@/lib/product';
 import { formatDuration, formatSessionDate, scoreColor } from '@/lib/trainer/session-utils';
 import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheetPanel';
+import { useShell } from '@/components/ShellProvider';
 import {
   TRAINER_VOICES,
   trainerVoiceLabel,
@@ -85,6 +86,7 @@ function formatTime(secs: number): string {
 }
 
 export default function ColdCallTrainerView() {
+  const shell = useShell();
   const [viewState, setViewState] = useState<ViewState>('SETUP');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [focus, setFocus] = useState<FocusArea>('standard');
@@ -101,7 +103,9 @@ export default function ColdCallTrainerView() {
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [canStoreRecordings, setCanStoreRecordings] = useState(false);
-  const [minutesRemaining, setMinutesRemaining] = useState<number | null>(null);
+  const [minutesRemaining, setMinutesRemaining] = useState<number | null>(
+    () => shell?.metrics.minutesRemaining ?? null
+  );
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -255,7 +259,11 @@ export default function ColdCallTrainerView() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d) return;
-        if (typeof d.minutesRemaining === 'number') setMinutesRemaining(d.minutesRemaining);
+        if (typeof d.minutesRemaining === 'number') {
+          setMinutesRemaining((current) =>
+            current === d.minutesRemaining ? current : d.minutesRemaining
+          );
+        }
         if (d.id) setUserId(String(d.id));
         if (d.orgId) setOrgId(String(d.orgId));
         setCanStoreRecordings(Boolean(d.canStoreRecordings));

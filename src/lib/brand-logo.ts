@@ -1,7 +1,7 @@
 /** Well-known local assets under /public/brands/{slug}.svg */
-const LOCAL_LOGO_SLUGS = new Set(['nike']);
+const LOCAL_LOGO_SLUGS = new Set<string>([]);
 
-/** First letter(s) for monogram avatars — Nike → N, Acme Corp → AC */
+/** First letter(s) for monogram avatars — Acme Corp → AC */
 export function brandInitials(name: string): string {
   const cleaned = name.replace(/^Demo\s*[·•]\s*/i, '').trim();
   const parts = cleaned.split(/\s+/).filter(Boolean);

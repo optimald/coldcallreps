@@ -1,26 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import BrandMark from '@/components/BrandMark';
 import CreateBrandModal from '@/components/CreateBrandModal';
 import NavIconGlyph from '@/components/NavIcon';
 import ThemePicker from '@/components/ThemePicker';
+import { ShellProvider } from '@/components/ShellProvider';
 import { NAV_SECTIONS_BY_ROLE, brandNavSections, type AppRole, type NavSection } from '@/lib/roles';
 import { PLAN, type PlanKey } from '@/lib/product';
 import { repPublicPath } from '@/lib/public-urls';
 import type { RoleModeState, SwitchableMode } from '@/lib/role-mode';
 import {
+  brandHref,
   brandPathKey,
   readSelectedBrandKey,
   resolveSelectedBrand,
   writeSelectedBrandKey,
+  writeBrandDeskMode,
   SELECTED_BRAND_COOKIE,
+  type BrandDeskMode,
   type BrandRef,
 } from '@/lib/brand-context';
-import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
+import { CANONICAL_DEMO_BRANDS, getDemoKpis, getDemoTeam } from '@/lib/demo/brand-demo-data';
+import type { ShellBootstrap } from '@/lib/shell-bootstrap';
 
 const FALLBACK = NAV_SECTIONS_BY_ROLE.REP;
 const SIDEBAR_COLLAPSED_KEY = 'ccr-sidebar-collapsed';
@@ -36,6 +41,17 @@ type MeMetrics = {
   profileSlug: string | null;
 };
 
+type BrandTopMetrics = {
+  walletLabel: string | null;
+  openCampaigns: number | null;
+  teamCount: number | null;
+};
+
+function pathBrandKey(pathname: string): string | null {
+  const m = pathname.match(/^\/brands\/([^/]+)/);
+  return m?.[1] || null;
+}
+
 function syncBrandCookie(key: string) {
   try {
     document.cookie = `${SELECTED_BRAND_COOKIE}=${encodeURIComponent(key)}; path=/; max-age=31536000; samesite=lax`;
@@ -48,6 +64,10 @@ function isActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   // /brands list should not highlight for nested brand routes
   if (href === '/brands') return pathname === '/brands' || pathname === '/brands/';
+  // Brand dashboard is exact /brands/[id] only — not campaigns/leads/etc.
+  if (/^\/brands\/[^/]+$/.test(href)) {
+    return pathname === href || pathname === `${href}/`;
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -106,30 +126,106 @@ function SwitchModeGlyph({ mode }: { mode: SwitchableMode }) {
   );
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  initial = null,
+}: {
+  children: React.ReactNode;
+  initial?: ShellBootstrap | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
-  const [sections, setSections] = useState<NavSection[]>(FALLBACK);
-  const [role, setRole] = useState<AppRole>('REP');
-  const [roleMode, setRoleMode] = useState<RoleModeState | null>(null);
+  const pathKey = pathBrandKey(pathname);
+
+  const [sections, setSections] = useState<NavSection[]>(
+    () =>
+      initial?.sections ||
+      (pathKey ? brandNavSections(pathKey) : FALLBACK)
+  );
+  const [role, setRole] = useState<AppRole>(
+    () => initial?.role || (pathKey ? 'BRAND' : 'REP')
+  );
+  const [roleMode, setRoleMode] = useState<RoleModeState | null>(
+    () => initial?.roleMode || null
+  );
   const [switchBusy, setSwitchBusy] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapseHydrated, setCollapseHydrated] = useState(false);
-  const [metrics, setMetrics] = useState<MeMetrics>({
-    minutesRemaining: null,
-    minutesUsed: null,
-    totalPoints: null,
-    currentStreak: null,
-    globalRank: null,
-    globalRankPool: null,
-    plan: null,
-    profileSlug: null,
-  });
-  const [ownedBrands, setOwnedBrands] = useState<BrandRef[]>([]);
-  const [selectedBrand, setSelectedBrand] = useState<BrandRef | null>(null);
+  const [metrics, setMetrics] = useState<MeMetrics>(
+    () =>
+      initial?.metrics || {
+        minutesRemaining: null,
+        minutesUsed: null,
+        totalPoints: null,
+        currentStreak: null,
+        globalRank: null,
+        globalRankPool: null,
+        plan: null,
+        profileSlug: null,
+      }
+  );
+  const [ownedBrands, setOwnedBrands] = useState<BrandRef[]>(
+    () => initial?.brands || []
+  );
+  const [selectedBrand, setSelectedBrand] = useState<BrandRef | null>(
+    () => initial?.selectedBrand || null
+  );
   const [createBrandOpen, setCreateBrandOpen] = useState(false);
-  const { mode: deskMode, setDeskMode } = useBrandDeskMode();
+  const [brandMetrics, setBrandMetrics] = useState<BrandTopMetrics>({
+    walletLabel: null,
+    openCampaigns: null,
+    teamCount: null,
+  });
+  const [deskMode, setDeskModeState] = useState<BrandDeskMode>(
+    () => initial?.deskMode || 'live'
+  );
+  const setDeskMode = useCallback((mode: BrandDeskMode) => {
+    writeBrandDeskMode(mode);
+    setDeskModeState(mode);
+    const key = selectedBrand ? brandPathKey(selectedBrand) : pathKey;
+    if (role === 'BRAND' || role === 'RECRUITER') {
+      setSections(
+        brandNavSections(
+          key,
+          mode === 'demo'
+            ? { leads: 137, generateLeads: 4, liveCalls: 0, campaigns: 2 }
+            : undefined
+        )
+      );
+    }
+  }, [selectedBrand, pathKey, role]);
+  const deskHydrated = true;
+  const isBrandDesk = role === 'BRAND' || role === 'RECRUITER';
+  const switcherBrands = useMemo(() => {
+    if (deskMode !== 'demo' || !isBrandDesk) return ownedBrands;
+    return CANONICAL_DEMO_BRANDS.map((b) => ({
+      id: b.id,
+      slug: b.slug,
+      name: b.name,
+      logoUrl: b.logoUrl,
+    }));
+  }, [deskMode, isBrandDesk, ownedBrands]);
+
+  useEffect(() => {
+    if (!isBrandDesk) return;
+    if (deskMode === 'demo') {
+      const key = selectedBrand ? brandPathKey(selectedBrand) : '';
+      const inDemo = switcherBrands.some((b) => brandPathKey(b) === key);
+      if (!inDemo && switcherBrands[0]) {
+        setSelectedBrand(switcherBrands[0]);
+        writeSelectedBrandKey(brandPathKey(switcherBrands[0]));
+      }
+      return;
+    }
+    const key = selectedBrand ? brandPathKey(selectedBrand) : '';
+    const inOwned = ownedBrands.some((b) => brandPathKey(b) === key);
+    if (!inOwned && ownedBrands[0]) {
+      setSelectedBrand(ownedBrands[0]);
+      writeSelectedBrandKey(brandPathKey(ownedBrands[0]));
+    }
+  }, [deskMode, isBrandDesk, selectedBrand, switcherBrands, ownedBrands]);
 
   useEffect(() => {
     try {
@@ -150,38 +246,49 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [sidebarCollapsed, collapseHydrated]);
 
+  // One-time soft refresh for rank / minutes; never resets nav to SDR.
   useEffect(() => {
+    let cancelled = false;
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d) return;
+        if (cancelled || !d) return;
         const r = (d.platformRole || 'REP') as AppRole;
         setRole(r);
         setRoleMode(d.roleMode || null);
-        setMetrics({
-          minutesRemaining: typeof d.minutesRemaining === 'number' ? d.minutesRemaining : null,
-          minutesUsed: typeof d.minutesUsed === 'number' ? d.minutesUsed : null,
-          totalPoints: typeof d.totalPoints === 'number' ? d.totalPoints : null,
-          currentStreak: typeof d.currentStreak === 'number' ? d.currentStreak : null,
-          globalRank: typeof d.globalRank === 'number' ? d.globalRank : null,
-          globalRankPool: typeof d.globalRankPool === 'number' ? d.globalRankPool : null,
-          plan: d.plan || 'FREE',
-          profileSlug: d.profileSlug || null,
-        });
+        setMetrics((prev) => ({
+          minutesRemaining:
+            typeof d.minutesRemaining === 'number' ? d.minutesRemaining : prev.minutesRemaining,
+          minutesUsed: typeof d.minutesUsed === 'number' ? d.minutesUsed : prev.minutesUsed,
+          totalPoints: typeof d.totalPoints === 'number' ? d.totalPoints : prev.totalPoints,
+          currentStreak:
+            typeof d.currentStreak === 'number' ? d.currentStreak : prev.currentStreak,
+          globalRank: typeof d.globalRank === 'number' ? d.globalRank : prev.globalRank,
+          globalRankPool:
+            typeof d.globalRankPool === 'number' ? d.globalRankPool : prev.globalRankPool,
+          plan: d.plan || prev.plan || 'FREE',
+          profileSlug: d.profileSlug || prev.profileSlug,
+        }));
 
         if (r === 'BRAND' || r === 'RECRUITER') {
+          if (initial?.brands?.length) {
+            // SSR already seeded brands; only open create if empty.
+            if (initial.brands.length === 0) setCreateBrandOpen(true);
+          }
           fetch('/api/brands?mine=1')
             .then((res) => (res.ok ? res.json() : null))
             .then((bd) => {
-              const list: BrandRef[] = (bd?.brands || []).map((b: any) => ({
-                id: b.id,
-                slug: b.slug,
-                name: b.name,
-              }));
+              if (cancelled) return;
+              const list: BrandRef[] = (bd?.brands || []).map(
+                (b: BrandRef & { logoUrl?: string | null }) => ({
+                  id: b.id,
+                  slug: b.slug,
+                  name: b.name,
+                  logoUrl: b.logoUrl,
+                })
+              );
               setOwnedBrands(list);
-              // Prefer brand id/slug from current URL when under /brands/[id]/...
-              const m = pathname.match(/^\/brands\/([^/]+)/);
-              const fromPath = m?.[1] || null;
+              const fromPath = pathBrandKey(pathname);
               const resolved = resolveSelectedBrand(list, fromPath || readSelectedBrandKey());
               setSelectedBrand(resolved);
               if (resolved) {
@@ -190,16 +297,43 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 syncBrandCookie(key);
               }
               setSections(brandNavSections(resolved ? brandPathKey(resolved) : null));
+              if (list.length === 0) setCreateBrandOpen(true);
             })
             .catch(() => {
-              setSections(brandNavSections(null));
+              if (!cancelled) {
+                setSections(brandNavSections(null));
+                setCreateBrandOpen(true);
+              }
             });
         } else {
           setSections(NAV_SECTIONS_BY_ROLE[r] || FALLBACK);
         }
       })
       .catch(() => {});
-  }, [pathname]);
+    return () => {
+      cancelled = true;
+    };
+    // Mount-only: role/nav come from SSR; this only soft-refreshes metrics.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep brand-scoped nav in sync when the URL brand changes (no /api/me).
+  useEffect(() => {
+    if (!isBrandDesk) return;
+    const fromPath = pathBrandKey(pathname);
+    if (!fromPath || ownedBrands.length === 0) return;
+    const resolved = resolveSelectedBrand(ownedBrands, fromPath);
+    if (!resolved) return;
+    const key = brandPathKey(resolved);
+    if (selectedBrand && brandPathKey(selectedBrand) === key) {
+      setSections(brandNavSections(key));
+      return;
+    }
+    setSelectedBrand(resolved);
+    writeSelectedBrandKey(key);
+    syncBrandCookie(key);
+    setSections(brandNavSections(key));
+  }, [pathname, isBrandDesk, ownedBrands, selectedBrand]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -214,20 +348,122 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
-  const pageLabel = useMemo(() => {
+  useEffect(() => {
+    if (!isBrandDesk) {
+      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+      return;
+    }
+    if (!deskHydrated) return;
+
+    if (deskMode === 'demo') {
+      const key = selectedBrand ? brandPathKey(selectedBrand) : 'demo-meridianops';
+      const kpis = getDemoKpis(key);
+      setBrandMetrics({
+        walletLabel: kpis.escrowLabel.replace(/\.00$/, ''),
+        openCampaigns: kpis.openCampaigns,
+        teamCount: getDemoTeam(key).length,
+      });
+      return;
+    }
+
+    const key = selectedBrand ? brandPathKey(selectedBrand) : null;
+    if (!key) {
+      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/brands/${encodeURIComponent(key)}/overview`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.kpis) return;
+        setBrandMetrics({
+          walletLabel: typeof d.kpis.escrowLabel === 'string' ? d.kpis.escrowLabel : null,
+          openCampaigns:
+            typeof d.kpis.openCampaigns === 'number' ? d.kpis.openCampaigns : null,
+          teamCount: typeof d.kpis.activeSdrs === 'number' ? d.kpis.activeSdrs : null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isBrandDesk, deskHydrated, deskMode, selectedBrand]);
+
+  const breadcrumbs = useMemo(() => {
+    type Crumb = { label: string; href?: string };
+    const crumbs: Crumb[] = [];
+
+    const brandMatch = pathname.match(/^\/brands\/([^/]+)(?:\/(.*))?$/);
+    if (brandMatch && isBrandDesk) {
+      const key = brandMatch[1];
+      const rest = (brandMatch[2] || '').replace(/\/$/, '');
+      const brandName =
+        selectedBrand && brandPathKey(selectedBrand) === key
+          ? selectedBrand.name
+          : ownedBrands.find((b) => brandPathKey(b) === key)?.name || key;
+
+      if (rest) {
+        crumbs.push({ label: brandName, href: `/brands/${key}` });
+        const segmentLabels: Record<string, string> = {
+          campaigns: 'Campaigns',
+          leads: 'Leads',
+          calls: 'Calls',
+          pipeline: 'Pipeline',
+          practice: 'Practice',
+          settings: 'Settings',
+          'sdrs/applications': 'Applications',
+          'sdrs/team': 'Team',
+          'sdrs/stats': 'Stats',
+          'sdrs/payouts': 'Payouts',
+        };
+        const known =
+          segmentLabels[rest] ||
+          segmentLabels[rest.split('/').slice(0, 2).join('/')] ||
+          null;
+        if (known) {
+          crumbs.push({ label: known });
+        } else if (rest.startsWith('campaigns/')) {
+          crumbs.push({ label: 'Campaigns', href: `/brands/${key}/campaigns` });
+          crumbs.push({ label: 'Campaign' });
+        } else if (rest.startsWith('leads/')) {
+          crumbs.push({ label: 'Leads', href: `/brands/${key}/leads` });
+          crumbs.push({ label: 'Lead' });
+        } else {
+          crumbs.push({ label: rest.split('/').pop() || 'App' });
+        }
+      } else {
+        crumbs.push({ label: brandName });
+        crumbs.push({ label: 'Dashboard' });
+      }
+      return crumbs;
+    }
+
+    if (pathname === '/brands' || pathname === '/brands/') {
+      return [{ label: 'My brands' }];
+    }
+
     for (const section of sections) {
       const hit = section.items.find((item) => isActive(pathname, item.href));
-      if (hit) return hit.label;
+      if (hit) {
+        return [{ label: hit.label }];
+      }
     }
-    if (pathname.startsWith('/sessions')) return 'Past calls';
-    if (pathname.startsWith('/onboarding')) return 'Onboarding';
-    if (/\/brands\/[^/]+\/practice/.test(pathname)) return 'Practice calls';
-    return 'App';
-  }, [pathname, sections]);
+    if (pathname.startsWith('/sessions')) return [{ label: 'Past calls' }];
+    if (pathname.startsWith('/onboarding')) return [{ label: 'Onboarding' }];
+    return [{ label: 'App' }];
+  }, [pathname, sections, isBrandDesk, selectedBrand, ownedBrands]);
 
   const minutesLeft = metrics.minutesRemaining;
   const linkTitle = (label: string) => (sidebarCollapsed ? label : undefined);
-  const switchTarget = roleMode?.switchTarget ?? null;
+  // Prefer roleMode; fall back to active role so the toggle never disappears after a stale shell.
+  const switchTarget: SwitchableMode | null =
+    roleMode?.switchTarget ??
+    (role === 'REP' ? 'BRAND' : role === 'BRAND' || role === 'RECRUITER' ? 'REP' : null);
   const switchLabel =
     switchTarget === 'BRAND'
       ? 'Switch to Brand'
@@ -238,11 +474,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   async function switchMode(target: SwitchableMode) {
     if (switchBusy) return;
     setSwitchBusy(true);
+    setSwitchError(null);
     setMenuOpen(false);
     try {
       const modeStatus = roleMode?.modes?.[target];
       if (modeStatus && !modeStatus.onboarded) {
-        router.push(modeStatus.onboardingPath);
+        // Full navigation so AppShell remounts with the post-onboarding role.
+        window.location.href = modeStatus.onboardingPath;
         return;
       }
       const res = await fetch('/api/me', {
@@ -250,17 +488,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activeRole: target }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.status === 409 && data.onboardingPath) {
-        router.push(data.onboardingPath);
+        window.location.href = data.onboardingPath;
         return;
       }
       if (!res.ok) {
-        console.warn('[switchMode]', data.error || data.notice);
+        const err =
+          data.error || data.notice || `Could not switch to ${target === 'REP' ? 'SDR' : 'Brand'}`;
+        setSwitchError(err);
+        console.warn('[switchMode]', err);
         return;
       }
-      window.location.href = data.redirectTo || (target === 'BRAND' ? '/brands' : '/dashboard');
+      window.location.href = data.redirectTo || '/dashboard';
     } catch (e) {
+      const err = e instanceof Error ? e.message : 'Switch failed';
+      setSwitchError(err);
       console.warn('[switchMode]', e);
     } finally {
       setSwitchBusy(false);
@@ -286,52 +529,66 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app-sidebar__scroll">
         {sections.map((section) => (
           <div key={section.id} className="app-nav-section">
-            <div className="app-nav-section__head">
-              <p className="app-nav-section__label">{section.label}</p>
-              {section.id === 'brand' && (role === 'BRAND' || role === 'RECRUITER') ? (
-                <div className="app-brand-controls">
-                  <select
-                    className="field app-brand-switcher app-brand-switcher--inline"
-                    aria-label="Selected brand"
-                    value={selectedBrand ? brandPathKey(selectedBrand) : ''}
-                    onChange={(e) => {
-                      const key = e.target.value;
-                      if (key === '__create__') {
-                        setCreateBrandOpen(true);
-                        return;
-                      }
-                      if (key === '__all__') {
-                        router.push('/brands');
-                        return;
-                      }
-                      const next = ownedBrands.find((b) => brandPathKey(b) === key) || null;
-                      setSelectedBrand(next);
-                      if (next) {
-                        writeSelectedBrandKey(brandPathKey(next));
-                        syncBrandCookie(brandPathKey(next));
-                        setSections(brandNavSections(brandPathKey(next)));
-                        const m = pathname.match(/^\/brands\/[^/]+(\/.*)?$/);
-                        const rest = m?.[1] && m[1] !== '/' ? m[1].replace(/^\//, '') : '';
-                        router.push(
-                          rest
-                            ? `/brands/${brandPathKey(next)}/${rest}`
-                            : `/brands/${brandPathKey(next)}`
-                        );
-                      }
-                    }}
-                  >
-                    {ownedBrands.length === 0 ? <option value="">No brands yet</option> : null}
-                    {ownedBrands.map((b) => (
-                      <option key={b.id} value={brandPathKey(b)}>
-                        {b.name}
-                      </option>
-                    ))}
-                    <option value="__all__">All brands…</option>
-                    <option value="__create__">+ Create brand…</option>
-                  </select>
-                </div>
-              ) : null}
-            </div>
+            {section.label ||
+            (section.id === 'brand' && (role === 'BRAND' || role === 'RECRUITER')) ? (
+              <div className="app-nav-section__head">
+                {section.label ? (
+                  <p className="app-nav-section__label">{section.label}</p>
+                ) : null}
+                {section.id === 'brand' && (role === 'BRAND' || role === 'RECRUITER') ? (
+                  <div className="app-brand-controls">
+                    <select
+                      className="field app-brand-switcher app-brand-switcher--inline"
+                      aria-label="Selected brand"
+                      value={selectedBrand ? brandPathKey(selectedBrand) : ''}
+                      onChange={(e) => {
+                        const key = e.target.value;
+                        if (key === '__create__') {
+                          setCreateBrandOpen(true);
+                          return;
+                        }
+                        const next = switcherBrands.find((b) => brandPathKey(b) === key) || null;
+                        setSelectedBrand(next);
+                        if (next) {
+                          const nextKey = brandPathKey(next);
+                          writeSelectedBrandKey(nextKey);
+                          syncBrandCookie(nextKey);
+                          setSections(
+                            brandNavSections(
+                              nextKey,
+                              deskMode === 'demo'
+                                ? { leads: 45, generateLeads: 2, liveCalls: 0, campaigns: 2 }
+                                : undefined
+                            )
+                          );
+                          const m = pathname.match(/^\/brands\/[^/]+(\/.*)?$/);
+                          if (m) {
+                            const rest = m[1] && m[1] !== '/' ? m[1].replace(/^\//, '') : '';
+                            router.push(rest ? `/brands/${nextKey}/${rest}` : `/brands/${nextKey}`);
+                          } else if (pathname === '/dashboard') {
+                            router.refresh();
+                          } else if (pathname === '/brands' || pathname === '/brands/') {
+                            router.push(`/brands/${nextKey}`);
+                          } else {
+                            router.push(`/brands/${nextKey}`);
+                          }
+                        }
+                      }}
+                    >
+                      {switcherBrands.length === 0 ? <option value="">No brands yet</option> : null}
+                      {switcherBrands.map((b) => (
+                        <option key={b.id} value={brandPathKey(b)}>
+                          {b.name}
+                        </option>
+                      ))}
+                      {deskMode === 'live' ? (
+                        <option value="__create__">+ Create brand…</option>
+                      ) : null}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <ul className="app-nav-section__list">
               {section.items.map((item) => {
                 const active = isActive(pathname, item.href);
@@ -348,6 +605,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         <NavIconGlyph name={item.icon} />
                       </span>
                       <span className="app-nav-link__label">{item.label}</span>
+                      {item.badge != null && item.badge !== '' ? (
+                        <span className="app-nav-link__badge" aria-label={`${item.badge} items`}>
+                          {item.badge}
+                        </span>
+                      ) : null}
                     </Link>
                   </li>
                 );
@@ -416,6 +678,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </button>
         )}
+        {switchError ? (
+          <p className="app-mode-switch__error" role="alert">
+            {switchError}
+          </p>
+        ) : null}
         <div className="app-sidebar__clerk">
           <OrganizationSwitcher
             hidePersonal={false}
@@ -473,6 +740,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     .join(' ');
 
   return (
+    <ShellProvider
+      role={role}
+      roleMode={roleMode}
+      brands={ownedBrands}
+      selectedBrand={selectedBrand}
+      metrics={metrics}
+      deskMode={deskMode}
+      setDeskMode={setDeskMode}
+    >
     <div className={shellClass}>
       <aside className="app-sidebar app-sidebar--desktop" aria-label="Primary">
         {sidebar}
@@ -489,38 +765,102 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           >
             <span className="app-menu-btn__bars" data-open={menuOpen} />
           </button>
-          <div className="app-topbar__title">
+          <div className="app-topbar__title" aria-label="Breadcrumb">
             <span className="app-topbar__crumb">ColdCallReps</span>
-            <span className="app-topbar__sep">/</span>
-            <span>{pageLabel}</span>
+            {breadcrumbs.map((crumb, i) => (
+              <span key={`${crumb.label}-${i}`} className="app-topbar__crumb-group">
+                <span className="app-topbar__sep">/</span>
+                {crumb.href ? (
+                  <Link href={crumb.href} className="app-topbar__crumb-link">
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className={i === breadcrumbs.length - 1 ? undefined : 'app-topbar__crumb'}>
+                    {crumb.label}
+                  </span>
+                )}
+              </span>
+            ))}
           </div>
           <div className="app-topbar__right">
             <ThemePicker compact />
             <div className="app-metrics" aria-label="Account metrics">
-              {metrics.globalRank != null && (
-                <Link
-                  href="/dashboard#leaderboard"
-                  className="app-metric app-metric--rank"
-                  title="Global ranking by all-time points"
-                >
-                  <span className="app-metric__label">Rank</span>
-                  <span className="app-metric__value">
-                    #{metrics.globalRank}
-                    {metrics.globalRankPool != null && metrics.globalRankPool > 1 ? (
-                      <span className="app-metric__of">/{metrics.globalRankPool}</span>
-                    ) : null}
-                  </span>
-                </Link>
-              )}
-              {minutesLeft != null && (
+              {isBrandDesk ? (
                 <>
-                  <Link href="/billing" className="app-metric app-metric--accent" title="Minutes remaining">
-                    <span className="app-metric__label">Min</span>
-                    <span className="app-metric__value">{minutesLeft}</span>
-                  </Link>
+                  {brandMetrics.walletLabel != null && (
+                    <Link
+                      href="/billing"
+                      className="app-metric app-metric--accent"
+                      title="Escrow wallet balance"
+                    >
+                      <span className="app-metric__label">Wallet</span>
+                      <span className="app-metric__value">{brandMetrics.walletLabel}</span>
+                    </Link>
+                  )}
+                  {brandMetrics.openCampaigns != null && (
+                    <Link
+                      href={
+                        selectedBrand
+                          ? brandHref(selectedBrand, 'campaigns')
+                          : '/brands'
+                      }
+                      className="app-metric"
+                      title="Open campaigns"
+                    >
+                      <span className="app-metric__label">Campaigns</span>
+                      <span className="app-metric__value">{brandMetrics.openCampaigns}</span>
+                    </Link>
+                  )}
+                  {brandMetrics.teamCount != null && (
+                    <Link
+                      href={
+                        selectedBrand
+                          ? brandHref(selectedBrand, 'sdrs', 'team')
+                          : '/brands'
+                      }
+                      className="app-metric"
+                      title="Active SDRs on this brand"
+                    >
+                      <span className="app-metric__label">Team</span>
+                      <span className="app-metric__value">{brandMetrics.teamCount}</span>
+                    </Link>
+                  )}
                   <Link href="/billing" className="app-metric-upgrade">
                     Upgrade →
                   </Link>
+                </>
+              ) : (
+                <>
+                  {metrics.globalRank != null && (
+                    <Link
+                      href="/dashboard#leaderboard"
+                      className="app-metric app-metric--rank"
+                      title="Global ranking by all-time points"
+                    >
+                      <span className="app-metric__label">Rank</span>
+                      <span className="app-metric__value">
+                        #{metrics.globalRank}
+                        {metrics.globalRankPool != null && metrics.globalRankPool > 1 ? (
+                          <span className="app-metric__of">/{metrics.globalRankPool}</span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  )}
+                  {minutesLeft != null && (
+                    <>
+                      <Link
+                        href="/billing"
+                        className="app-metric app-metric--accent"
+                        title="Minutes remaining"
+                      >
+                        <span className="app-metric__label">Min</span>
+                        <span className="app-metric__value">{minutesLeft}</span>
+                      </Link>
+                      <Link href="/billing" className="app-metric-upgrade">
+                        Upgrade →
+                      </Link>
+                    </>
+                  )}
                 </>
               )}
               <Link href="/billing" className="app-metric app-metric--plan" title="Current plan">
@@ -553,7 +893,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <CreateBrandModal
         open={createBrandOpen}
-        onClose={() => setCreateBrandOpen(false)}
+        onClose={() => {
+          if (ownedBrands.length === 0 && isBrandDesk) return;
+          setCreateBrandOpen(false);
+        }}
+        redirectTo={undefined}
         onCreated={(key) => {
           if (!key) return;
           writeSelectedBrandKey(key);
@@ -562,5 +906,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }}
       />
     </div>
+    </ShellProvider>
   );
 }

@@ -80,7 +80,7 @@ export function onboardingPathFor(mode: SwitchableMode): string {
 }
 
 export function homeForMode(mode: SwitchableMode): string {
-  return mode === 'REP' ? '/dashboard' : '/brands';
+  return '/dashboard';
 }
 
 export function isRepOnboarded(
@@ -112,6 +112,8 @@ export function isModeUnlocked(
 /**
  * Build mode-switch payload for /api/me and AppShell.
  * SUPERADMIN / MANAGER keep their desks — no sidebar toggle.
+ * Switch target is always the opposite desk for REP ↔ Brand so the sidebar
+ * control never disappears after a one-sided onboarding.
  */
 export function buildRoleModeState(
   profile: Pick<

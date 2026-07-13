@@ -1,6 +1,18 @@
-import { PLAN, TRIAL_MINUTES } from '@/lib/product';
+import {
+  BRAND_LEAD_PLAN,
+  LEAD_PACKS,
+  PLAN,
+  TRIAL_MINUTES,
+} from '@/lib/product';
 
 export type RoleLandingKey = 'reps' | 'brands' | 'teams';
+
+export type RolePricingCard = {
+  label: string;
+  price: string;
+  detail: string;
+  highlight?: boolean;
+};
 
 export interface RoleLanding {
   key: RoleLandingKey;
@@ -20,6 +32,7 @@ export interface RoleLanding {
   pricingHeadline: string;
   pricingNote: string;
   planHref: string;
+  pricingCards?: RolePricingCard[];
 }
 
 export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
@@ -76,9 +89,27 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
         body: 'Unlock more practice minutes and higher-paying deals as you win.',
       },
     ],
-    pricingHeadline: 'Ready when you are',
-    pricingNote: `Free (${TRIAL_MINUTES} min) · Starter $${PLAN.STARTER.price}/mo (${PLAN.STARTER.minutes} min) · Pro $${PLAN.PRO.price}/mo · Brand deals are free for reps · Stripe Connect when you’re ready to get paid`,
+    pricingHeadline: 'Practice plans for SDRs',
+    pricingNote: `Free (${TRIAL_MINUTES} min) · Starter $${PLAN.STARTER.price}/mo (${PLAN.STARTER.minutes} min) · Pro $${PLAN.PRO.price}/mo (${PLAN.PRO.minutes} min) · Brand deals are free for reps · Stripe Connect when you’re ready to get paid`,
     planHref: '/sign-up?role=REP',
+    pricingCards: [
+      {
+        label: 'Free',
+        price: '$0',
+        detail: `${TRIAL_MINUTES} practice minutes to start · brand deals free`,
+      },
+      {
+        label: 'Starter',
+        price: `$${PLAN.STARTER.price}/mo`,
+        detail: `${PLAN.STARTER.minutes} practice minutes / mo · live coach`,
+        highlight: true,
+      },
+      {
+        label: 'Pro',
+        price: `$${PLAN.PRO.price}/mo`,
+        detail: `${PLAN.PRO.minutes} min / mo · recording storage`,
+      },
+    ],
   },
   brands: {
     key: 'brands',
@@ -133,10 +164,27 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
         body: 'You only pay when a lead goal is met.',
       },
     ],
-    pricingHeadline: 'Free to start. Pay only when a goal is met.',
-    pricingNote:
-      'Sign up and create a campaign at no cost. Set your own price per lead and choose the goal — qualified lead or booked appointment. You only pay when that goal is delivered.',
+    pricingHeadline: 'Lead generation + results-based campaigns',
+    pricingNote: `Free includes ${BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo. Brand Lead Plan $${BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo for ${BRAND_LEAD_PLAN.LEAD_MONTHLY.allotment.toLocaleString()} · Annual $${BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr (20% off). Packs from $${LEAD_PACKS[0].priceUsd}. CSV import unlimited. Campaign escrow: pay SDRs only when goals are met (~20% platform fee).`,
     planHref: '/sign-up?role=BRAND',
+    pricingCards: [
+      {
+        label: 'Free',
+        price: '$0',
+        detail: `${BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo · unlimited import · post campaigns`,
+      },
+      {
+        label: 'Brand Lead Plan',
+        price: `$${BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo`,
+        detail: `${BRAND_LEAD_PLAN.LEAD_MONTHLY.allotment.toLocaleString()} enriched leads / mo · or $${BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr`,
+        highlight: true,
+      },
+      {
+        label: 'Lead packs',
+        price: `From $${LEAD_PACKS[0].priceUsd}`,
+        detail: LEAD_PACKS.map((p) => `${p.credits}/${p.priceUsd}`).join(' · ') + ' (12-mo shelf)',
+      },
+    ],
   },
   teams: {
     key: 'teams',

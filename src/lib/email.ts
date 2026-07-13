@@ -4,7 +4,10 @@ export async function sendEmail(opts: {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   from?: string;
+  replyTo?: string;
+  idempotencyKey?: string;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -16,18 +19,27 @@ export async function sendEmail(opts: {
     process.env.RESEND_FROM ||
     'Cold Call Reps <reps@coldcallreps.com>';
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (opts.idempotencyKey) {
+    headers['Idempotency-Key'] = opts.idempotencyKey.slice(0, 256);
+  }
+
+  const body: Record<string, unknown> = {
+    from,
+    to: [opts.to],
+    subject: opts.subject,
+    html: opts.html,
+  };
+  if (opts.text) body.text = opts.text;
+  if (opts.replyTo) body.reply_to = opts.replyTo;
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-    }),
+    headers,
+    body: JSON.stringify(body),
   });
 
   const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };

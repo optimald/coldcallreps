@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { prisma } from '@/lib/prisma';
-import { PLAN, minutesForTier, priceIdForTier, type PaidPlanKey } from '@/lib/product';
+import {
+  PLAN,
+  minutesForTier,
+  priceIdForTier,
+  brandLeadPlanFromPriceId,
+  type PaidPlanKey,
+} from '@/lib/product';
 import { TRIAL_MINUTES } from '@/lib/product';
 import { creditPersonalMinutes, topUpOrgPool } from '@/lib/minutes';
 import { connectStatusFromAccount } from '@/lib/stripe';
+import {
+  applyBrandLeadSubscription,
+  downgradeBrandLeadPlan,
+  grantLeadPack,
+} from '@/lib/lead-credits';
 
 async function markCampaignPayoutPaid(session: Stripe.Checkout.Session) {
   const payoutId = session.metadata?.payoutId;
@@ -65,12 +76,54 @@ async function markCampaignPayoutPaid(session: Stripe.Checkout.Session) {
     where: { id: existing.applicationId, status: { not: 'COMPLETED' } },
     data: { status: 'COMPLETED' },
   });
+
+  try {
+    const { notifyAsync } = await import('@/lib/notifications');
+    const { formatPayout } = await import('@/lib/campaigns');
+    const full = await prisma.campaignPayout.findUnique({
+      where: { id: payoutId },
+      include: {
+        campaign: {
+          select: {
+            title: true,
+            brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
+          },
+        },
+        repUser: { select: { id: true, email: true, displayName: true } },
+      },
+    });
+    if (full) {
+      notifyAsync({
+        event: 'payout.paid',
+        recipient: {
+          userId: full.repUser.id,
+          email: full.repUser.email,
+          displayName: full.repUser.displayName,
+        },
+        brand: full.campaign.brand,
+        payload: {
+          campaignTitle: full.campaign.title,
+          campaignId: full.campaignId,
+          amountLabel: formatPayout(full.netCents),
+          ctaUrl: '/billing',
+          forAudience: 'sdr',
+        },
+        idempotencyKey: `payout.paid:${full.id}`,
+      });
+    }
+  } catch (e) {
+    console.warn('[webhook] payout.paid notify failed', e);
+  }
 }
 
 async function syncConnectAccount(account: Stripe.Account) {
   const userId = account.metadata?.userId;
   const status = connectStatusFromAccount(account);
   if (userId) {
+    const before = await prisma.userProfile.findUnique({
+      where: { id: userId },
+      select: { stripeConnectPayoutsEnabled: true, email: true, displayName: true },
+    });
     await prisma.userProfile.updateMany({
       where: { id: userId },
       data: {
@@ -79,6 +132,23 @@ async function syncConnectAccount(account: Stripe.Account) {
         stripeConnectPayoutsEnabled: status.payoutsEnabled,
       },
     });
+    if (status.payoutsEnabled && !before?.stripeConnectPayoutsEnabled) {
+      try {
+        const { notifyAsync } = await import('@/lib/notifications');
+        notifyAsync({
+          event: 'connect.ready',
+          recipient: {
+            userId,
+            email: before?.email,
+            displayName: before?.displayName,
+          },
+          payload: { ctaUrl: '/billing', forAudience: 'sdr' },
+          idempotencyKey: `connect.ready:${userId}:${account.id}`,
+        });
+      } catch (e) {
+        console.warn('[webhook] connect.ready notify failed', e);
+      }
+    }
     return;
   }
   await prisma.userProfile.updateMany({
@@ -314,22 +384,95 @@ export async function POST(req: Request) {
           stripeSessionId: session.id,
           note: 'Stripe wallet fund',
         });
+        try {
+          const { notifyAsync } = await import('@/lib/notifications');
+          const { formatPayout } = await import('@/lib/campaigns');
+          const brand = await prisma.brand.findUnique({
+            where: { id: brandId },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              logoUrl: true,
+              ownerId: true,
+            },
+          });
+          if (brand?.ownerId) {
+            notifyAsync({
+              event: 'wallet.funded',
+              recipient: { userId: brand.ownerId },
+              brand,
+              payload: {
+                amountLabel: formatPayout(amountCents),
+                ctaUrl: `/brands/${brand.slug}/campaigns`,
+                forAudience: 'brand',
+              },
+              idempotencyKey: `wallet.funded:${session.id}`,
+            });
+          }
+        } catch (e) {
+          console.warn('[webhook] wallet.funded notify failed', e);
+        }
       }
     } else if (session.mode === 'payment' && session.metadata?.kind === 'campaign_payout') {
       await markCampaignPayoutPaid(session);
+    } else if (session.mode === 'payment' && session.metadata?.kind === 'lead_pack') {
+      const brandId = session.metadata.brandId;
+      const credits = parseInt(session.metadata.credits || '0', 10) || 0;
+      if (brandId && credits > 0) {
+        await grantLeadPack(brandId, credits, {
+          stripeSessionId: session.id,
+          note: `Purchased ${session.metadata.pack || 'lead pack'}`,
+        });
+      }
+    } else if (
+      session.mode === 'subscription' &&
+      session.metadata?.kind === 'brand_lead_plan'
+    ) {
+      const brandId = session.metadata.brandId;
+      const leadPlan =
+        session.metadata.leadPlan === 'LEAD_ANNUAL' ? 'LEAD_ANNUAL' : 'LEAD_MONTHLY';
+      const subscriptionId =
+        typeof session.subscription === 'string'
+          ? session.subscription
+          : session.subscription?.id || null;
+      if (brandId) {
+        let periodEnd: Date | null = null;
+        if (subscriptionId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            periodEnd = sub.current_period_end
+              ? new Date(sub.current_period_end * 1000)
+              : null;
+          } catch {
+            /* ignore */
+          }
+        }
+        await applyBrandLeadSubscription({
+          brandId,
+          plan: leadPlan,
+          subscriptionId,
+          periodEnd,
+        });
+      }
     } else if (session.mode === 'subscription' || session.metadata?.tier) {
-      const tier = asPaidPlanKey(session.metadata?.tier);
-      await applySubscription({
-        userId,
-        customerId:
-          typeof session.customer === 'string' ? session.customer : session.customer?.id || null,
-        customerEmail,
-        tier,
-        subscriptionId:
-          typeof session.subscription === 'string'
-            ? session.subscription
-            : session.subscription?.id || null,
-      });
+      // Skip if this was a brand lead plan (handled above)
+      if (session.metadata?.kind === 'brand_lead_plan') {
+        /* already handled */
+      } else {
+        const tier = asPaidPlanKey(session.metadata?.tier);
+        await applySubscription({
+          userId,
+          customerId:
+            typeof session.customer === 'string' ? session.customer : session.customer?.id || null,
+          customerEmail,
+          tier,
+          subscriptionId:
+            typeof session.subscription === 'string'
+              ? session.subscription
+              : session.subscription?.id || null,
+        });
+      }
     }
   }
 
@@ -351,6 +494,42 @@ export async function POST(req: Request) {
           failureReason: 'Checkout expired',
         },
       });
+      try {
+        const { notifyAsync } = await import('@/lib/notifications');
+        const payout = await prisma.campaignPayout.findUnique({
+          where: { id: session.metadata.payoutId },
+          include: {
+            campaign: {
+              select: {
+                title: true,
+                brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
+              },
+            },
+            repUser: { select: { id: true, email: true, displayName: true } },
+          },
+        });
+        if (payout) {
+          notifyAsync({
+            event: 'payout.failed',
+            recipient: {
+              userId: payout.repUser.id,
+              email: payout.repUser.email,
+              displayName: payout.repUser.displayName,
+            },
+            brand: payout.campaign.brand,
+            payload: {
+              campaignTitle: payout.campaign.title,
+              campaignId: payout.campaignId,
+              reason: 'Checkout expired before payment completed',
+              ctaUrl: '/billing',
+              forAudience: 'sdr',
+            },
+            idempotencyKey: `payout.failed:${payout.id}:expired`,
+          });
+        }
+      } catch (e) {
+        console.warn('[webhook] payout.failed notify failed', e);
+      }
     }
   }
 
@@ -358,13 +537,58 @@ export async function POST(req: Request) {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId =
       typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
-    if (customerId) {
+    const priceId = invoice.lines?.data?.[0]?.price?.id;
+    const leadPlanFromPrice = brandLeadPlanFromPriceId(priceId);
+    const brandIdFromMeta =
+      invoice.lines?.data?.[0]?.metadata?.brandId ||
+      (invoice.subscription_details as { metadata?: { brandId?: string } } | null)?.metadata
+        ?.brandId;
+
+    if (leadPlanFromPrice && customerId) {
+      // Renew brand lead allotment on paid invoice
+      let brandId = brandIdFromMeta || null;
+      if (!brandId) {
+        const subId =
+          typeof invoice.subscription === 'string'
+            ? invoice.subscription
+            : invoice.subscription?.id || null;
+        if (subId) {
+          const hit = await prisma.brand.findFirst({
+            where: { stripeLeadSubscriptionId: subId },
+            select: { id: true },
+          });
+          brandId = hit?.id || null;
+        }
+      }
+      if (brandId) {
+        const subId =
+          typeof invoice.subscription === 'string'
+            ? invoice.subscription
+            : invoice.subscription?.id || null;
+        let periodEnd: Date | null = null;
+        if (subId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subId);
+            periodEnd = sub.current_period_end
+              ? new Date(sub.current_period_end * 1000)
+              : null;
+          } catch {
+            /* ignore */
+          }
+        }
+        await applyBrandLeadSubscription({
+          brandId,
+          plan: leadPlanFromPrice,
+          subscriptionId: subId,
+          periodEnd,
+        });
+      }
+    } else if (customerId) {
       const profile = await findProfileForCheckout({
         customerId,
         customerEmail: invoice.customer_email || null,
       });
       if (profile) {
-        const priceId = invoice.lines?.data?.[0]?.price?.id;
         const fromPrice = tierFromPriceId(priceId);
         const tier = fromPrice || asPaidPlanKey(profile.plan);
         const subId =
@@ -384,8 +608,25 @@ export async function POST(req: Request) {
   if (event.type === 'customer.subscription.updated') {
     const sub = event.data.object as Stripe.Subscription;
     const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
-    if (customerId && sub.status === 'active') {
-      const priceId = sub.items?.data?.[0]?.price?.id;
+    const priceId = sub.items?.data?.[0]?.price?.id;
+    const leadPlan = brandLeadPlanFromPriceId(priceId) ||
+      (sub.metadata?.kind === 'brand_lead_plan'
+        ? sub.metadata.leadPlan === 'LEAD_ANNUAL'
+          ? 'LEAD_ANNUAL'
+          : 'LEAD_MONTHLY'
+        : null);
+    const brandId = sub.metadata?.brandId;
+
+    if (leadPlan && brandId && sub.status === 'active') {
+      await applyBrandLeadSubscription({
+        brandId,
+        plan: leadPlan,
+        subscriptionId: sub.id,
+        periodEnd: sub.current_period_end
+          ? new Date(sub.current_period_end * 1000)
+          : null,
+      });
+    } else if (customerId && sub.status === 'active' && !leadPlan) {
       const tier = tierFromPriceId(priceId) || asPaidPlanKey(sub.metadata?.tier);
       await applySubscription({
         customerId,
@@ -394,7 +635,19 @@ export async function POST(req: Request) {
       });
     }
     if (customerId && (sub.status === 'unpaid' || sub.status === 'canceled')) {
-      await downgradeToFree(customerId);
+      if (brandId || sub.metadata?.kind === 'brand_lead_plan') {
+        const id =
+          brandId ||
+          (
+            await prisma.brand.findFirst({
+              where: { stripeLeadSubscriptionId: sub.id },
+              select: { id: true },
+            })
+          )?.id;
+        if (id) await downgradeBrandLeadPlan(id);
+      } else {
+        await downgradeToFree(customerId);
+      }
     }
   }
 
@@ -413,7 +666,20 @@ export async function POST(req: Request) {
   if (event.type === 'customer.subscription.deleted') {
     const sub = event.data.object as Stripe.Subscription;
     const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
-    if (customerId) await downgradeToFree(customerId);
+    const brandId = sub.metadata?.brandId;
+    if (brandId || sub.metadata?.kind === 'brand_lead_plan') {
+      const id =
+        brandId ||
+        (
+          await prisma.brand.findFirst({
+            where: { stripeLeadSubscriptionId: sub.id },
+            select: { id: true },
+          })
+        )?.id;
+      if (id) await downgradeBrandLeadPlan(id);
+    } else if (customerId) {
+      await downgradeToFree(customerId);
+    }
   }
 
   return NextResponse.json({ received: true });

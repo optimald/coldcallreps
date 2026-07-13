@@ -1,20 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { FOCUS_LABELS, type FocusArea } from '@/lib/product';
+import type { TrainerLeaderboardRow as Row } from '@/lib/trainer-leaderboard';
 import { EmptyState, Panel } from '@/components/ui/PagePrimitives';
-
-interface Row {
-  rank: number;
-  displayName: string;
-  totalPoints: number;
-  totalSessions: number;
-  avgScore: number;
-  streak: number;
-  badges: string[];
-  hiringBoard: boolean;
-}
 
 type LeaderboardPanelProps = {
   /** denser embed for dashboard */
@@ -22,31 +12,41 @@ type LeaderboardPanelProps = {
   /** ultra-compact for above-the-fold desk (top N, minimal chrome) */
   compact?: boolean;
   limit?: number;
+  initialRows?: Row[];
+  initialOrgId?: string | null;
 };
 
 export default function LeaderboardPanel({
   embedded = false,
   compact = false,
   limit,
+  initialRows,
+  initialOrgId,
 }: LeaderboardPanelProps) {
   const resolvedLimit = limit ?? (compact ? 8 : embedded ? 12 : 25);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<Row[]>(() => initialRows ?? []);
   const [focus, setFocus] = useState('');
   const [period, setPeriod] = useState('week');
   const [scope, setScope] = useState<'global' | 'org'>('global');
-  const [orgId, setOrgId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [orgId, setOrgId] = useState<string | null>(initialOrgId ?? null);
+  const [loading, setLoading] = useState(initialRows === undefined);
+  const skipInitialFetch = useRef(initialRows !== undefined);
 
   useEffect(() => {
+    if (initialOrgId !== undefined) return;
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.orgId) setOrgId(d.orgId);
       })
       .catch(() => {});
-  }, []);
+  }, [initialOrgId]);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     setLoading(true);
     const params = new URLSearchParams({ period, limit: String(resolvedLimit) });
     if (focus) params.set('focus', focus);
@@ -129,7 +129,7 @@ export default function LeaderboardPanel({
     <ol className={`stack${compact ? ' dash-board__list' : ''}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {rows.map((r) => (
         <li
-          key={`${r.rank}-${r.displayName}`}
+          key={r.userId}
           className={compact ? 'dash-board__row' : 'session-row'}
           style={compact ? undefined : { gridTemplateColumns: '2.5rem 1fr auto' }}
         >

@@ -16,6 +16,11 @@ import {
   homeForMode,
   serializeUnlockedRoles,
 } from '@/lib/role-mode';
+import {
+  normalizeWebsiteUrl,
+  resolveBrandLogoFromWebsite,
+} from '@/lib/fetch-brand-logo';
+import { normalizeLogoUrlInput } from '@/lib/brand-logo-upload';
 
 /**
  * POST /api/onboarding/brand
@@ -24,7 +29,8 @@ import {
  *
  * Body: {
  *   accept: true,
- *   brandName, logoUrl?, description?,
+ *   brandName, websiteUrl, description,
+ *   logoUrl?, // optional override; otherwise fetched from websiteUrl
  *   campaignTitle?, campaignDescription?, pricingTier?,
  *   fundWalletCents?: number  // optional Stripe Checkout for escrow
  * }
@@ -49,21 +55,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Brand name is required' }, { status: 400 });
     }
 
-    let logoUrl: string | null = null;
-    if (body.logoUrl != null && String(body.logoUrl).trim()) {
-      const raw = String(body.logoUrl).trim().slice(0, 500);
-      if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) logoUrl = raw;
-      else {
-        return NextResponse.json(
-          { error: 'Logo must be an https URL or site path' },
-          { status: 400 }
-        );
-      }
-    }
-
     const description = body.description
       ? String(body.description).trim().slice(0, 1000)
-      : null;
+      : '';
+    if (!description) {
+      return NextResponse.json({ error: 'A short description is required' }, { status: 400 });
+    }
+
+    const websiteUrl = normalizeWebsiteUrl(String(body.websiteUrl || body.website || ''));
+    if (!websiteUrl) {
+      return NextResponse.json(
+        { error: 'A valid website URL is required (we use it to fetch your logo)' },
+        { status: 400 }
+      );
+    }
+
+    let logoUrl: string | null = null;
+    if (body.logoUrl != null && String(body.logoUrl).trim()) {
+      const parsed = normalizeLogoUrlInput(body.logoUrl);
+      if (parsed.error) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      logoUrl = parsed.logoUrl;
+    }
+    if (!logoUrl) {
+      logoUrl = await resolveBrandLogoFromWebsite(websiteUrl);
+    }
 
     const baseSlug =
       String(body.slug || brandName)
@@ -90,6 +107,7 @@ export async function POST(req: Request) {
           name: brandName,
           slug,
           description,
+          websiteUrl,
           logoUrl,
         },
       });
@@ -194,6 +212,29 @@ export async function POST(req: Request) {
       } catch (e) {
         console.warn('[onboarding/brand] wallet checkout failed', e);
       }
+    }
+
+    if (!profile.brandOnboardedAt) {
+      const { notifyAsync } = await import('@/lib/notifications');
+      notifyAsync({
+        event: 'welcome.brand',
+        recipient: {
+          userId: profile.id,
+          email: profile.email,
+          displayName: profile.displayName,
+        },
+        brand: {
+          id: result.brand.id,
+          name: result.brand.name,
+          slug: result.brand.slug,
+          logoUrl: result.brand.logoUrl,
+        },
+        payload: {
+          ctaUrl: `/brands/${result.brand.slug}`,
+          forAudience: 'brand',
+        },
+        idempotencyKey: `welcome.brand:${profile.id}:${result.brand.id}`,
+      });
     }
 
     return NextResponse.json({

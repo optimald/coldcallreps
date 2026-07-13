@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { brandHref, brandPathKey } from '@/lib/brand-context';
 import { getOrCreateBrandWallet } from '@/lib/escrow';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canAccessBrandDesk } from '@/lib/roles';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import BrandSdrPayoutsClient from '@/components/BrandSdrPayoutsClient';
 
@@ -15,12 +16,8 @@ export default async function BrandSdrPayoutsPage({
 }) {
   const profile = await requireUser();
   const { id } = await params;
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-  if (!canManageBrand(profile, brand.ownerId)) redirect('/dashboard');
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode)) redirect('/dashboard');
 
   const [payouts, wallet] = await Promise.all([
     prisma.campaignPayout.findMany({
@@ -50,7 +47,6 @@ export default async function BrandSdrPayoutsPage({
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="Payouts"
         description="Fund escrow for verified appointments, then pay SDRs from campaign detail. Brands do not use Stripe Connect — SDRs do."
         actions={

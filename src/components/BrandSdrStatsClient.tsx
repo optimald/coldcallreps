@@ -19,7 +19,7 @@ function pct(num: number, den: number): string {
 }
 
 function DemoStatsBody({ brandKey }: { brandKey: string }) {
-  const s = getDemoStats();
+  const s = getDemoStats(brandKey);
   const pipeMax = Math.max(1, ...s.pipeline.map((p) => p.value));
   const maxDay = Math.max(1, ...s.days.map((d) => d.count));
   const maxDials = Math.max(1, ...s.perSdr.map((r) => r.dials));
@@ -184,7 +184,7 @@ function DemoStatsBody({ brandKey }: { brandKey: string }) {
       <p className="muted" style={{ fontSize: '0.8rem', marginTop: '-0.25rem' }}>
         Totals: {s.campaignCount} campaigns · {s.appCount} applications · {s.callCount} calls ·{' '}
         <Link href={brandHref(brandKey, 'calls')} className="soft-link">
-          open live calls
+          open calls
         </Link>
       </p>
     </>
@@ -199,8 +199,8 @@ export default function BrandSdrStatsClient({
   brandKey: string;
   liveChildren: ReactNode;
 }) {
-  const { mode, hydrated } = useBrandDeskMode();
-  if (hydrated && mode === 'demo') {
+  const { mode } = useBrandDeskMode();
+  if (mode === 'demo') {
     return <DemoStatsBody brandKey={brandKey} />;
   }
   return <>{liveChildren}</>;

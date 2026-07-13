@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
-import { practiceHref } from '@/lib/campaigns';
+import { isCampaignDialEligible, practiceHref } from '@/lib/campaigns';
+import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { assertCanApplyToCampaign } from '@/lib/apply-gate';
+import { notifyAsync } from '@/lib/notifications';
 
 /**
  * POST — SDR applies to an OPEN campaign after AI trainer gate.
@@ -18,10 +20,22 @@ export async function POST(
     const { id } = await params;
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { brand: { select: { ownerId: true, name: true } } },
+      include: {
+        brand: {
+          select: { id: true, name: true, slug: true, logoUrl: true, ownerId: true },
+        },
+      },
     });
-    if (!campaign || campaign.status !== 'OPEN') {
+    if (!campaign) {
       return NextResponse.json({ error: 'Campaign not open' }, { status: 404 });
+    }
+    const spend = await loadOneCampaignSpend(campaign.id);
+    const eligible = isCampaignDialEligible({ ...campaign, ...spend });
+    if (!eligible.ok) {
+      return NextResponse.json(
+        { error: eligible.reason || 'Campaign not open', code: 'CAMPAIGN_NOT_ELIGIBLE' },
+        { status: 404 }
+      );
     }
     if (canManageBrand(profile, campaign.brand.ownerId)) {
       return NextResponse.json(
@@ -35,6 +49,31 @@ export async function POST(
       campaign,
     });
     if (!gate.ok) {
+      const { notifyAsync } = await import('@/lib/notifications');
+      notifyAsync({
+        event: 'campaign.apply.blocked',
+        recipient: {
+          userId: profile.id,
+          email: profile.email,
+          displayName: profile.displayName,
+        },
+        brand: {
+          id: campaign.brand.id,
+          name: campaign.brand.name,
+          slug: campaign.brand.slug,
+          logoUrl: campaign.brand.logoUrl,
+        },
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: campaign.id,
+          reason: gate.error,
+          gateCode: gate.code,
+          practiceHref: gate.practiceHref,
+          ctaUrl: gate.practiceHref,
+          forAudience: 'sdr',
+        },
+        idempotencyKey: `campaign.apply.blocked:${campaign.id}:${profile.id}:${gate.code}`,
+      });
       return NextResponse.json(
         {
           error: gate.error,
@@ -81,6 +120,39 @@ export async function POST(
             status: 'APPLIED',
           },
         });
+
+    if (campaign.brand.ownerId) {
+      const owner = await prisma.userProfile.findUnique({
+        where: { id: campaign.brand.ownerId },
+        select: { id: true, email: true, displayName: true },
+      });
+      if (owner) {
+        notifyAsync({
+          event: 'campaign.application.submitted',
+          recipient: {
+            userId: owner.id,
+            email: owner.email,
+            displayName: owner.displayName,
+          },
+          brand: {
+            id: campaign.brand.id,
+            name: campaign.brand.name,
+            slug: campaign.brand.slug,
+            logoUrl: campaign.brand.logoUrl,
+          },
+          fromUserId: profile.id,
+          payload: {
+            campaignTitle: campaign.title,
+            campaignId: campaign.id,
+            applicationId: application.id,
+            sdrName: profile.displayName || 'An SDR',
+            customMessage: message || undefined,
+            ctaUrl: `/brands/${campaign.brand.slug}/sdrs/applications`,
+          },
+          idempotencyKey: `campaign.application.submitted:${application.id}:${application.updatedAt.toISOString()}`,
+        });
+      }
+    }
 
     return NextResponse.json({
       application,

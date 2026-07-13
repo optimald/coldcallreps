@@ -163,6 +163,109 @@ export function priceIdForPack(key: MinutePackKey): string | undefined {
   return process.env[pack.priceEnv];
 }
 
+/**
+ * Brand lead credits (Maps scrape + enhanced enrichment).
+ * Ratified Option B — July 2026. Imports / manual adds do not consume credits.
+ */
+export type BrandLeadPlanKey = 'FREE' | 'LEAD_MONTHLY' | 'LEAD_ANNUAL';
+
+export const BRAND_LEAD_FREE_MONTHLY = 100;
+export const BRAND_LEAD_PLAN_ALLOTMENT = 1000;
+
+export const BRAND_LEAD_PLAN = {
+  FREE: {
+    key: 'FREE' as const,
+    label: 'Free',
+    priceUsd: 0,
+    allotment: BRAND_LEAD_FREE_MONTHLY,
+    interval: 'month' as const,
+    features: [
+      `${BRAND_LEAD_FREE_MONTHLY} enriched leads / mo`,
+      'Generate Leads (Maps scrape + enrichment)',
+      'Unlimited CSV / manual import',
+      'Quick Intel table + campaign escrow',
+    ],
+  },
+  LEAD_MONTHLY: {
+    key: 'LEAD_MONTHLY' as const,
+    label: 'Brand Lead Plan',
+    priceUsd: 149,
+    allotment: BRAND_LEAD_PLAN_ALLOTMENT,
+    interval: 'month' as const,
+    priceEnv: 'STRIPE_BRAND_LEAD_MONTHLY_PRICE_ID',
+    features: [
+      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enriched leads / mo`,
+      'Priority scrape queue',
+      'Unlimited CSV / manual import',
+      'Campaign escrow + SDR payouts',
+    ],
+  },
+  LEAD_ANNUAL: {
+    key: 'LEAD_ANNUAL' as const,
+    label: 'Brand Lead Plan (Annual)',
+    priceUsd: 1190,
+    /** Effective ~$99/mo (20% off). */
+    monthlyEquivalentUsd: 99,
+    allotment: BRAND_LEAD_PLAN_ALLOTMENT,
+    interval: 'year' as const,
+    priceEnv: 'STRIPE_BRAND_LEAD_ANNUAL_PRICE_ID',
+    features: [
+      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enriched leads / mo`,
+      '20% off vs monthly ($1,190/yr)',
+      'Unlimited CSV / manual import',
+      'Campaign escrow + SDR payouts',
+    ],
+  },
+} as const;
+
+export const LEAD_PACKS = [
+  {
+    key: 'lead_pack_250' as const,
+    credits: 250,
+    priceUsd: 79,
+    priceEnv: 'STRIPE_LEAD_PACK_250_PRICE_ID',
+    label: '250 leads',
+  },
+  {
+    key: 'lead_pack_1000' as const,
+    credits: 1000,
+    priceUsd: 249,
+    priceEnv: 'STRIPE_LEAD_PACK_1000_PRICE_ID',
+    label: '1,000 leads',
+  },
+  {
+    key: 'lead_pack_5000' as const,
+    credits: 5000,
+    priceUsd: 799,
+    priceEnv: 'STRIPE_LEAD_PACK_5000_PRICE_ID',
+    label: '5,000 leads',
+  },
+] as const;
+
+export type LeadPackKey = (typeof LEAD_PACKS)[number]['key'];
+
+export function priceIdForBrandLeadPlan(
+  key: Exclude<BrandLeadPlanKey, 'FREE'>
+): string | undefined {
+  const plan = BRAND_LEAD_PLAN[key];
+  return process.env[plan.priceEnv];
+}
+
+export function priceIdForLeadPack(key: LeadPackKey): string | undefined {
+  const pack = LEAD_PACKS.find((p) => p.key === key);
+  if (!pack) return undefined;
+  return process.env[pack.priceEnv];
+}
+
+export function brandLeadPlanFromPriceId(
+  priceId: string | undefined | null
+): Exclude<BrandLeadPlanKey, 'FREE'> | null {
+  if (!priceId) return null;
+  if (priceId === process.env.STRIPE_BRAND_LEAD_MONTHLY_PRICE_ID) return 'LEAD_MONTHLY';
+  if (priceId === process.env.STRIPE_BRAND_LEAD_ANNUAL_PRICE_ID) return 'LEAD_ANNUAL';
+  return null;
+}
+
 export function priceIdForTier(tier: PaidPlanKey | PlanKey): string | undefined {
   switch (tier) {
     case 'FREE':

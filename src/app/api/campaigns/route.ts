@@ -3,10 +3,13 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand, effectiveRole } from '@/lib/roles';
 import {
+  isBudgetMode,
   isCampaignGoalType,
   isCampaignStatus,
+  parseOptionalDate,
   serializeCampaign,
 } from '@/lib/campaigns';
+import { loadCampaignSpendStats } from '@/lib/campaign-spend';
 import {
   DEFAULT_CAMPAIGN_MIN_SCORE,
   DEFAULT_MIN_PRACTICE_SESSIONS,
@@ -14,6 +17,17 @@ import {
   resolvePayoutCents,
 } from '@/lib/campaign-tiers';
 import { lockEscrowForCampaign } from '@/lib/escrow';
+
+async function serializeWithSpend<T extends { id: string }>(
+  campaigns: T[],
+  mapFn: (c: T & { spentCents: number; spentTodayCents: number }) => ReturnType<typeof serializeCampaign>
+) {
+  const spend = await loadCampaignSpendStats(campaigns.map((c) => c.id));
+  return campaigns.map((c) => {
+    const s = spend.get(c.id) || { spentCents: 0, spentTodayCents: 0 };
+    return mapFn({ ...c, ...s });
+  });
+}
 
 /**
  * GET — authenticated list.
@@ -44,27 +58,32 @@ export async function GET(req: Request) {
           },
         },
       });
+      const spend = await loadCampaignSpendStats(applications.map((a) => a.campaign.id));
       return NextResponse.json({
-        applications: applications.map((a) => ({
-          id: a.id,
-          status: a.status,
-          message: a.message,
-          createdAt: a.createdAt,
-          updatedAt: a.updatedAt,
-          payout: a.payout
-            ? {
-                id: a.payout.id,
-                status: a.payout.status,
-                netCents: a.payout.netCents,
-                grossCents: a.payout.grossCents,
-                paidAt: a.payout.paidAt,
-              }
-            : null,
-          campaign: serializeCampaign({
-            ...a.campaign,
-            myApplication: { id: a.id, status: a.status },
-          }),
-        })),
+        applications: applications.map((a) => {
+          const s = spend.get(a.campaign.id) || { spentCents: 0, spentTodayCents: 0 };
+          return {
+            id: a.id,
+            status: a.status,
+            message: a.message,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+            payout: a.payout
+              ? {
+                  id: a.payout.id,
+                  status: a.payout.status,
+                  netCents: a.payout.netCents,
+                  grossCents: a.payout.grossCents,
+                  paidAt: a.payout.paidAt,
+                }
+              : null,
+            campaign: serializeCampaign({
+              ...a.campaign,
+              ...s,
+              myApplication: { id: a.id, status: a.status },
+            }),
+          };
+        }),
       });
     }
 
@@ -87,7 +106,7 @@ export async function GET(req: Request) {
         },
       });
       return NextResponse.json({
-        campaigns: campaigns.map((c) => serializeCampaign(c)),
+        campaigns: await serializeWithSpend(campaigns, (c) => serializeCampaign(c)),
         canManage: manage,
       });
     }
@@ -110,14 +129,19 @@ export async function GET(req: Request) {
       },
     });
 
+    const spend = await loadCampaignSpendStats(campaigns.map((c) => c.id));
     return NextResponse.json({
-      campaigns: campaigns.map((c) => {
-        const { applications, ...rest } = c;
-        return serializeCampaign({
-          ...rest,
-          myApplication: applications[0] || null,
-        });
-      }),
+      campaigns: campaigns
+        .map((c) => {
+          const { applications, ...rest } = c;
+          const s = spend.get(c.id) || { spentCents: 0, spentTodayCents: 0 };
+          return serializeCampaign({
+            ...rest,
+            ...s,
+            myApplication: applications[0] || null,
+          });
+        })
+        .filter((c) => c.dialEligible),
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
@@ -163,6 +187,32 @@ export async function POST(req: Request) {
 
     const goalType = isCampaignGoalType(body.goalType) ? body.goalType : 'BOOKED_MEETING';
     const status = isCampaignStatus(body.status) ? body.status : 'DRAFT';
+    const wantsMeeting = goalType === 'BOOKED_MEETING' || goalType === 'BOTH';
+    const bookingLink = body.bookingLink ? String(body.bookingLink).trim().slice(0, 500) : null;
+    const meetingDurationMinutes =
+      body.meetingDurationMinutes != null && body.meetingDurationMinutes !== ''
+        ? Math.max(5, Math.min(180, Math.round(Number(body.meetingDurationMinutes))))
+        : null;
+    const qualifiedPayoutCents =
+      body.qualifiedPayoutCents != null
+        ? Math.max(0, Math.round(Number(body.qualifiedPayoutCents)))
+        : null;
+
+    if (wantsMeeting && !bookingLink) {
+      return NextResponse.json(
+        {
+          error: 'Meeting campaigns require a Cal.com / Calendly / Google Appointment link',
+          code: 'BOOKING_LINK_REQUIRED',
+        },
+        { status: 400 }
+      );
+    }
+    if (wantsMeeting && !meetingDurationMinutes) {
+      return NextResponse.json(
+        { error: 'Meeting campaigns require meetingDurationMinutes', code: 'DURATION_REQUIRED' },
+        { status: 400 }
+      );
+    }
 
     if (status === 'OPEN') {
       const poolCount = await prisma.brandPhoneNumber.count({
@@ -205,6 +255,33 @@ export async function POST(req: Request) {
       body.budgetCents != null && body.budgetCents !== ''
         ? Math.max(0, Math.round(Number(body.budgetCents)))
         : payoutCents * maxAwards;
+    const budgetMode = isBudgetMode(body.budgetMode) ? body.budgetMode : 'OVERALL';
+    const dailyBudgetCents =
+      body.dailyBudgetCents != null && body.dailyBudgetCents !== ''
+        ? Math.max(0, Math.round(Number(body.dailyBudgetCents)))
+        : null;
+    if (budgetMode === 'DAILY' && (dailyBudgetCents == null || dailyBudgetCents <= 0)) {
+      return NextResponse.json(
+        { error: 'dailyBudgetCents required when budgetMode is DAILY', code: 'DAILY_BUDGET_REQUIRED' },
+        { status: 400 }
+      );
+    }
+
+    const startsAtParsed = parseOptionalDate(body.startsAt);
+    if (body.startsAt !== undefined && startsAtParsed === undefined) {
+      return NextResponse.json({ error: 'Invalid startsAt' }, { status: 400 });
+    }
+    const endsAtParsed = parseOptionalDate(body.endsAt);
+    if (body.endsAt !== undefined && endsAtParsed === undefined) {
+      return NextResponse.json({ error: 'Invalid endsAt' }, { status: 400 });
+    }
+    const startsAt =
+      startsAtParsed !== undefined
+        ? startsAtParsed
+        : status === 'OPEN'
+          ? new Date()
+          : null;
+    const endsAt = endsAtParsed !== undefined ? endsAtParsed : null;
 
     const minScore =
       body.minScore != null && body.minScore !== ''
@@ -240,10 +317,17 @@ export async function POST(req: Request) {
         packId,
         playbookId,
         budgetCents,
+        budgetMode,
+        dailyBudgetCents: budgetMode === 'DAILY' ? dailyBudgetCents : null,
+        startsAt,
+        endsAt,
         maxAwards,
-        bookingLink: body.bookingLink
-          ? String(body.bookingLink).trim().slice(0, 500)
-          : null,
+        bookingLink,
+        meetingDurationMinutes: wantsMeeting ? meetingDurationMinutes : null,
+        qualifiedPayoutCents:
+          goalType === 'BOTH' || goalType === 'QUALIFIED_LEAD'
+            ? qualifiedPayoutCents ?? (goalType === 'QUALIFIED_LEAD' ? payoutCents : null)
+            : null,
         targetVertical: body.targetVertical
           ? String(body.targetVertical).trim().slice(0, 160)
           : body.query
@@ -272,7 +356,10 @@ export async function POST(req: Request) {
         });
         const opened = await prisma.campaign.update({
           where: { id: campaign.id },
-          data: { status: 'OPEN' },
+          data: {
+            status: 'OPEN',
+            startsAt: campaign.startsAt || new Date(),
+          },
           include: {
             brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
             pack: { select: { id: true, name: true } },
@@ -280,7 +367,13 @@ export async function POST(req: Request) {
             _count: { select: { applications: true } },
           },
         });
-        return NextResponse.json({ campaign: serializeCampaign(opened) });
+        return NextResponse.json({
+          campaign: serializeCampaign({
+            ...opened,
+            spentCents: 0,
+            spentTodayCents: 0,
+          }),
+        });
       } catch (e: unknown) {
         await prisma.campaign.delete({ where: { id: campaign.id } }).catch(() => {});
         const msg = e instanceof Error ? e.message : 'Escrow lock failed';
@@ -288,7 +381,13 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ campaign: serializeCampaign(campaign) });
+    return NextResponse.json({
+      campaign: serializeCampaign({
+        ...campaign,
+        spentCents: 0,
+        spentTodayCents: 0,
+      }),
+    });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });

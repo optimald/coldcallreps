@@ -248,6 +248,58 @@ export async function PATCH(req: Request) {
       },
     });
 
+    // Notify active SDRs when a lead is newly assigned to a campaign
+    if (
+      campaignId &&
+      campaignId !== existing.campaignId &&
+      existing.brandId
+    ) {
+      try {
+        const { notifyAsync } = await import('@/lib/notifications');
+        const campaign = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: {
+            id: true,
+            title: true,
+            brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
+          },
+        });
+        if (campaign) {
+          const apps = await prisma.campaignApplication.findMany({
+            where: {
+              campaignId,
+              status: { in: ['ACTIVE', 'ACCEPTED'] },
+            },
+            select: {
+              user: { select: { id: true, email: true, displayName: true } },
+            },
+            take: 50,
+          });
+          for (const app of apps) {
+            notifyAsync({
+              event: 'lead.assigned',
+              recipient: {
+                userId: app.user.id,
+                email: app.user.email,
+                displayName: app.user.displayName,
+              },
+              brand: campaign.brand,
+              payload: {
+                campaignTitle: campaign.title,
+                campaignId: campaign.id,
+                companyName: prospect.companyName,
+                ctaUrl: '/cold_calls',
+                forAudience: 'sdr',
+              },
+              idempotencyKey: `lead.assigned:${prospect.id}:${app.user.id}`,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[prospects] lead.assigned notify failed', e);
+      }
+    }
+
     return NextResponse.json({ prospect });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { brandHref, brandPathKey } from '@/lib/brand-context';
 import { formatPayout } from '@/lib/campaigns';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canAccessBrandDesk } from '@/lib/roles';
 import BrandSdrStatsClient, {
   BrandSdrStatsEmptyLive,
 } from '@/components/BrandSdrStatsClient';
@@ -32,12 +33,8 @@ export default async function BrandSdrStatsPage({
 }) {
   const profile = await requireUser();
   const { id } = await params;
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-  if (!canManageBrand(profile, brand.ownerId)) redirect('/dashboard');
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode)) redirect('/dashboard');
 
   const now = new Date();
   const startOfDay = new Date(now);
@@ -293,7 +290,6 @@ export default async function BrandSdrStatsPage({
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow={brand.name}
         title="SDR stats"
         description="Pipeline health, dial volume, and per-rep scorecards for this brand."
         actions={
@@ -492,7 +488,7 @@ export default async function BrandSdrStatsPage({
           <p className="muted" style={{ fontSize: '0.8rem', marginTop: '-0.25rem' }}>
             Totals: {campaignCount} campaigns · {appCount} applications · {callCount} calls ·{' '}
             <Link href={`/brands/${key}/calls`} className="soft-link">
-              open live calls
+              open calls
             </Link>
           </p>
         </>

@@ -21,7 +21,7 @@ export async function POST(
     const { id: campaignId } = await params;
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      include: { brand: { select: { id: true, ownerId: true, name: true } } },
+      include: { brand: { select: { id: true, ownerId: true, name: true, slug: true } } },
     });
     if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -84,6 +84,37 @@ export async function POST(
           })
           .catch(() => null);
       }
+      const { notifyAsync } = await import('@/lib/notifications');
+      const brand = campaign.brand;
+      if (brand.ownerId) {
+        notifyAsync({
+          event: 'appointment.failed_audit',
+          recipient: { userId: brand.ownerId },
+          brand: { id: brand.id, name: brand.name, slug: brand.slug },
+          payload: {
+            campaignTitle: campaign.title,
+            campaignId,
+            prospectName: prospectName || undefined,
+            reason: audit.reasons?.join('; ') || 'Audit failed',
+            ctaUrl: `/brands/${brand.slug}/calls`,
+            forAudience: 'brand',
+          },
+          idempotencyKey: `appointment.failed_audit:${claim.id}`,
+        });
+      }
+      notifyAsync({
+        event: 'appointment.failed_audit',
+        recipient: { userId: profile.id },
+        brand: { id: brand.id, name: brand.name, slug: brand.slug },
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId,
+          reason: audit.reasons?.join('; ') || 'Audit failed',
+          ctaUrl: '/gigs',
+          forAudience: 'sdr',
+        },
+        idempotencyKey: `appointment.failed_audit:sdr:${claim.id}`,
+      });
       return NextResponse.json(
         {
           claim,
@@ -111,8 +142,34 @@ export async function POST(
         .catch(() => null);
     }
 
-    // Escrow release + payout record
+    // Escrow release + payout record (respect spend caps — live calls already finished)
     const split = calcPayoutSplit(campaign.payoutCents, campaign.platformFeeBps);
+    const { isCampaignDialEligible } = await import('@/lib/campaigns');
+    const { loadOneCampaignSpend } = await import('@/lib/campaign-spend');
+    const spend = await loadOneCampaignSpend(campaignId);
+    const budgetGate = isCampaignDialEligible({
+      status: 'OPEN', // award gate ignores pause for already-verified claims? Plan: gate new awards when daily remaining hits 0
+      startsAt: campaign.startsAt,
+      endsAt: null, // allow awards after end for in-flight results
+      budgetCents: campaign.budgetCents,
+      budgetMode: campaign.budgetMode,
+      dailyBudgetCents: campaign.dailyBudgetCents,
+      spentCents: spend.spentCents,
+      spentTodayCents: spend.spentTodayCents,
+      nextAwardCents: split.grossCents,
+    });
+    if (!budgetGate.ok) {
+      return NextResponse.json(
+        {
+          claim,
+          audit,
+          error: budgetGate.reason || 'Budget exhausted',
+          code: 'BUDGET_EXCEEDED',
+        },
+        { status: 400 }
+      );
+    }
+
     try {
       await releaseEscrowOutcome({
         brandId: campaign.brandId,
@@ -196,6 +253,45 @@ export async function POST(
         console.warn('[claims] Connect transfer failed — payout stays PENDING', e);
       }
     }
+
+    const { notifyAsync } = await import('@/lib/notifications');
+    const { formatPayout } = await import('@/lib/campaigns');
+    const brandCtx = {
+      id: campaign.brand.id,
+      name: campaign.brand.name,
+      slug: campaign.brand.slug,
+    };
+    if (campaign.brand.ownerId) {
+      notifyAsync({
+        event: 'appointment.verified',
+        recipient: { userId: campaign.brand.ownerId },
+        brand: brandCtx,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId,
+          prospectName: prospectName || undefined,
+          amountLabel: formatPayout(split.grossCents),
+          ctaUrl: `/brands/${campaign.brand.slug}/sdrs/payouts`,
+          forAudience: 'brand',
+        },
+        idempotencyKey: `appointment.verified:brand:${claim.id}`,
+      });
+    }
+    notifyAsync({
+      event: payout.status === 'PAID' ? 'payout.paid' : 'appointment.verified',
+      recipient: { userId: profile.id },
+      brand: brandCtx,
+      payload: {
+        campaignTitle: campaign.title,
+        campaignId,
+        amountLabel: formatPayout(
+          payout.status === 'PAID' ? split.netCents : split.grossCents
+        ),
+        ctaUrl: '/billing',
+        forAudience: 'sdr',
+      },
+      idempotencyKey: `appointment.verified:sdr:${claim.id}:${payout.status}`,
+    });
 
     return NextResponse.json({
       claim: { ...claim, status: payout.status === 'PAID' ? 'PAID' : claim.status },

@@ -4,34 +4,79 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { brandHref, brandPathKey, type BrandRef } from '@/lib/brand-context';
 import { EmptyState, Panel, Stat, StatGrid } from '@/components/ui/PagePrimitives';
+import { BRAND_LEAD_PLAN, LEAD_PACKS } from '@/lib/product';
 
-type LedgerRow = {
+type PaymentMethod = {
   id: string;
-  type: string;
-  amountCents: number;
-  balanceAfter: number;
-  campaignId: string | null;
-  campaignTitle: string | null;
-  note: string | null;
-  createdAt: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  isDefault: boolean;
+  isBackup: boolean;
 };
 
-type EscrowCampaign = {
-  id: string;
-  title: string;
-  status: string;
-  escrowLockedCents: number;
-  escrowLabel: string;
-};
-
-type WalletData = {
+type BillingPayload = {
   brand: { id: string; slug: string; name: string };
-  balanceCents: number;
-  balanceLabel: string;
-  escrowLockedCents: number;
-  escrowLockedLabel: string;
-  ledger: LedgerRow[];
-  campaignsWithEscrow: EscrowCampaign[];
+  credits: {
+    plan: string;
+    allotmentRemaining: number;
+    packRemaining: number;
+    totalRemaining: number;
+    usedThisPeriod: number;
+    periodLimit: number;
+    packExpiresAt: string | null;
+    planPeriodEnd: string | null;
+  };
+  plan: { key: string; label: string; priceUsd: number; allotment: number };
+  subscription: {
+    id: string;
+    status: string;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: number | null;
+    planKey: string;
+  } | null;
+  paymentMethods: PaymentMethod[];
+  invoices: Array<{
+    id: string;
+    number: string | null;
+    status: string | null;
+    amountPaid: number;
+    currency: string;
+    created: number;
+    hostedInvoiceUrl: string | null;
+    description: string | null;
+  }>;
+  wallet: {
+    balanceCents: number;
+    balanceLabel: string;
+    ledger: Array<{
+      id: string;
+      type: string;
+      amountCents: number;
+      balanceAfter: number;
+      campaignId: string | null;
+      note: string | null;
+      createdAt: string;
+    }>;
+  };
+  campaigns: Array<{
+    id: string;
+    title: string;
+    status: string;
+    budgetLabel: string;
+    escrowLabel: string;
+    escrowLockedCents: number | null;
+  }>;
+  creditLedger: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    allotmentAfter: number;
+    packAfter: number;
+    note: string | null;
+    createdAt: string;
+  }>;
 };
 
 const FUND_PRESETS = [100, 250, 500, 1000, 2500];
@@ -42,6 +87,10 @@ const LEDGER_LABELS: Record<string, string> = {
   ESCROW_RELEASE: 'Released to payout',
   ESCROW_REFUND: 'Escrow refunded',
   ADJUSTMENT: 'Adjustment',
+  GRANT_ALLOTMENT: 'Allotment grant',
+  GRANT_PACK: 'Pack purchase',
+  DEDUCT_SAVE: 'Lead saved',
+  EXPIRE_PACK: 'Pack expired',
 };
 
 function money(cents: number) {
@@ -52,7 +101,7 @@ function money(cents: number) {
 export default function BrandBillingPanel() {
   const [brands, setBrands] = useState<BrandRef[]>([]);
   const [brandKey, setBrandKey] = useState('');
-  const [wallet, setWallet] = useState<WalletData | null>(null);
+  const [data, setData] = useState<BillingPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [customDollars, setCustomDollars] = useState('500');
@@ -61,8 +110,8 @@ export default function BrandBillingPanel() {
 
   const loadBrands = useCallback(async () => {
     const res = await fetch('/api/brands?mine=1');
-    const data = await res.json().catch(() => ({}));
-    const list: BrandRef[] = (data.brands || []).map((b: BrandRef) => ({
+    const json = await res.json().catch(() => ({}));
+    const list: BrandRef[] = (json.brands || []).map((b: BrandRef) => ({
       id: b.id,
       slug: b.slug,
       name: b.name,
@@ -78,21 +127,21 @@ export default function BrandBillingPanel() {
     }
   }, [brandKey]);
 
-  const loadWallet = useCallback(async (key: string) => {
+  const loadBilling = useCallback(async (key: string) => {
     if (!key) {
-      setWallet(null);
+      setData(null);
       return;
     }
     setLoading(true);
     setErr('');
     try {
-      const res = await fetch(`/api/brands/${encodeURIComponent(key)}/wallet`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load wallet');
-      setWallet(data);
+      const res = await fetch(`/api/brands/${encodeURIComponent(key)}/billing`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not load billing');
+      setData(json);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Load failed');
-      setWallet(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -103,17 +152,21 @@ export default function BrandBillingPanel() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('wallet') === 'funded') {
       setMsg('Wallet funded — balance updates after Stripe confirms payment.');
-    } else if (params.get('wallet') === 'cancel') {
+    } else if (params.get('lead_plan') === 'success') {
+      setMsg('Brand Lead Plan activated — allotment refreshes after Stripe confirms.');
+    } else if (params.get('lead_pack') === 'success') {
+      setMsg('Lead pack purchased — credits appear after Stripe confirms.');
+    } else if (params.get('wallet') === 'cancel' || params.get('lead_plan') === 'cancel') {
       setErr('Checkout canceled — no charge was made.');
     }
   }, [loadBrands]);
 
   useEffect(() => {
-    if (brandKey) void loadWallet(brandKey);
-  }, [brandKey, loadWallet]);
+    if (brandKey) void loadBilling(brandKey);
+  }, [brandKey, loadBilling]);
 
   async function fund(dollars: number) {
-    if (!wallet?.brand.id) return;
+    if (!data?.brand.id) return;
     const amountCents = Math.round(dollars * 100);
     if (amountCents < 5000) {
       setErr('Minimum fund is $50');
@@ -123,20 +176,60 @@ export default function BrandBillingPanel() {
     setErr('');
     setMsg('');
     try {
-      const res = await fetch(`/api/brands/${wallet.brand.id}/wallet`, {
+      const res = await fetch(`/api/brands/${data.brand.id}/wallet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amountCents, returnTo: 'billing' }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Checkout failed');
-      if (data.url) {
-        window.location.href = data.url;
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Checkout failed');
+      if (json.url) {
+        window.location.href = json.url;
         return;
       }
       throw new Error('No checkout URL');
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Fund failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function subscribeLead(interval: 'month' | 'year') {
+    if (!data?.brand.id) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/billing/lead-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId: data.brand.id, interval }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.hint || 'Checkout failed');
+      if (json.url) window.location.href = json.url;
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Subscribe failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function buyPack(pack: string) {
+    if (!data?.brand.id) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/billing/lead-pack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId: data.brand.id, pack }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.hint || 'Checkout failed');
+      if (json.url) window.location.href = json.url;
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Pack checkout failed');
     } finally {
       setBusy(false);
     }
@@ -151,9 +244,9 @@ export default function BrandBillingPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ returnPath: '/billing' }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Portal unavailable');
-      if (data.url) window.location.href = data.url;
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Portal unavailable');
+      if (json.url) window.location.href = json.url;
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Portal failed');
     } finally {
@@ -161,12 +254,33 @@ export default function BrandBillingPanel() {
     }
   }
 
+  async function setPrimary(pmId: string) {
+    if (!data?.brand.id) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await fetch(`/api/brands/${data.brand.id}/billing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultPaymentMethodId: pmId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not update payment method');
+      setMsg('Primary payment method updated.');
+      await loadBilling(brandKey);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (brands.length === 0 && !loading) {
     return (
-      <Panel title="Campaign funding">
+      <Panel title="Brand billing">
         <EmptyState
           title="Create a brand first"
-          description="Escrow wallets are per brand. Create a brand, then fund campaigns from here."
+          description="Lead plans, escrow wallets, and campaign budgets are per brand."
           action={
             <Link href="/brands" className="btn" style={{ marginTop: '1rem' }}>
               Brands →
@@ -177,12 +291,17 @@ export default function BrandBillingPanel() {
     );
   }
 
+  const usagePct =
+    data && data.credits.periodLimit > 0
+      ? Math.min(100, Math.round((data.credits.usedThisPeriod / data.credits.periodLimit) * 100))
+      : 0;
+
   return (
     <div className="stack" style={{ gap: '1.25rem' }}>
       <div className="billing-brand-bar">
         <label className="billing-brand-bar__field">
           <span className="muted" style={{ fontSize: '0.78rem', fontWeight: 650 }}>
-            Brand wallet
+            Brand
           </span>
           <select
             className="field"
@@ -199,10 +318,10 @@ export default function BrandBillingPanel() {
         </label>
         <div className="billing-brand-bar__actions">
           <button type="button" className="btn-ghost" disabled={busy} onClick={() => void openPortal()}>
-            Payment methods &amp; invoices
+            Stripe portal
           </button>
-          {wallet ? (
-            <Link href={brandHref(wallet.brand, 'campaigns')} className="btn-ghost">
+          {data ? (
+            <Link href={brandHref(data.brand, 'campaigns')} className="btn-ghost">
               Campaigns →
             </Link>
           ) : null}
@@ -212,32 +331,238 @@ export default function BrandBillingPanel() {
       {msg ? <p className="msg-ok">{msg}</p> : null}
       {err ? <p className="msg-err">{err}</p> : null}
 
-      {loading && !wallet ? (
-        <p className="muted">Loading wallet…</p>
-      ) : wallet ? (
+      {loading && !data ? (
+        <p className="muted">Loading billing…</p>
+      ) : data ? (
         <>
           <StatGrid>
-            <Stat label="Available balance" value={wallet.balanceLabel} tone="accent" />
-            <Stat label="Locked in campaigns" value={wallet.escrowLockedLabel} />
+            <Stat label="Lead plan" value={data.plan.label} tone="accent" />
             <Stat
-              label="Ledger entries"
-              value={wallet.ledger.length}
+              label="Credits left"
+              value={data.credits.totalRemaining.toLocaleString()}
             />
+            <Stat label="Used this period" value={`${data.credits.usedThisPeriod} / ${data.credits.periodLimit}`} />
+            <Stat label="Escrow wallet" value={data.wallet.balanceLabel} />
           </StatGrid>
 
           <Panel
-            title="Fund campaigns"
-            description="Top up the prepaid escrow wallet. Capital locks when you open a campaign and releases to SDRs on verified appointments (~20% platform fee)."
+            title="Lead plan & usage"
+            description="Generate Leads consumes 1 credit per saved enriched lead. CSV / manual import is unlimited and free."
           >
-            <div className="billing-fund-presets">
-              {FUND_PRESETS.map((d) => (
+            <div
+              style={{
+                height: 8,
+                borderRadius: 4,
+                background: 'var(--line)',
+                overflow: 'hidden',
+                marginBottom: '0.75rem',
+              }}
+            >
+              <div
+                style={{
+                  width: `${usagePct}%`,
+                  height: '100%',
+                  background: 'var(--accent)',
+                }}
+              />
+            </div>
+            <p className="muted" style={{ fontSize: '0.85rem', margin: '0 0 1rem' }}>
+              Allotment {data.credits.allotmentRemaining} · Pack {data.credits.packRemaining}
+              {data.credits.packExpiresAt
+                ? ` (pack expires ${new Date(data.credits.packExpiresAt).toLocaleDateString()})`
+                : ''}
+              {data.subscription
+                ? ` · Sub ${data.subscription.status}${
+                    data.subscription.currentPeriodEnd
+                      ? ` · renews ${new Date(data.subscription.currentPeriodEnd * 1000).toLocaleDateString()}`
+                      : ''
+                  }`
+                : ''}
+            </p>
+            {data.credits.plan === 'FREE' ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <button
-                  key={d}
                   type="button"
                   className="btn"
                   disabled={busy}
-                  onClick={() => void fund(d)}
+                  onClick={() => void subscribeLead('month')}
                 >
+                  Upgrade ${BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo · 1,000 leads
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => void subscribeLead('year')}
+                >
+                  Annual ${BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr (20% off)
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <button type="button" className="btn-ghost" disabled={busy} onClick={() => void openPortal()}>
+                  Manage subscription
+                </button>
+                {data.credits.plan === 'LEAD_MONTHLY' ? (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busy}
+                    onClick={() => void subscribeLead('year')}
+                  >
+                    Switch to annual ${BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Lead credit packs" description="Overage packs burn after allotment hits zero. 12-month shelf life.">
+            <div className="billing-fund-presets">
+              {LEAD_PACKS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy}
+                  onClick={() => void buyPack(p.key)}
+                >
+                  {p.label} · ${p.priceUsd}
+                </button>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel
+            title="Payment methods"
+            description="Primary card for invoices. Backup is the next saved card — add more in Stripe portal."
+            actions={
+              <button type="button" className="btn-ghost" disabled={busy} onClick={() => void openPortal()}>
+                Add / edit cards
+              </button>
+            }
+          >
+            {data.paymentMethods.length === 0 ? (
+              <EmptyState
+                title="No cards on file"
+                description="Fund the wallet or subscribe — Stripe saves the card. Then set primary here."
+              />
+            ) : (
+              <ul className="brand-list">
+                {data.paymentMethods.map((pm) => (
+                  <li key={pm.id}>
+                    <span>
+                      {(pm.brand || 'Card').toUpperCase()} ···· {pm.last4}
+                      {pm.expMonth && pm.expYear ? (
+                        <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                          {pm.expMonth}/{pm.expYear}
+                        </span>
+                      ) : null}
+                      {pm.isDefault ? (
+                        <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>
+                          Primary
+                        </span>
+                      ) : null}
+                      {pm.isBackup ? (
+                        <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>
+                          Backup
+                        </span>
+                      ) : null}
+                    </span>
+                    {!pm.isDefault ? (
+                      <button
+                        type="button"
+                        className="soft-link"
+                        disabled={busy}
+                        onClick={() => void setPrimary(pm.id)}
+                      >
+                        Make primary
+                      </button>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Charges & invoices" description="Stripe invoices for subscriptions, packs, and wallet funds.">
+            {data.invoices.length === 0 ? (
+              <EmptyState title="No invoices yet" description="Charges appear here after the first Stripe checkout." />
+            ) : (
+              <div className="billing-ledger-wrap">
+                <table className="billing-ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col">When</th>
+                      <th scope="col">Description</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Amount</th>
+                      <th scope="col" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.invoices.map((inv) => (
+                      <tr key={inv.id}>
+                        <td className="muted" style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                          {new Date(inv.created * 1000).toLocaleDateString()}
+                        </td>
+                        <td>{inv.description || inv.number || inv.id}</td>
+                        <td>{inv.status}</td>
+                        <td>${(inv.amountPaid / 100).toFixed(2)}</td>
+                        <td>
+                          {inv.hostedInvoiceUrl ? (
+                            <a href={inv.hostedInvoiceUrl} className="soft-link" target="_blank" rel="noreferrer">
+                              View
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <Panel
+            title="Campaign budgets"
+            description="Per-campaign budget caps and escrow currently locked."
+          >
+            {data.campaigns.length === 0 ? (
+              <EmptyState title="No campaigns" description="Open a campaign to lock escrow from the wallet." />
+            ) : (
+              <ul className="brand-list">
+                {data.campaigns.map((c) => (
+                  <li key={c.id}>
+                    <span>
+                      {c.title}
+                      <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                        {c.status} · budget {c.budgetLabel}
+                      </span>
+                    </span>
+                    <span style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      <strong>{c.escrowLabel}</strong>
+                      <Link href={brandHref(data.brand, 'campaigns', c.id)} className="soft-link">
+                        Open
+                      </Link>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title="Fund campaign escrow"
+            description="Prepaid wallet for SDR payouts (~20% platform fee on verified results)."
+          >
+            <div className="billing-fund-presets">
+              {FUND_PRESETS.map((d) => (
+                <button key={d} type="button" className="btn" disabled={busy} onClick={() => void fund(d)}>
                   ${d.toLocaleString()}
                 </button>
               ))}
@@ -262,57 +587,11 @@ export default function BrandBillingPanel() {
                 {busy ? 'Opening Stripe…' : 'Fund custom amount'}
               </button>
             </div>
-            <p className="muted" style={{ margin: '0.75rem 0 0', fontSize: '0.82rem' }}>
-              Minimum $50 · max $5,000 per checkout · card saved via Stripe Customer Portal for
-              invoices.
-            </p>
           </Panel>
 
-          {wallet.campaignsWithEscrow.length > 0 ? (
-            <Panel title="Escrow by campaign" description="Currently locked against OPEN / active campaigns.">
-              <ul className="brand-list">
-                {wallet.campaignsWithEscrow.map((c) => (
-                  <li key={c.id}>
-                    <span>
-                      {c.title}
-                      <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.85rem' }}>
-                        {c.status}
-                      </span>
-                    </span>
-                    <span style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <strong>{c.escrowLabel}</strong>
-                      <Link
-                        href={brandHref(wallet.brand, 'campaigns', c.id)}
-                        className="soft-link"
-                      >
-                        Open
-                      </Link>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          ) : null}
-
-          <Panel
-            title="Ledger"
-            description="All wallet movements — funds, escrow locks, releases, and adjustments."
-            actions={
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => void loadWallet(brandKey)}
-                disabled={loading}
-              >
-                Refresh
-              </button>
-            }
-          >
-            {wallet.ledger.length === 0 ? (
-              <EmptyState
-                title="No ledger entries yet"
-                description="Fund the wallet to see your first credit. Opening a campaign locks capital here."
-              />
+          <Panel title="Wallet ledger">
+            {data.wallet.ledger.length === 0 ? (
+              <EmptyState title="No wallet movements" description="Fund the wallet to see the first credit." />
             ) : (
               <div className="billing-ledger-wrap">
                 <table className="billing-ledger">
@@ -320,15 +599,14 @@ export default function BrandBillingPanel() {
                     <tr>
                       <th scope="col">When</th>
                       <th scope="col">Type</th>
-                      <th scope="col">Campaign</th>
                       <th scope="col">Amount</th>
                       <th scope="col">Balance</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {wallet.ledger.map((row) => (
+                    {data.wallet.ledger.map((row) => (
                       <tr key={row.id}>
-                        <td className="muted" style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                        <td className="muted" style={{ fontSize: '0.85rem' }}>
                           {new Date(row.createdAt).toLocaleString(undefined, {
                             month: 'short',
                             day: 'numeric',
@@ -336,41 +614,8 @@ export default function BrandBillingPanel() {
                             minute: '2-digit',
                           })}
                         </td>
-                        <td>
-                          <span className={`billing-ledger__type billing-ledger__type--${row.type.toLowerCase()}`}>
-                            {LEDGER_LABELS[row.type] || row.type}
-                          </span>
-                          {row.note ? (
-                            <div className="muted" style={{ fontSize: '0.75rem', marginTop: '0.15rem' }}>
-                              {row.note}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td>
-                          {row.campaignId ? (
-                            <Link
-                              href={brandHref(wallet.brand, 'campaigns', row.campaignId)}
-                              className="soft-link"
-                            >
-                              {row.campaignTitle || 'Campaign'}
-                            </Link>
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
-                        </td>
-                        <td
-                          style={{
-                            fontWeight: 650,
-                            color:
-                              row.amountCents > 0
-                                ? 'var(--good, var(--accent))'
-                                : row.amountCents < 0
-                                  ? 'var(--ink)'
-                                  : undefined,
-                          }}
-                        >
-                          {money(row.amountCents)}
-                        </td>
+                        <td>{LEDGER_LABELS[row.type] || row.type}</td>
+                        <td>{money(row.amountCents)}</td>
                         <td className="muted">${(row.balanceAfter / 100).toFixed(2)}</td>
                       </tr>
                     ))}
@@ -380,21 +625,49 @@ export default function BrandBillingPanel() {
             )}
           </Panel>
 
-          <Panel title="How brand billing works">
-            <ol className="billing-how" style={{ margin: 0, paddingLeft: '1.15rem' }}>
-              <li>Fund the escrow wallet with a card (Stripe Checkout + invoice).</li>
-              <li>Open a campaign — required capital locks from available balance.</li>
-              <li>SDRs deliver verified appointments; escrow releases and SDRs get paid via Connect.</li>
-              <li>Manage cards, receipts, and tax IDs anytime in the Stripe customer portal.</li>
-            </ol>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-              <Link href={brandHref(wallet.brand, 'sdrs', 'payouts')} className="btn-ghost">
-                Payout history →
-              </Link>
-              <button type="button" className="btn-ghost" disabled={busy} onClick={() => void openPortal()}>
-                Open Stripe portal
-              </button>
-            </div>
+          <Panel title="Lead credit ledger">
+            {data.creditLedger.length === 0 ? (
+              <EmptyState title="No credit activity" description="Generate Leads or buy a pack to see movements." />
+            ) : (
+              <div className="billing-ledger-wrap">
+                <table className="billing-ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col">When</th>
+                      <th scope="col">Type</th>
+                      <th scope="col">Δ</th>
+                      <th scope="col">Allotment</th>
+                      <th scope="col">Pack</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.creditLedger.map((row) => (
+                      <tr key={row.id}>
+                        <td className="muted" style={{ fontSize: '0.85rem' }}>
+                          {new Date(row.createdAt).toLocaleString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td>
+                          {LEDGER_LABELS[row.type] || row.type}
+                          {row.note ? (
+                            <div className="muted" style={{ fontSize: '0.75rem' }}>
+                              {row.note}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>{row.amount > 0 ? `+${row.amount}` : row.amount}</td>
+                        <td>{row.allotmentAfter}</td>
+                        <td>{row.packAfter}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Panel>
         </>
       ) : null}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { brandHref } from '@/lib/brand-context';
-import { DEMO_KPIS } from '@/lib/demo/brand-demo-data';
+import { getDemoKpis } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 
 type Kpis = {
@@ -16,12 +16,12 @@ type Kpis = {
 };
 
 export default function BrandDeskKpis({ brandKey }: { brandKey: string }) {
-  const { mode, hydrated } = useBrandDeskMode();
-  const isDemo = hydrated && mode === 'demo';
+  const { mode } = useBrandDeskMode();
+  const isDemo = mode === 'demo';
   const [liveKpis, setLiveKpis] = useState<Kpis | null>(null);
 
   useEffect(() => {
-    if (!hydrated || mode === 'demo') return;
+    if (mode === 'demo') return;
     let cancelled = false;
     fetch(`/api/brands/${encodeURIComponent(brandKey)}/overview`)
       .then((r) => (r.ok ? r.json() : null))
@@ -32,9 +32,9 @@ export default function BrandDeskKpis({ brandKey }: { brandKey: string }) {
     return () => {
       cancelled = true;
     };
-  }, [brandKey, hydrated, mode]);
+  }, [brandKey, mode]);
 
-  const kpis = isDemo ? DEMO_KPIS : liveKpis;
+  const kpis = isDemo ? getDemoKpis(brandKey) : liveKpis;
   if (!kpis) return null;
 
   const items = [

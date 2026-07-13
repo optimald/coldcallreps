@@ -13,7 +13,19 @@ import {
   matchStateOf,
   type MatchState,
 } from '@/lib/brand-lead-match';
-import { DEMO_CAMPAIGNS, DEMO_LEADS, DEMO_MSG, type DemoLead } from '@/lib/demo/brand-demo-data';
+import {
+  DEMO_MSG,
+  getDemoCampaigns,
+  getDemoLeads,
+  type DemoLead,
+} from '@/lib/demo/brand-demo-data';
+import {
+  getGrade,
+  healthTone,
+  parseIntel,
+  scoreTone,
+  signalTone,
+} from '@/lib/prospect-intel';
 
 type BrandOpt = { id: string; name: string; slug: string | null };
 type CampaignOpt = {
@@ -146,8 +158,9 @@ export default function BrandLeadsClient({
 }) {
   const router = useRouter();
   const { mode, hydrated } = useBrandDeskMode();
-  const isLive = hydrated && mode === 'live';
-  const isDemo = hydrated && mode === 'demo';
+  // Prefer live data until desk mode is known demo — never flash DEMO_LEADS at Live users.
+  const isDemo = mode === 'demo';
+  const isLive = !isDemo;
   const brandId = brands[0]?.id || '';
   const brandKey = brands[0]?.slug || brands[0]?.id || '';
 
@@ -156,7 +169,9 @@ export default function BrandLeadsClient({
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [trainingLeads, setTrainingLeads] = useState<TrainingLeadView[]>(DEMO_LEADS);
+  const [trainingLeads, setTrainingLeads] = useState<TrainingLeadView[]>(() =>
+    getDemoLeads(brandKey || 'demo-meridianops')
+  );
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -166,6 +181,7 @@ export default function BrandLeadsClient({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [enriching, setEnriching] = useState<string | null>(null);
+  const [webevoBusy, setWebevoBusy] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [companyName, setCompanyName] = useState('');
@@ -177,23 +193,23 @@ export default function BrandLeadsClient({
 
   const brandCampaigns = useMemo(() => {
     if (isLive) return campaigns.filter((c) => c.brandId === brandId);
-    return DEMO_CAMPAIGNS.map((c) => ({
+    return getDemoCampaigns(brandKey).map((c) => ({
       id: c.id,
       title: c.title,
       brandId: brandId || 'demo',
       status: c.status,
     }));
-  }, [isLive, campaigns, brandId]);
+  }, [isLive, campaigns, brandId, brandKey]);
 
   const campaignTitle = useCallback(
     (id: string | null | undefined) => {
       if (!id) return 'Unassigned';
       const live = brandCampaigns.find((c) => c.id === id)?.title;
       if (live) return live;
-      const demo = DEMO_CAMPAIGNS.find((c) => c.id === id)?.title;
+      const demo = getDemoCampaigns(brandKey).find((c) => c.id === id)?.title;
       return demo || 'Unassigned';
     },
-    [brandCampaigns]
+    [brandCampaigns, brandKey]
   );
 
   useEffect(() => {
@@ -242,7 +258,7 @@ export default function BrandLeadsClient({
     if (!hydrated) return;
 
     if (mode === 'demo') {
-      setTrainingLeads(DEMO_LEADS);
+      setTrainingLeads(getDemoLeads(brandKey));
       setLoading(false);
       return;
     }
@@ -357,6 +373,34 @@ export default function BrandLeadsClient({
       setMsg(e instanceof Error ? e.message : 'Enrich failed');
     } finally {
       setEnriching(null);
+    }
+  }
+
+  async function webevoOne(id: string, force = false) {
+    if (!isLive) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    setWebevoBusy(id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/prospects/${id}/webevo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'WebEvo scan failed');
+      setMsg(
+        `WebEvo (UILensAI): ${data.overallScore ?? '—'} · ${data.rating || 'scanned'}${
+          data.durationMs ? ` · ${(data.durationMs / 1000).toFixed(0)}s` : ''
+        }`
+      );
+      await loadCampaign();
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'WebEvo scan failed');
+    } finally {
+      setWebevoBusy(null);
     }
   }
 
@@ -572,8 +616,37 @@ export default function BrandLeadsClient({
     detail && 'ownerEmail' in detail && detail.ownerEmail ? String(detail.ownerEmail) : null;
   const detailMatch = detail ? matchStateOf(detail) : null;
 
+  const phaseStats = useMemo(() => {
+    const total = pool.length;
+    const raw = pool.filter((l) => !l.qualifyPhase1).length;
+    const high = pool.filter((l) => {
+      const s = parseIntel(l.hooksJSON)?.score;
+      return s != null && s >= 60;
+    }).length;
+    const audited = pool.filter((l) => l.qualifyPhase3 && l.outreachReady).length;
+    const fresh = pool.filter((l) => l.status === 'new').length;
+    return { total, raw, high, audited, fresh };
+  }, [pool]);
+
   return (
     <div className="stack brand-leads">
+      <div className="brand-leads__phase-strip" aria-label="Lead enrichment summary">
+        <span className="brand-leads__phase-pill">
+          <strong>{phaseStats.total}</strong> Total
+        </span>
+        <span className="brand-leads__phase-pill brand-leads__phase-pill--new">
+          <strong>{phaseStats.fresh}</strong> New
+        </span>
+        <span className="brand-leads__phase-pill brand-leads__phase-pill--hot">
+          <strong>{phaseStats.high}</strong> High priority
+        </span>
+        <span className="brand-leads__phase-pill brand-leads__phase-pill--raw">
+          <strong>{phaseStats.raw}</strong> Raw (P1)
+        </span>
+        <span className="brand-leads__phase-pill brand-leads__phase-pill--ok">
+          <strong>{phaseStats.audited}</strong> Dial-ready
+        </span>
+      </div>
       <div className="brand-leads__toolbar">
         <div className="brand-leads__search">
           <input
@@ -626,7 +699,7 @@ export default function BrandLeadsClient({
         <div className="brand-leads__actions">
           {brandKey ? (
             <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn btn-primary btn-sm">
-              Find leads
+              Generate leads
             </Link>
           ) : null}
           <button
@@ -648,7 +721,7 @@ export default function BrandLeadsClient({
             className="btn btn-ghost btn-sm"
             onClick={() => {
               if (isDemo) {
-                setTrainingLeads(DEMO_LEADS);
+                setTrainingLeads(getDemoLeads(brandKey));
                 return;
               }
               void loadCampaign();
@@ -769,7 +842,7 @@ export default function BrandLeadsClient({
           </div>
         ) : (
           <div className="brand-leads__table-wrap">
-            <table className="brand-leads__table brand-leads__table--match">
+            <table className="brand-leads__table brand-leads__table--intel">
               <thead>
                 <tr className="brand-leads__row brand-leads__row--head">
                   {isLive ? (
@@ -785,9 +858,19 @@ export default function BrandLeadsClient({
                       />
                     </th>
                   ) : null}
-                  <th className="brand-leads__col--company">Company</th>
-                  <th className="brand-leads__col--dm">Decision maker</th>
+                  <th className="brand-leads__col--company">Name</th>
+                  <th className="brand-leads__col--score">Trojan</th>
+                  <th className="brand-leads__col--health">Health</th>
+                  <th className="brand-leads__col--webevo">WebEvo</th>
+                  <th className="brand-leads__col--location">Location</th>
+                  <th className="brand-leads__col--year">© Year</th>
+                  <th className="brand-leads__col--reviews">Reviews</th>
+                  <th className="brand-leads__col--last-review">Last review</th>
+                  <th className="brand-leads__col--cms">CMS</th>
+                  <th className="brand-leads__col--signals">Signals</th>
+                  <th className="brand-leads__col--dm">Owner</th>
                   <th className="brand-leads__col--phone">Phone</th>
+                  <th className="brand-leads__col--calls">Calls</th>
                   <th className="brand-leads__col--match-status">Status</th>
                   <th className="brand-leads__col--campaign">Campaign</th>
                 </tr>
@@ -799,6 +882,28 @@ export default function BrandLeadsClient({
                   const state = matchStateOf(l);
                   const title =
                     'ownerTitle' in l && l.ownerTitle ? String(l.ownerTitle) : null;
+                  const intel = parseIntel(l.hooksJSON);
+                  const score = intel?.score ?? null;
+                  const health = intel?.health ?? null;
+                  const webEvo = intel?.webEvoScore ?? null;
+                  const gradeInfo = webEvo != null ? getGrade(webEvo) : null;
+                  const callCount =
+                    'callCount' in l && typeof l.callCount === 'number'
+                      ? l.callCount
+                      : 'attemptCount' in l && typeof l.attemptCount === 'number'
+                        ? l.attemptCount
+                        : 0;
+                  const lastReview = intel?.lastReviewAt
+                    ? (() => {
+                        const days = Math.round(
+                          (Date.now() - new Date(intel.lastReviewAt!).getTime()) / 86400000
+                        );
+                        if (days < 30) return `${days}d ago`;
+                        if (days < 365) return `${Math.round(days / 30)}mo ago`;
+                        return `${Math.round(days / 365)}y ago`;
+                      })()
+                    : null;
+                  const domain = domainOf(l.website);
                   return (
                     <tr
                       key={l.id}
@@ -825,10 +930,62 @@ export default function BrandLeadsClient({
                           </span>
                           <div className="brand-leads__name-meta">
                             <span className="brand-leads__name">{l.companyName}</span>
-                            <span className="brand-leads__sub muted">
-                              {[l.industry, loc].filter(Boolean).join(' · ') || '—'}
-                            </span>
+                            <span className="brand-leads__sub muted">{domain || '—'}</span>
                           </div>
+                        </div>
+                      </td>
+                      <td className={`brand-leads__col--score brand-leads__score brand-leads__score--${scoreTone(score)}`}>
+                        {score != null ? Math.round(score) : '—'}
+                      </td>
+                      <td className={`brand-leads__col--health brand-leads__health brand-leads__health--${healthTone(health)}`}>
+                        {health != null ? Math.round(health) : '—'}
+                      </td>
+                      <td
+                        className={`brand-leads__col--webevo brand-leads__webevo brand-leads__webevo--${
+                          webEvo != null && webEvo >= 70
+                            ? 'ok'
+                            : webEvo != null && webEvo >= 45
+                              ? 'mid'
+                              : webEvo != null
+                                ? 'bad'
+                                : 'warn'
+                        }`}
+                      >
+                        {gradeInfo && gradeInfo.grade !== '—' ? (
+                          <>
+                            <span className="brand-leads__webevo-grade">{gradeInfo.grade}</span>{' '}
+                            <span className="brand-leads__webevo-score">{Math.round(webEvo!)}</span>
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="brand-leads__col--location muted small">{loc || '—'}</td>
+                      <td className="brand-leads__col--year">{intel?.copyrightYear || '—'}</td>
+                      <td className="brand-leads__col--reviews">
+                        {l.reviewRating != null ? (
+                          <>
+                            {l.reviewRating}★
+                            {l.reviewCount != null ? (
+                              <span className="muted"> ({l.reviewCount})</span>
+                            ) : null}
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="brand-leads__col--last-review muted small">{lastReview || '—'}</td>
+                      <td className="brand-leads__col--cms muted small">{intel?.cms || '—'}</td>
+                      <td className="brand-leads__col--signals">
+                        <div className="brand-leads__signals">
+                          {(intel?.signals || []).slice(0, 4).map((s) => (
+                            <span
+                              key={s}
+                              className={`brand-leads__signal brand-leads__signal--${signalTone(s)}`}
+                            >
+                              {s}
+                            </span>
+                          ))}
                         </div>
                       </td>
                       <td className="brand-leads__col--dm">
@@ -839,6 +996,20 @@ export default function BrandLeadsClient({
                       </td>
                       <td className="brand-leads__col--phone brand-leads__phone">
                         {l.phone || <span className="muted">—</span>}
+                      </td>
+                      <td className="brand-leads__col--calls">
+                        {brandKey ? (
+                          <Link
+                            href={`/brands/${brandKey}/leads/${l.id}`}
+                            className="soft-link"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Call log"
+                          >
+                            {callCount}
+                          </Link>
+                        ) : (
+                          callCount
+                        )}
                       </td>
                       <td className="brand-leads__col--match-status">
                         <span className={matchChipClass(state)}>{matchLabel(state)}</span>
@@ -1112,6 +1283,17 @@ export default function BrandLeadsClient({
                   >
                     Condition + sync CRM
                   </button>
+                  {detail.website ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={webevoBusy === detail.id}
+                      onClick={() => void webevoOne(detail.id, true)}
+                      title="Opt-in UILensAI pro-scan (not part of phone pipeline)"
+                    >
+                      {webevoBusy === detail.id ? 'WebEvo scanning…' : 'WebEvo scan (UILensAI)'}
+                    </button>
+                  ) : null}
                 </div>
               </details>
             ) : null}

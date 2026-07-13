@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { brandHref } from '@/lib/brand-context';
-import { DEMO_TEAM } from '@/lib/demo/brand-demo-data';
+import { getDemoTeam } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { EmptyState, Panel } from '@/components/ui/PagePrimitives';
 
@@ -28,9 +28,9 @@ export default function BrandSdrTeamClient({
   brandKey: string;
   initial: TeamMemberRow[];
 }) {
-  const { mode, hydrated } = useBrandDeskMode();
-  const isDemo = hydrated && mode === 'demo';
-  const team: TeamMemberRow[] = isDemo ? DEMO_TEAM : initial;
+  const { mode } = useBrandDeskMode();
+  const isDemo = mode === 'demo';
+  const team: TeamMemberRow[] = isDemo ? getDemoTeam(brandKey) : initial;
 
   return (
     <Panel title="Active SDRs" description={`${team.length} on roster`}>

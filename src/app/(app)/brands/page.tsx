@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import CreateBrandModal from '@/components/CreateBrandModal';
+import { brandPathKey, writeSelectedBrandKey } from '@/lib/brand-context';
 import { EmptyState, PageHeader, Panel } from '@/components/ui/PagePrimitives';
 
 export default function BrandsPage() {
@@ -16,7 +17,14 @@ export default function BrandsPage() {
     try {
       const res = await fetch('/api/brands?mine=1');
       const data = await res.json();
-      setBrands(data.brands || []);
+      const list = data.brands || [];
+      setBrands(list);
+      const wantCreate =
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('create') === '1';
+      if (list.length === 0 || wantCreate) {
+        setCreateOpen(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -29,9 +37,9 @@ export default function BrandsPage() {
   return (
     <main className="app-page">
       <PageHeader
-        eyebrow="Brands"
-        title="Your brands"
-        description="Only brands you own appear here. Create a brand → practice pack → campaign → SDRs dial your leads."
+        eyebrow="Account"
+        title="My brands"
+        description="Manage brands you own. The sidebar selector sets which brand Home and campaigns use."
         actions={
           <button type="button" className="btn" onClick={() => setCreateOpen(true)}>
             Create brand
@@ -61,7 +69,12 @@ export default function BrandsPage() {
       ) : (
         <div className="page-grid">
           {brands.map((b) => (
-            <Link key={b.id} href={`/brands/${b.slug || b.id}`} className="card-tile">
+            <Link
+              key={b.id}
+              href={`/brands/${b.slug || b.id}`}
+              className="card-tile"
+              onClick={() => writeSelectedBrandKey(brandPathKey(b))}
+            >
               <div className="card-tile__logo-row">
                 <BrandLogo name={b.name} slug={b.slug} logoUrl={b.logoUrl} size="sm" />
                 <h2 className="card-tile__title">{b.name}</h2>
@@ -70,7 +83,7 @@ export default function BrandsPage() {
                 {b.packs?.length || 0} packs · {b._count?.certifications || 0} certified ·{' '}
                 {b._count?.bounties || 0} bounties
               </p>
-              <span className="card-tile__footer">Open brand desk →</span>
+              <span className="card-tile__footer">Open dashboard →</span>
             </Link>
           ))}
         </div>
@@ -78,8 +91,15 @@ export default function BrandsPage() {
 
       <CreateBrandModal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => void load()}
+        onClose={() => {
+          // Keep modal open when there are zero brands — must create one first
+          if (brands.length === 0) return;
+          setCreateOpen(false);
+        }}
+        redirectTo={undefined}
+        onCreated={(key) => {
+          if (key) writeSelectedBrandKey(key);
+        }}
       />
     </main>
   );

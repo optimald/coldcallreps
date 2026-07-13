@@ -95,6 +95,20 @@ export async function POST(req: Request) {
       });
     }
 
+    if (!profile.repOnboardedAt) {
+      const { notifyAsync } = await import('@/lib/notifications');
+      notifyAsync({
+        event: 'welcome.sdr',
+        recipient: {
+          userId: profile.id,
+          email: profile.email,
+          displayName: updated.displayName,
+        },
+        payload: { ctaUrl: '/gigs', forAudience: 'sdr' },
+        idempotencyKey: `welcome.sdr:${profile.id}`,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       platformRole: updated.platformRole,

@@ -5,9 +5,11 @@ import { canManageBrand } from '@/lib/roles';
 import {
   calcPayoutSplit,
   formatPayout,
+  isCampaignDialEligible,
   practiceHref,
   serializePayout,
 } from '@/lib/campaigns';
+import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { appBaseUrl, getStripe } from '@/lib/stripe';
 
 /**
@@ -158,22 +160,29 @@ export async function POST(
       return NextResponse.json({ error: 'Net payout after fee is too small.' }, { status: 400 });
     }
 
-    // Budget guard (optional field on campaign)
-    if (campaign.budgetCents != null && campaign.budgetCents > 0) {
-      const paidAgg = await prisma.campaignPayout.aggregate({
-        where: { campaignId: id, status: 'PAID' },
-        _sum: { grossCents: true },
-      });
-      const spent = paidAgg._sum.grossCents || 0;
-      if (spent + split.grossCents > campaign.budgetCents) {
-        return NextResponse.json(
-          {
-            error: `Budget exhausted (${formatPayout(spent)} of ${formatPayout(campaign.budgetCents)} used).`,
-            code: 'BUDGET_EXCEEDED',
-          },
-          { status: 400 }
-        );
-      }
+    // Spend caps (overall / daily) — pause does not block paying completed work; only caps do.
+    const spend = await loadOneCampaignSpend(id);
+    const budgetGate = isCampaignDialEligible({
+      status: 'OPEN',
+      startsAt: null,
+      endsAt: null,
+      budgetCents: campaign.budgetCents,
+      budgetMode: campaign.budgetMode,
+      dailyBudgetCents: campaign.dailyBudgetCents,
+      spentCents: spend.spentCents,
+      spentTodayCents: spend.spentTodayCents,
+      nextAwardCents: split.grossCents,
+    });
+    if (!budgetGate.ok) {
+      return NextResponse.json(
+        {
+          error: budgetGate.reason || 'Budget exhausted',
+          code: 'BUDGET_EXCEEDED',
+          remainingOverallCents: budgetGate.remainingOverallCents,
+          remainingDailyCents: budgetGate.remainingDailyCents,
+        },
+        { status: 400 }
+      );
     }
 
     if (campaign.maxAwards != null && campaign.maxAwards > 0) {
@@ -285,6 +294,37 @@ export async function POST(
       where: { id: payout.id },
       data: { stripeCheckoutSessionId: session.id },
     });
+
+    const { notifyAsync } = await import('@/lib/notifications');
+    notifyAsync({
+      event: 'payout.ready',
+      recipient: {
+        userId: rep.id,
+        email: rep.email,
+        displayName: rep.displayName,
+      },
+      brand: {
+        id: campaign.brandId,
+        name: campaign.brand.name,
+        slug: campaign.brand.slug,
+      },
+      fromUserId: profile.id,
+      payload: {
+        campaignTitle: campaign.title,
+        campaignId: id,
+        amountLabel: formatPayout(split.netCents),
+        ctaUrl: '/billing',
+      },
+      idempotencyKey: `payout.ready:${payout.id}`,
+    });
+    if (!rep.stripeConnectAccountId || !rep.stripeConnectPayoutsEnabled) {
+      notifyAsync({
+        event: 'connect.required',
+        recipient: { userId: rep.id, email: rep.email, displayName: rep.displayName },
+        payload: { campaignTitle: campaign.title, ctaUrl: '/billing' },
+        idempotencyKey: `connect.required:${rep.id}:${payout.id}`,
+      });
+    }
 
     return NextResponse.json({
       url: session.url,

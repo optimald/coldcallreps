@@ -53,10 +53,17 @@ export async function POST(req: Request) {
       });
     }
 
+    const couponId =
+      typeof body.couponId === 'string' && body.couponId.trim()
+        ? body.couponId.trim()
+        : null;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: !couponId,
+      ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
       success_url: `${appUrl}/billing?pack=success&minutes=${pack.minutes}`,
       cancel_url: `${appUrl}/billing?pack=cancel`,
       metadata: {

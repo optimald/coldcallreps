@@ -1,10 +1,11 @@
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { ownedBrandIds } from '@/lib/brand-leads';
+import { requireDeskBrand } from '@/lib/desk-brand';
 import { listTrainingLeads } from '@/lib/training-leads';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand, effectiveRole } from '@/lib/roles';
+import { canAccessBrandDesk, effectiveRole } from '@/lib/roles';
 import { brandHref } from '@/lib/brand-context';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import BrandLeadsClient from '@/components/BrandLeadsClient';
@@ -18,13 +19,8 @@ export default async function BrandLeadsPage({
   const role = effectiveRole(profile);
   const { id } = await params;
 
-  const brand = await prisma.brand.findFirst({
-    where: { OR: [{ id }, { slug: id }] },
-    select: { id: true, slug: true, name: true, ownerId: true },
-  });
-  if (!brand) notFound();
-
-  if (!canManageBrand(profile, brand.ownerId) && role !== 'SUPERADMIN') {
+  const { brand, deskMode } = await requireDeskBrand(id);
+  if (!canAccessBrandDesk(profile, brand, deskMode) && role !== 'SUPERADMIN') {
     redirect('/practice');
   }
 
@@ -51,7 +47,6 @@ export default async function BrandLeadsPage({
     <main className="app-page brand-leads-page">
       <PageHeader
         compact
-        eyebrow={brand.name}
         title="Leads"
         actions={
           <Link href={brandHref(brand, 'leads', 'audit')} className="btn-ghost">

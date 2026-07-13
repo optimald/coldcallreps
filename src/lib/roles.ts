@@ -3,7 +3,13 @@ import { brandHref } from '@/lib/brand-context';
 
 export type AppRole = PlatformRole;
 
-export type NavItem = { href: string; label: string; icon: NavIcon };
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: NavIcon;
+  /** Optional sidebar pill counter (demo or live). */
+  badge?: number | string | null;
+};
 
 export type NavSection = {
   id: string;
@@ -46,6 +52,8 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 
 const I = {
   admin: { href: '/admin', label: 'Admin', icon: 'admin' as const },
+  adminBrands: { href: '/admin/brands', label: 'All brands', icon: 'brands' as const },
+  adminReview: { href: '/admin/review', label: 'Review', icon: 'leads' as const },
   dashboard: { href: '/dashboard', label: 'Home', icon: 'dashboard' as const },
   trainer: { href: '/practice', label: 'Practice', icon: 'trainer' as const },
   hiring: { href: '/hiring', label: 'Profile', icon: 'profile' as const },
@@ -65,23 +73,50 @@ const I = {
 
 /**
  * Brand / recruiter nav when a brand is selected (campaigns live under the brand).
- * Without a brand key, brand-context links fall back to /brands.
+ * Brand switcher lives in the Brand section header — not a separate Brands workspace item.
+ * Without a brand key, brand-context links fall back to /dashboard (create-brand gate).
  */
-export function brandNavSections(brandKey: string | null): NavSection[] {
-  const scoped = (path: string) => (brandKey ? brandHref(brandKey, path) : '/brands');
+export function brandNavSections(
+  brandKey: string | null,
+  counts?: { leads?: number; generateLeads?: number; liveCalls?: number; campaigns?: number }
+): NavSection[] {
+  const desk = brandKey ? brandHref(brandKey) : '/dashboard';
+  const scoped = (path: string) => (brandKey ? brandHref(brandKey, path) : '/dashboard');
   return [
     {
       id: 'main',
-      label: 'Workspace',
-      items: [I.dashboard, I.brands],
+      label: '',
+      items: [{ ...I.dashboard, label: 'Home' }],
     },
     {
       id: 'brand',
       label: 'Brand',
       items: [
-        { href: scoped('campaigns'), label: 'Campaigns', icon: 'campaigns' },
-        { href: scoped('leads'), label: 'Leads', icon: 'leads' },
-        { href: scoped('calls'), label: 'Live calls', icon: 'outbound' },
+        { href: desk, label: 'Dashboard', icon: 'dashboard' },
+        {
+          href: scoped('campaigns'),
+          label: 'Campaigns',
+          icon: 'campaigns',
+          badge: counts?.campaigns ?? null,
+        },
+        {
+          href: scoped('leads'),
+          label: 'Leads',
+          icon: 'leads',
+          badge: counts?.leads ?? null,
+        },
+        {
+          href: scoped('pipeline'),
+          label: 'Generate leads',
+          icon: 'prospects',
+          badge: counts?.generateLeads ?? null,
+        },
+        {
+          href: scoped('calls'),
+          label: 'Calls',
+          icon: 'outbound',
+          badge: counts?.liveCalls ?? null,
+        },
       ],
     },
     {
@@ -97,7 +132,12 @@ export function brandNavSections(brandKey: string | null): NavSection[] {
     {
       id: 'account',
       label: 'Account',
-      items: [I.integrations, I.billing, I.settings],
+      items: [
+        { ...I.brands, label: 'My brands' },
+        I.integrations,
+        I.billing,
+        I.settings,
+      ],
     },
   ];
 }
@@ -139,7 +179,7 @@ export const NAV_SECTIONS_BY_ROLE: Record<AppRole, NavSection[]> = {
     {
       id: 'ops',
       label: 'Ops',
-      items: [I.admin, I.dashboard, I.campaigns, I.gigs, I.leads, I.brands],
+      items: [I.admin, I.adminBrands, I.adminReview, I.dashboard, I.campaigns, I.brands],
     },
     {
       id: 'account',
@@ -180,6 +220,23 @@ export function canManageBrand(
   if (isSuperadmin(profile)) return true;
   if (!brandOwnerId) return false;
   return brandOwnerId === profile.id;
+}
+
+/**
+ * Brand desk pages: owners always; platform demo-* brands when desk is in Demo mode
+ * (BRAND / RECRUITER) so portfolio links to MeridianOps / Harborline / SummitShield work.
+ */
+export function canAccessBrandDesk(
+  profile: Pick<UserProfile, 'id' | 'platformRole' | 'email'>,
+  brand: { ownerId: string | null; slug?: string | null },
+  deskMode?: 'live' | 'demo' | null
+): boolean {
+  if (canManageBrand(profile, brand.ownerId)) return true;
+  if (deskMode !== 'demo') return false;
+  const slug = brand.slug || '';
+  if (!slug.startsWith('demo-')) return false;
+  const role = effectiveRole(profile);
+  return role === 'BRAND' || role === 'RECRUITER' || role === 'SUPERADMIN';
 }
 
 /** Job posts demoted — Brand / Super Admin only (campaigns are the primary marketplace). */

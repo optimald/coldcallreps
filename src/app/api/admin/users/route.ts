@@ -9,34 +9,49 @@ export async function GET(req: Request) {
     await requireSuperadmin();
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') || '').trim();
-    const users = await prisma.userProfile.findMany({
-      where: q
-        ? {
-            OR: [
-              // SQLite/Turso: no case-insensitive mode — contains is enough for admin search
-              { email: { contains: q } },
-              { displayName: { contains: q } },
-              { id: { contains: q } },
-            ],
-          }
-        : undefined,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        platformRole: true,
-        plan: true,
-        minutesRemaining: true,
-        totalPoints: true,
-        bountyCredits: true,
-        hiringBoardOptIn: true,
-        createdAt: true,
-        repProfile: { select: { slug: true, verified: true } },
-      },
-    });
-    return NextResponse.json({ users });
+    const [users, recentSessions] = await Promise.all([
+      prisma.userProfile.findMany({
+        where: q
+          ? {
+              OR: [
+                // SQLite/Turso: no case-insensitive mode — contains is enough for admin search
+                { email: { contains: q } },
+                { displayName: { contains: q } },
+                { id: { contains: q } },
+              ],
+            }
+          : undefined,
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          platformRole: true,
+          plan: true,
+          minutesRemaining: true,
+          totalPoints: true,
+          bountyCredits: true,
+          hiringBoardOptIn: true,
+          createdAt: true,
+          repProfile: { select: { slug: true, verified: true } },
+        },
+      }),
+      prisma.trainerSession.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+        select: {
+          id: true,
+          overallScore: true,
+          focusArea: true,
+          duration: true,
+          integrityFlags: true,
+          createdAt: true,
+          user: { select: { displayName: true, email: true } },
+        },
+      }),
+    ]);
+    return NextResponse.json({ users, recentSessions });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });

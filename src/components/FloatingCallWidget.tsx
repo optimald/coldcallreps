@@ -4,18 +4,21 @@ import { useState, type ReactNode } from 'react';
 import { formatDuration } from '@/lib/trainer/session-utils';
 
 export type CallDisposition =
+  | 'appointment_set'
+  | 'not_interested'
+  | 'no_answer'
+  | 'gatekeeper_blocked'
+  /** @deprecated legacy — still readable on old call logs */
   | 'interested'
   | 'callback'
-  | 'not_interested'
-  | 'voicemail'
-  | 'no_answer';
+  | 'voicemail';
 
+/** Ruthlessly simple outbound wrap-up codes. */
 export const CALL_DISPOSITIONS: { id: CallDisposition; label: string; short: string }[] = [
-  { id: 'interested', label: 'Interested', short: '🔥' },
-  { id: 'callback', label: 'Callback', short: '📅' },
-  { id: 'not_interested', label: 'No', short: '🚫' },
-  { id: 'voicemail', label: 'VM', short: '📱' },
-  { id: 'no_answer', label: 'N/A', short: '📞' },
+  { id: 'appointment_set', label: 'Appointment set', short: 'Appt' },
+  { id: 'not_interested', label: 'Not interested', short: 'No' },
+  { id: 'no_answer', label: 'No answer / VM', short: 'NA' },
+  { id: 'gatekeeper_blocked', label: 'Gatekeeper blocked', short: 'GK' },
 ];
 
 /** Bottom-right floating controls during an active practice or outbound call. */

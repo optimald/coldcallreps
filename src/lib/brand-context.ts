@@ -4,10 +4,17 @@ export const SELECTED_BRAND_KEY = 'ccr-selected-brand';
 export const SELECTED_BRAND_COOKIE = 'ccr-selected-brand';
 /** Brand desk data mode: live = real campaign CRM; demo = in-memory sample fixtures. */
 export const BRAND_DESK_MODE_KEY = 'ccr-brand-desk-mode';
+/** Cookie mirror so SSR / first paint match Live vs Demo without waiting on localStorage. */
+export const BRAND_DESK_MODE_COOKIE = 'ccr-brand-desk-mode';
 
 export type BrandDeskMode = 'live' | 'demo';
 
-export type BrandRef = { id: string; slug: string; name: string };
+export type BrandRef = {
+  id: string;
+  slug: string;
+  name: string;
+  logoUrl?: string | null;
+};
 
 /** Prefer slug in URLs; fall back to id. */
 export function brandPathKey(brand: Pick<BrandRef, 'id' | 'slug'>): string {
@@ -37,6 +44,7 @@ export function writeSelectedBrandKey(key: string) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(SELECTED_BRAND_KEY, key);
+    window.dispatchEvent(new CustomEvent('ccr-selected-brand', { detail: key }));
   } catch {
     /* ignore */
   }
@@ -52,10 +60,19 @@ export function readBrandDeskMode(): BrandDeskMode {
   }
 }
 
+function syncDeskModeCookie(mode: BrandDeskMode) {
+  try {
+    document.cookie = `${BRAND_DESK_MODE_COOKIE}=${mode}; path=/; max-age=31536000; samesite=lax`;
+  } catch {
+    /* ignore */
+  }
+}
+
 export function writeBrandDeskMode(mode: BrandDeskMode) {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(BRAND_DESK_MODE_KEY, mode);
+    syncDeskModeCookie(mode);
     window.dispatchEvent(new CustomEvent('ccr-brand-desk-mode', { detail: mode }));
   } catch {
     /* ignore */

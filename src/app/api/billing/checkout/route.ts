@@ -65,6 +65,11 @@ export async function POST(req: Request) {
         ? Math.min(Math.max(Number(body.seats) || PLAN.TEAM.seats || 5, 1), 100)
         : 1;
 
+    const couponId =
+      typeof body.couponId === 'string' && body.couponId.trim()
+        ? body.couponId.trim()
+        : null;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -77,6 +82,8 @@ export async function POST(req: Request) {
             }
           : { price: priceId, quantity: 1 },
       ],
+      allow_promotion_codes: !couponId,
+      ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
       success_url: `${appUrl}/dashboard?checkout=success&tier=${tier}`,
       cancel_url: `${appUrl}/billing?checkout=cancel`,
       metadata: {

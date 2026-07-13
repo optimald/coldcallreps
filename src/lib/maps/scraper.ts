@@ -263,6 +263,7 @@ export async function scrapeWebsiteHooks(
         https,
         health,
         webEvoScore: Math.max(10, health - 20),
+        webEvoSource: 'heuristic' as const,
         score: computeTrojanScore(ctx.reviewCount, health, ctx.reviewRating),
         signals: ['Broken', `HTTP ${res.status}`],
       };
@@ -359,6 +360,7 @@ export async function scrapeWebsiteHooks(
       signals,
       health,
       webEvoScore,
+      webEvoSource: 'heuristic',
       score,
       lastReviewAt: null,
     };

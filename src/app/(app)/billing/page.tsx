@@ -10,6 +10,7 @@ import {
   type PaidPlanKey,
 } from '@/lib/product';
 import BrandBillingPanel from '@/components/BrandBillingPanel';
+import { useShell } from '@/components/ShellProvider';
 
 const MONTHLY_CARDS: { tier: 'STARTER' | 'PRO'; features: string[]; highlight?: boolean }[] = [
   {
@@ -28,14 +29,17 @@ const MONTHLY_CARDS: { tier: 'STARTER' | 'PRO'; features: string[]; highlight?: 
 ];
 
 export default function AppPricingPage() {
+  const shell = useShell();
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
-  const [plan, setPlan] = useState<string | null>(null);
-  const [minutes, setMinutes] = useState<number | null>(null);
+  const [plan, setPlan] = useState<string | null>(() => shell?.metrics.plan || null);
+  const [minutes, setMinutes] = useState<number | null>(
+    () => shell?.metrics.minutesRemaining ?? null
+  );
   const [orgPool, setOrgPool] = useState<number | null>(null);
   const [minuteSource, setMinuteSource] = useState<string | null>(null);
   const [hasSubscription, setHasSubscription] = useState(false);
-  const [platformRole, setPlatformRole] = useState<string | null>(null);
+  const [platformRole, setPlatformRole] = useState<string | null>(() => shell?.role || null);
   const [loadError, setLoadError] = useState('');
   const [orgSeats, setOrgSeats] = useState(PLAN.TEAM.seats || 5);
 
@@ -133,7 +137,7 @@ export default function AppPricingPage() {
     else setMsg(data.error || 'Portal unavailable');
   }
 
-  const role = platformRole || 'REP';
+  const role = platformRole || shell?.role || 'REP';
   const isBrandDesk = role === 'BRAND' || role === 'RECRUITER';
   const showSdrPlans = role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN';
   const showOrgPlan = role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN';
@@ -150,7 +154,10 @@ export default function AppPricingPage() {
           <h1 className="page-title">Billing</h1>
           <p className="page-desc">
             {role === 'BRAND' || role === 'RECRUITER' ? (
-              <>Fund campaign escrow, review the ledger, and manage payment methods.</>
+              <>
+                Lead plan usage &amp; packs, campaign escrow, Stripe charges, and payment methods
+                (primary + backup).
+              </>
             ) : plan ? (
               <>
                 Current plan: <strong style={{ color: 'var(--ink)' }}>{plan}</strong>

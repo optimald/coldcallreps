@@ -3,10 +3,23 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import {
+  formatPayout,
+  isBudgetMode,
   isCampaignGoalType,
   isCampaignStatus,
+  parseOptionalDate,
   serializeCampaign,
 } from '@/lib/campaigns';
+import { loadOneCampaignSpend } from '@/lib/campaign-spend';
+import { lockEscrowForCampaign } from '@/lib/escrow';
+import { notifyAsync, notifyCampaignSdrs } from '@/lib/notifications';
+
+const campaignInclude = {
+  brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
+  pack: { select: { id: true, name: true } },
+  playbook: { select: { id: true, title: true } },
+  _count: { select: { applications: true } },
+} as const;
 
 export async function GET(
   _req: Request,
@@ -43,10 +56,12 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const spend = await loadOneCampaignSpend(campaign.id);
     const { applications, brand, ...rest } = campaign;
     return NextResponse.json({
       campaign: serializeCampaign({
         ...rest,
+        ...spend,
         brand: { id: brand.id, name: brand.name, slug: brand.slug, logoUrl: brand.logoUrl },
         myApplication: applications[0] || null,
       }),
@@ -69,7 +84,11 @@ export async function PATCH(
     const { id } = await params;
     const existing = await prisma.campaign.findUnique({
       where: { id },
-      include: { brand: { select: { ownerId: true } } },
+      include: {
+        brand: {
+          select: { id: true, name: true, slug: true, logoUrl: true, ownerId: true },
+        },
+      },
     });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageBrand(profile, existing.brand.ownerId)) {
@@ -85,9 +104,34 @@ export async function PATCH(
       data.icpText = body.icpText ? String(body.icpText).slice(0, 4000) : null;
     }
     if (isCampaignGoalType(body.goalType)) data.goalType = body.goalType;
-    if (isCampaignStatus(body.status)) data.status = body.status;
+    if (isCampaignStatus(body.status)) {
+      if (existing.status === 'CLOSED' && body.status !== 'CLOSED') {
+        return NextResponse.json(
+          { error: 'Closed campaigns cannot be reactivated.', code: 'CAMPAIGN_CLOSED' },
+          { status: 400 }
+        );
+      }
+      data.status = body.status;
+    }
 
-    if (data.status === 'OPEN') {
+    // Activate toggle: ON = OPEN, OFF = PAUSED. CLOSED stays terminal (no toggle).
+    if (typeof body.activateOn === 'boolean') {
+      if (existing.status === 'CLOSED') {
+        return NextResponse.json(
+          { error: 'Closed campaigns cannot be toggled.', code: 'CAMPAIGN_CLOSED' },
+          { status: 400 }
+        );
+      }
+      if (body.activateOn) {
+        data.status = 'OPEN';
+      } else if (existing.status === 'OPEN' || existing.status === 'DRAFT' || existing.status === 'PAUSED') {
+        data.status = 'PAUSED';
+      }
+    }
+
+    const opening =
+      data.status === 'OPEN' && existing.status !== 'OPEN';
+    if (opening) {
       const poolCount = await prisma.brandPhoneNumber.count({
         where: { brandId: existing.brandId, isActive: true },
       });
@@ -96,6 +140,23 @@ export async function PATCH(
         select: { twilioPhoneE164: true },
       });
       if (poolCount === 0 && !brandPhones?.twilioPhoneE164?.trim()) {
+        notifyAsync({
+          event: 'brand.phone_pool.empty',
+          recipient: { userId: profile.id },
+          brand: {
+            id: existing.brand.id,
+            name: existing.brand.name,
+            slug: existing.brand.slug,
+            logoUrl: existing.brand.logoUrl,
+          },
+          payload: {
+            campaignTitle: existing.title,
+            campaignId: id,
+            ctaUrl: `/brands/${existing.brand.slug}/settings`,
+            forAudience: 'brand',
+          },
+          idempotencyKey: `brand.phone_pool.empty:${existing.brandId}:${id}`,
+        });
         return NextResponse.json(
           {
             error:
@@ -126,12 +187,65 @@ export async function PATCH(
     if (typeof body.requireCertification === 'boolean') {
       data.requireCertification = body.requireCertification;
     }
+
+    const spend = await loadOneCampaignSpend(id);
+
     if (body.budgetCents !== undefined) {
-      data.budgetCents =
-        body.budgetCents == null || body.budgetCents === ''
-          ? null
-          : Math.max(0, Math.round(Number(body.budgetCents)));
+      if (body.budgetCents == null || body.budgetCents === '') {
+        data.budgetCents = null;
+      } else {
+        let next = Math.max(0, Math.round(Number(body.budgetCents)));
+        if (next < spend.spentCents) {
+          next = spend.spentCents;
+        }
+        data.budgetCents = next;
+      }
     }
+    if (isBudgetMode(body.budgetMode)) {
+      data.budgetMode = body.budgetMode;
+    }
+    if (body.dailyBudgetCents !== undefined) {
+      if (body.dailyBudgetCents == null || body.dailyBudgetCents === '') {
+        data.dailyBudgetCents = null;
+      } else {
+        let next = Math.max(0, Math.round(Number(body.dailyBudgetCents)));
+        if (next < spend.spentTodayCents) {
+          next = spend.spentTodayCents;
+        }
+        data.dailyBudgetCents = next;
+      }
+    }
+
+    const nextMode = (data.budgetMode as string) || existing.budgetMode || 'OVERALL';
+    const nextDaily =
+      data.dailyBudgetCents !== undefined
+        ? (data.dailyBudgetCents as number | null)
+        : existing.dailyBudgetCents;
+    if (nextMode === 'DAILY' && (nextDaily == null || nextDaily <= 0)) {
+      return NextResponse.json(
+        { error: 'dailyBudgetCents required when budgetMode is DAILY', code: 'DAILY_BUDGET_REQUIRED' },
+        { status: 400 }
+      );
+    }
+    if (nextMode === 'OVERALL' && data.budgetMode === 'OVERALL') {
+      // leave daily as-is unless cleared
+    }
+
+    if (body.startsAt !== undefined) {
+      const parsed = parseOptionalDate(body.startsAt);
+      if (body.startsAt !== null && body.startsAt !== '' && parsed === undefined) {
+        return NextResponse.json({ error: 'Invalid startsAt' }, { status: 400 });
+      }
+      data.startsAt = parsed === undefined ? null : parsed;
+    }
+    if (body.endsAt !== undefined) {
+      const parsed = parseOptionalDate(body.endsAt);
+      if (body.endsAt !== null && body.endsAt !== '' && parsed === undefined) {
+        return NextResponse.json({ error: 'Invalid endsAt' }, { status: 400 });
+      }
+      data.endsAt = parsed === undefined ? null : parsed;
+    }
+
     if (body.maxAwards !== undefined) {
       data.maxAwards =
         body.maxAwards == null || body.maxAwards === ''
@@ -142,6 +256,18 @@ export async function PATCH(
       data.bookingLink = body.bookingLink
         ? String(body.bookingLink).trim().slice(0, 500)
         : null;
+    }
+    if (body.meetingDurationMinutes !== undefined) {
+      data.meetingDurationMinutes =
+        body.meetingDurationMinutes == null || body.meetingDurationMinutes === ''
+          ? null
+          : Math.max(5, Math.min(180, Math.round(Number(body.meetingDurationMinutes))));
+    }
+    if (body.qualifiedPayoutCents !== undefined) {
+      data.qualifiedPayoutCents =
+        body.qualifiedPayoutCents == null || body.qualifiedPayoutCents === ''
+          ? null
+          : Math.max(0, Math.round(Number(body.qualifiedPayoutCents)));
     }
     if (body.targetVertical !== undefined) {
       data.targetVertical = body.targetVertical
@@ -175,18 +301,158 @@ export async function PATCH(
       data.playbookId = playbookId;
     }
 
+    // First activate from DRAFT (or reopen with no escrow yet): lock escrow. Pause never hangs up calls.
+    if (opening && existing.escrowLockedCents <= 0) {
+      const amount =
+        (data.budgetCents as number | null | undefined) ?? existing.budgetCents ?? existing.payoutCents;
+      try {
+        await lockEscrowForCampaign({
+          brandId: existing.brandId,
+          campaignId: id,
+          amountCents: Math.max(0, amount || 0),
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Escrow lock failed';
+        notifyAsync({
+          event: 'brand.escrow.insufficient',
+          recipient: { userId: profile.id },
+          brand: {
+            id: existing.brand.id,
+            name: existing.brand.name,
+            slug: existing.brand.slug,
+            logoUrl: existing.brand.logoUrl,
+          },
+          payload: {
+            campaignTitle: existing.title,
+            campaignId: id,
+            reason: msg,
+            amountLabel: amount ? formatPayout(amount) : undefined,
+            ctaUrl: '/billing',
+            forAudience: 'brand',
+          },
+          idempotencyKey: `brand.escrow.insufficient:${id}:${profile.id}`,
+        });
+        return NextResponse.json({ error: msg, code: 'ESCROW_INSUFFICIENT' }, { status: 400 });
+      }
+      if (!existing.startsAt && data.startsAt === undefined) {
+        data.startsAt = new Date();
+      }
+    } else if (opening && !existing.startsAt && data.startsAt === undefined) {
+      data.startsAt = new Date();
+    }
+
     const campaign = await prisma.campaign.update({
       where: { id },
       data,
-      include: {
-        brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
-        pack: { select: { id: true, name: true } },
-        playbook: { select: { id: true, title: true } },
-        _count: { select: { applications: true } },
-      },
+      include: campaignInclude,
     });
 
-    return NextResponse.json({ campaign: serializeCampaign(campaign) });
+    const brandCtx = {
+      id: existing.brand.id,
+      name: existing.brand.name,
+      slug: existing.brand.slug,
+      logoUrl: existing.brand.logoUrl,
+    };
+    const prevStatus = existing.status;
+    const nextStatus = campaign.status;
+
+    if (nextStatus === 'OPEN' && prevStatus !== 'OPEN') {
+      void notifyCampaignSdrs({
+        campaignId: id,
+        event: 'campaign.opened',
+        brand: brandCtx,
+        fromUserId: profile.id,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: id,
+          ctaUrl: '/cold_calls',
+        },
+      });
+      if (opening && existing.brand.ownerId) {
+        notifyAsync({
+          event: 'escrow.locked',
+          recipient: { userId: existing.brand.ownerId },
+          brand: brandCtx,
+          payload: {
+            campaignTitle: campaign.title,
+            campaignId: id,
+            amountLabel: campaign.escrowLockedCents
+              ? formatPayout(campaign.escrowLockedCents)
+              : undefined,
+            ctaUrl: '/billing',
+          },
+          idempotencyKey: `escrow.locked:${id}:${campaign.updatedAt.toISOString()}`,
+        });
+      }
+    } else if (nextStatus === 'PAUSED' && prevStatus === 'OPEN') {
+      void notifyCampaignSdrs({
+        campaignId: id,
+        event: 'campaign.paused',
+        brand: brandCtx,
+        fromUserId: profile.id,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: id,
+          ctaUrl: '/gigs',
+        },
+      });
+    } else if (nextStatus === 'CLOSED' && prevStatus !== 'CLOSED') {
+      void notifyCampaignSdrs({
+        campaignId: id,
+        event: 'campaign.ended',
+        brand: brandCtx,
+        fromUserId: profile.id,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: id,
+          ctaUrl: '/gigs',
+        },
+      });
+    }
+
+    const freshSpend = await loadOneCampaignSpend(id);
+    const serialized = serializeCampaign({ ...campaign, ...freshSpend });
+    if (
+      serialized.remainingOverallCents != null &&
+      serialized.budgetCents &&
+      serialized.remainingOverallCents <= serialized.budgetCents * 0.15 &&
+      serialized.remainingOverallCents > 0 &&
+      existing.brand.ownerId
+    ) {
+      notifyAsync({
+        event: 'campaign.budget.low',
+        recipient: { userId: existing.brand.ownerId },
+        brand: brandCtx,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: id,
+          amountLabel: `${formatPayout(serialized.remainingOverallCents)} left`,
+          ctaUrl: `/brands/${existing.brand.slug}/campaigns/${id}`,
+        },
+        idempotencyKey: `campaign.budget.low:${id}:${Math.floor(serialized.remainingOverallCents / 1000)}`,
+      });
+    }
+    if (
+      (serialized.remainingOverallCents === 0 || serialized.remainingDailyCents === 0) &&
+      existing.brand.ownerId &&
+      nextStatus === 'OPEN'
+    ) {
+      notifyAsync({
+        event: 'campaign.budget.exhausted',
+        recipient: { userId: existing.brand.ownerId },
+        brand: brandCtx,
+        payload: {
+          campaignTitle: campaign.title,
+          campaignId: id,
+          ctaUrl: `/brands/${existing.brand.slug}/campaigns/${id}`,
+        },
+        idempotencyKey: `campaign.budget.exhausted:${id}:${serialized.budgetMode}:${new Date().toISOString().slice(0, 10)}`,
+      });
+    }
+
+    return NextResponse.json({
+      campaign: serialized,
+    });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });

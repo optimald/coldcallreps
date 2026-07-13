@@ -351,31 +351,111 @@ export async function seedDemoBrands() {
     });
   }
 
-  // Idempotent demo OPEN campaign on MeridianOps — $30 qualified lead
-  const meridian = results.find((r) => r.slug === 'demo-meridianops');
-  if (meridian) {
-    const existingCampaign = await prisma.campaign.findFirst({
-      where: {
-        brandId: meridian.brandId,
-        title: '$30 qualified lead · MeridianOps',
-      },
-    });
-    const campaignData = {
+  // Idempotent OPEN campaigns on each demo brand (gigs marketplace + practice)
+  const campaignSeeds: {
+    slug: string;
+    title: string;
+    description: string;
+    icpText: string;
+    goalType: 'QUALIFIED_LEAD' | 'BOOKED_MEETING';
+    payoutCents: number;
+    budgetCents: number;
+    maxAwards: number;
+  }[] = [
+    {
+      slug: 'demo-meridianops',
       title: '$30 qualified lead · MeridianOps',
       description:
         'Book discovery calls that meet MeridianOps ICP (VP Sales / CRO / Head of RevOps at 80–800 employee B2B SaaS). A qualified lead = decision-maker confirmed, pain acknowledged, and next step agreed. Practice the pack first — brands pay per result via Stripe Connect (~20% platform fee).',
       icpText:
         'Titles: VP Sales, CRO, Head of RevOps, Sales Ops Manager. Company size: 80–800. ACV: $28k–$90k ARR. Pain: forecast miss, CRM hygiene, SDR→AE handoff leakage.',
-      goalType: 'QUALIFIED_LEAD' as const,
+      goalType: 'QUALIFIED_LEAD',
       payoutCents: 3000,
+      budgetCents: 150000,
+      maxAwards: 50,
+    },
+    {
+      slug: 'demo-meridianops',
+      title: '$250 enterprise meeting · MeridianOps',
+      description:
+        'Booked 20-minute working session with VP Sales / CRO / Head of RevOps. Calendar hold + attendees confirmed. High ACV SaaS practice gig.',
+      icpText:
+        'Enterprise / upper mid-market SaaS. Decision-maker on forecast. Willing to review overlay tools on Salesforce.',
+      goalType: 'BOOKED_MEETING',
+      payoutCents: 25000,
+      budgetCents: 200000,
+      maxAwards: 20,
+    },
+    {
+      slug: 'demo-harborline',
+      title: '$175 life / commercial appointment · Harborline',
+      description:
+        'Set a licensed benefits review with a business owner or agency decision-maker. Appointment = calendar hold + decision-maker confirmed. Insurance practice gig ($3k–$25k+ case value).',
+      icpText:
+        'Business owners, benefits leads, life/commercial agency principals. Renewal pressure or underinsured gaps.',
+      goalType: 'BOOKED_MEETING',
+      payoutCents: 17500,
+      budgetCents: 175000,
+      maxAwards: 40,
+    },
+    {
+      slug: 'demo-harborline',
+      title: '$125 Medicare Advantage enrollment set · Harborline',
+      description:
+        'Book a licensed MA plan comparison review during AEP / OEP windows. Compliance-first: educate and schedule — never pressure or guarantee coverage on the cold call.',
+      icpText:
+        'Medicare-eligible households / Advantage shoppers. Primary doctor network concerns. Spouse often involved.',
+      goalType: 'BOOKED_MEETING',
+      payoutCents: 12500,
+      budgetCents: 125000,
+      maxAwards: 40,
+    },
+    {
+      slug: 'demo-summitshield',
+      title: '$85 roof inspection set · SummitShield',
+      description:
+        'Book an on-site roof inspection for homeowners with storm damage, aging roofs, or open adjuster visits. Inspection appointment = both decision-makers when possible.',
+      icpText:
+        'Homeowners, storm ZIP codes, roofs 12+ years, hail/wind claims open. Project size $8k–$45k.',
+      goalType: 'BOOKED_MEETING',
+      payoutCents: 8500,
+      budgetCents: 85000,
+      maxAwards: 50,
+    },
+    {
+      slug: 'demo-summitshield',
+      title: '$75 HVAC / solar appointment · SummitShield',
+      description:
+        'Set HVAC load-calc or solar site survey appointments. Sell the visit, not the full install. Financing-friendly close.',
+      icpText:
+        'Homeowners with aging HVAC, spiked summer bills, or solar curiosity. Spouse usually needed for numbers.',
+      goalType: 'BOOKED_MEETING',
+      payoutCents: 7500,
+      budgetCents: 75000,
+      maxAwards: 50,
+    },
+  ];
+
+  for (const seed of campaignSeeds) {
+    const brandRow = results.find((r) => r.slug === seed.slug);
+    if (!brandRow) continue;
+    const existingCampaign = await prisma.campaign.findFirst({
+      where: { brandId: brandRow.brandId, title: seed.title },
+    });
+    const campaignData = {
+      title: seed.title,
+      description: seed.description,
+      icpText: seed.icpText,
+      goalType: seed.goalType,
+      payoutCents: seed.payoutCents,
       platformFeeBps: 2000,
       status: 'OPEN' as const,
       minScore: 75,
       requireCertification: false,
-      packId: meridian.packId,
-      playbookId: meridian.playbookId,
-      budgetCents: 150000,
-      maxAwards: 50,
+      packId: brandRow.packId,
+      playbookId: brandRow.playbookId,
+      budgetCents: seed.budgetCents,
+      maxAwards: seed.maxAwards,
     };
     if (existingCampaign) {
       await prisma.campaign.update({
@@ -385,7 +465,7 @@ export async function seedDemoBrands() {
     } else {
       await prisma.campaign.create({
         data: {
-          brandId: meridian.brandId,
+          brandId: brandRow.brandId,
           createdByUserId: null,
           ...campaignData,
         },

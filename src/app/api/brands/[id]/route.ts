@@ -99,7 +99,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'logoUrl too long' }, { status: 400 });
       } else if (!/^https?:\/\//i.test(raw) && !raw.startsWith('/')) {
         return NextResponse.json(
-          { error: 'logoUrl must be an http(s) URL or a site path like /brands/nike.svg' },
+          { error: 'logoUrl must be an http(s) URL or a site path like /brands/logo.svg' },
           { status: 400 }
         );
       } else {
