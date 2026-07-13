@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrandLeads, campaignLeadWhere, dialableBrandCampaigns } from '@/lib/brand-leads';
+import {
+  canManageBrandLeads,
+  campaignLeadWhere,
+  dialableBrandCampaigns,
+  PROSPECT_DIAL_SELECT,
+  PROSPECT_LIST_SELECT,
+} from '@/lib/brand-leads';
 import { TRAINING_SOURCE, listTrainingLeads } from '@/lib/training-leads';
 import { effectiveRole } from '@/lib/roles';
 
@@ -17,7 +23,21 @@ export async function GET(req: Request) {
     const campaignId = searchParams.get('campaignId')?.trim();
     const dialable = searchParams.get('dialable') === '1';
     const training = searchParams.get('training') === '1' || source === TRAINING_SOURCE;
-    const take = Math.min(parseInt(searchParams.get('limit') || '100', 10) || 100, 200);
+    const fields = searchParams.get('fields') || 'list';
+    const listOnly = fields === 'list' || fields === 'compact';
+    const take = Math.min(
+      parseInt(searchParams.get('limit') || (listOnly ? '50' : '100'), 10) || 50,
+      200
+    );
+    const skip = Math.max(
+      parseInt(searchParams.get('skip') || searchParams.get('offset') || '0', 10) || 0,
+      0
+    );
+    const prospectSelect = dialable
+      ? PROSPECT_DIAL_SELECT
+      : listOnly
+        ? PROSPECT_LIST_SELECT
+        : undefined;
 
     const qFilter = q
       ? {
@@ -30,13 +50,22 @@ export async function GET(req: Request) {
         }
       : {};
 
-    // Practice contacts — any signed-in user
+    // Practice contacts — any signed-in user (demo brands); private brand training needs manage rights
     if (training) {
       const role = effectiveRole(profile);
-      const skip = Math.max(
-        parseInt(searchParams.get('skip') || searchParams.get('offset') || '0', 10) || 0,
-        0
-      );
+      if (brandId) {
+        const brand = await prisma.brand.findUnique({
+          where: { id: brandId },
+          select: { id: true, slug: true },
+        });
+        if (!brand) {
+          return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
+        const demoOk = Boolean(brand.slug?.startsWith('demo-'));
+        if (!demoOk && !(await canManageBrandLeads(profile, brandId))) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
       const { prospects, hasMore, total } = await listTrainingLeads({
         brandId: brandId || undefined,
         take,
@@ -60,23 +89,42 @@ export async function GET(req: Request) {
     if (dialable) {
       const campaigns = await dialableBrandCampaigns(profile.id);
       if (campaigns.length === 0) {
-        return NextResponse.json({ prospects: [], campaigns: [] });
+        return NextResponse.json({ prospects: [], campaigns: [], hasMore: false, total: 0, skip });
       }
-      const brandIds = [...new Set(campaigns.map((c) => c.brandId))];
+      // Only leads assigned to campaigns this SDR is accepted on — no brand-wide
+      // unassigned pool (prevents reading another campaign's unassigned CRM).
       const campaignIds = campaigns.map((c) => c.id);
-      const prospects = await prisma.prospect.findMany({
-        where: campaignLeadWhere({
-          OR: [
-            { campaignId: { in: campaignIds } },
-            { brandId: { in: brandIds }, campaignId: null },
-          ],
-          ...(status ? { status } : {}),
-          ...qFilter,
-        }),
-        orderBy: { updatedAt: 'desc' },
-        take,
+      const where = campaignLeadWhere({
+        campaignId: { in: campaignIds },
+        ...(status ? { status } : {}),
+        ...qFilter,
       });
-      return NextResponse.json({ prospects, campaigns });
+      const [total, prospects] = await Promise.all([
+        prisma.prospect.count({ where }),
+        prisma.prospect.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          take,
+          skip,
+          select: prospectSelect,
+        }),
+      ]);
+      const slimCampaigns = campaigns.map((c) => ({
+        id: c.id,
+        title: c.title,
+        brandId: c.brandId,
+        brandName: c.brand?.name ?? null,
+        packId: c.packId,
+        playbookId: c.playbookId,
+        status: c.status,
+      }));
+      return NextResponse.json({
+        prospects,
+        campaigns: slimCampaigns,
+        hasMore: skip + prospects.length < total,
+        total,
+        skip,
+      });
     }
 
     if (brandId) {
@@ -84,47 +132,67 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       const wantsTraining = source === TRAINING_SOURCE;
-      const prospects = await prisma.prospect.findMany({
-        where: {
-          brandId,
-          ...(campaignId ? { campaignId } : {}),
-          ...(status ? { status } : {}),
-          ...(wantsTraining
-            ? { source: TRAINING_SOURCE }
-            : source
-              ? { source }
-              : { NOT: { source: TRAINING_SOURCE } }),
-          ...qFilter,
-        },
-        orderBy: { updatedAt: 'desc' },
-        take,
-      });
+      const where = {
+        brandId,
+        ...(campaignId ? { campaignId } : {}),
+        ...(status ? { status } : {}),
+        ...(wantsTraining
+          ? { source: TRAINING_SOURCE }
+          : source
+            ? { source }
+            : { NOT: { source: TRAINING_SOURCE } }),
+        ...qFilter,
+      };
+      const [total, prospects] = await Promise.all([
+        prisma.prospect.count({ where }),
+        prisma.prospect.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          take,
+          skip,
+          ...(prospectSelect ? { select: prospectSelect } : {}),
+        }),
+      ]);
       return NextResponse.json({
         prospects,
         purpose: wantsTraining ? 'training' : 'campaign',
+        hasMore: skip + prospects.length < total,
+        total,
+        skip,
       });
     }
 
     // Personal CRM (reps practicing for themselves) — exclude training seeds
-    const prospects = await prisma.prospect.findMany({
-      where: {
-        userId: profile.id,
-        brandId: null,
-        NOT: { source: TRAINING_SOURCE },
-        ...(status ? { status } : {}),
-        ...(source ? { source } : {}),
-        ...qFilter,
-      },
-      orderBy: { updatedAt: 'desc' },
-      take,
-    });
+    const where = {
+      userId: profile.id,
+      brandId: null,
+      NOT: { source: TRAINING_SOURCE },
+      ...(status ? { status } : {}),
+      ...(source ? { source } : {}),
+      ...qFilter,
+    };
+    const [total, prospects] = await Promise.all([
+      prisma.prospect.count({ where }),
+      prisma.prospect.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        take,
+        skip,
+        ...(prospectSelect ? { select: prospectSelect } : {}),
+      }),
+    ]);
 
-    return NextResponse.json({ prospects });
+    return NextResponse.json({
+      prospects,
+      hasMore: skip + prospects.length < total,
+      total,
+      skip,
+    });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -151,6 +219,12 @@ export async function POST(req: Request) {
     if (brandId) {
       if (!(await canManageBrandLeads(profile, brandId))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      if (!isTraining && !campaignId) {
+        return NextResponse.json(
+          { error: 'campaignId required — enroll the lead in a campaign' },
+          { status: 400 }
+        );
       }
       if (campaignId) {
         const campaign = await prisma.campaign.findFirst({
@@ -183,7 +257,13 @@ export async function POST(req: Request) {
             : null,
         status: body.status ? String(body.status).slice(0, 32) : 'new',
         imageUrl: body.imageUrl ? String(body.imageUrl).slice(0, 500) : null,
-        source: isTraining ? TRAINING_SOURCE : brandId ? 'import' : 'manual',
+        source: isTraining
+          ? TRAINING_SOURCE
+          : body.source === 'import'
+            ? 'import'
+            : body.source === 'maps'
+              ? 'maps'
+              : 'manual',
       },
     });
 
@@ -192,7 +272,7 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -223,6 +303,16 @@ export async function PATCH(req: Request) {
           : null;
     // Training leads stay out of campaign assignment
     if (isTraining) campaignId = null;
+    if (
+      !isTraining &&
+      existing.brandId &&
+      campaignId === null
+    ) {
+      return NextResponse.json(
+        { error: 'campaignId required — brand leads must stay enrolled in a campaign' },
+        { status: 400 }
+      );
+    }
     if (campaignId && existing.brandId) {
       const campaign = await prisma.campaign.findFirst({
         where: { id: campaignId, brandId: existing.brandId },
@@ -305,6 +395,6 @@ export async function PATCH(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

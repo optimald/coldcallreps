@@ -32,6 +32,17 @@ export async function POST(req: Request) {
     const profile = await prisma.userProfile.findUnique({ where: { id: userId } });
     const orgId = profile?.orgId || null;
 
+    if (prospectId) {
+      const { resolveProspectAccess } = await import('@/lib/prospect-access');
+      if (!profile) {
+        return NextResponse.json({ error: 'Profile required' }, { status: 401 });
+      }
+      const access = await resolveProspectAccess(profile, String(prospectId));
+      if (!access) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const script = await buildTrainingScript({
       prospectId,
       focus,
@@ -43,6 +54,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(script);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

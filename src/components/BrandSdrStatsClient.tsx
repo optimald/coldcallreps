@@ -107,6 +107,48 @@ function DemoStatsBody({ brandKey }: { brandKey: string }) {
           </Link>
         }
       >
+        <ul className="sdr-stats__cards" aria-label="Per-SDR scorecards">
+          {s.perSdr.map((r, i) => (
+            <li key={r.userId} className="sdr-stats__card">
+              <div className="sdr-stats__card-top">
+                <span className="sdr-stats__rank" data-top={i < 3 ? String(i + 1) : undefined}>
+                  {i + 1}
+                </span>
+                <div className="sdr-stats__card-meta">
+                  <strong>
+                    {r.name}
+                    {r.verified ? (
+                      <span className="sdr-stats__verified" title="Verified">
+                        ✓
+                      </span>
+                    ) : null}
+                  </strong>
+                  <span className="muted small">
+                    {r.campaigns} campaign{r.campaigns === 1 ? '' : 's'}
+                    {r.statuses.includes('ACTIVE') ? ' · active' : ''}
+                  </span>
+                </div>
+              </div>
+              <div className="sdr-stats__card-stats">
+                <span>
+                  Dials <strong>{r.dials}</strong>
+                </span>
+                <span>
+                  Connect <strong>{pct(r.completed, r.dials)}</strong>
+                </span>
+                <span>
+                  Meetings <strong>{r.meetings}</strong>
+                </span>
+                <span>
+                  Payouts{' '}
+                  <strong>
+                    {r.payouts > 0 ? `${r.payouts} · ${formatPayout(r.payoutCents)}` : '—'}
+                  </strong>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
         <div className="sdr-stats__table-wrap">
           <table className="sdr-stats__table">
             <thead>

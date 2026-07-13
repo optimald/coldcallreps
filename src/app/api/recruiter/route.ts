@@ -87,7 +87,7 @@ export async function GET(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -153,6 +153,6 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

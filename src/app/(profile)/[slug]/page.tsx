@@ -40,6 +40,7 @@ export async function generateMetadata({
     return {
       title: `${name} — Cold Call Reps`,
       description: desc,
+      robots: { index: false, follow: false },
       openGraph: { title: `${name}${rep.verified ? ' ✓' : ''}`, description: desc, url: `/${slug}` },
     };
   }

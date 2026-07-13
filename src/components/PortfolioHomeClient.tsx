@@ -16,15 +16,8 @@ import {
   type BrandRef,
 } from '@/lib/brand-context';
 import type { BrandEconomics, DeskSignal, DeskTone } from '@/lib/desk-economics';
-import { formatDays, formatUsd, riskScore } from '@/lib/desk-economics';
-import {
-  CANONICAL_DEMO_BRANDS,
-  DEMO_APPLICATIONS,
-  DEMO_KPIS,
-  DEMO_TEAM,
-  getDemoEconomics,
-  getDemoStats,
-} from '@/lib/demo/brand-demo-data';
+import { formatDays, formatUsd } from '@/lib/desk-economics';
+import { buildDemoPortfolio } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { useShell } from '@/components/ShellProvider';
 import {
@@ -96,93 +89,6 @@ type PortfolioPayload = {
   };
 };
 
-/** Demo portfolio always shows the three canonical high-ticket brands. */
-function demoPortfolio(_owned: BrandRef[]): PortfolioPayload {
-  const stats = getDemoStats('demo-meridianops');
-  const brands: PortfolioBrand[] = CANONICAL_DEMO_BRANDS.map((b) => {
-    const economics = getDemoEconomics(b.slug);
-    return {
-      id: b.id,
-      slug: b.slug,
-      name: b.name,
-      logoUrl: b.logoUrl,
-      openCampaigns: economics.budget.status === 'uncapped' ? 1 : 2,
-      walletLabel: `$${Math.round(economics.budget.spentCents / 100 + (economics.budget.remainingCents || 0) / 100).toLocaleString()}`,
-      balanceCents:
-        (economics.budget.remainingCents || 0) + economics.budget.spentCents > 0
-          ? (economics.budget.remainingCents || 0) +
-            Math.round(economics.budget.spentCents * 0.3)
-          : 110000,
-      economics,
-      risk: riskScore(economics),
-    };
-  });
-
-  // Distinct wallet labels from fixture KPIs
-  brands[0].walletLabel = '$3,100';
-  brands[0].balanceCents = 310000;
-  brands[1].walletLabel = '$2,450';
-  brands[1].balanceCents = 245000;
-  brands[2].walletLabel = '$1,100';
-  brands[2].balanceCents = 110000;
-  brands[0].openCampaigns = 2;
-  brands[1].openCampaigns = 2;
-  brands[2].openCampaigns = 2;
-
-  brands.sort((a, b) => b.risk - a.risk);
-  const walletTotal = brands.reduce((s, b) => s + b.balanceCents, 0);
-  const goalsPerWeek = brands.reduce((s, b) => s + b.economics.goalsInPeriod, 0);
-  const spendPerWeek = brands.reduce((s, b) => s + b.economics.spendInPeriodCents, 0);
-
-  const exceptions = brands
-    .flatMap((b) =>
-      b.economics.signals
-        .filter((s) => s.tone === 'bad' || s.tone === 'warn')
-        .slice(0, 2)
-        .map((s) => ({
-          brandId: b.id,
-          brandKey: b.slug,
-          brandName: b.name,
-          logoUrl: b.logoUrl,
-          signal: s,
-        }))
-    )
-    .sort((a, b) => b.signal.priority - a.signal.priority)
-    .slice(0, 8);
-
-  return {
-    brandCount: brands.length,
-    kpis: {
-      openCampaigns: brands.reduce((s, b) => s + b.openCampaigns, 0),
-      pendingApplications: DEMO_KPIS.pendingApplications,
-      activeSdrs: DEMO_TEAM.length,
-      leads: DEMO_KPIS.leads,
-      callsToday: DEMO_KPIS.callsToday,
-      bookings: stats.bookings,
-      escrowLabel: `$${(walletTotal / 100).toFixed(0)}`,
-      goalsPerWeek,
-      costPerGoalLabel:
-        goalsPerWeek > 0 ? formatUsd(Math.round(spendPerWeek / goalsPerWeek)) : '—',
-      brandsAtRisk: brands.filter((b) => b.risk >= 50).length,
-    },
-    dialVolume: stats.days,
-    brands,
-    exceptions,
-    activity: {
-      applications: DEMO_APPLICATIONS.slice(0, 5).map((a, i) => ({
-        id: a.id,
-        status: a.status,
-        createdAt: a.createdAt,
-        repName: a.displayName,
-        campaignTitle: a.campaignTitle,
-        brandName: brands[i % brands.length]?.name || 'MeridianOps',
-        brandKey: brands[i % brands.length]?.slug || 'demo-meridianops',
-      })),
-      calls: [],
-    },
-  };
-}
-
 function toneClass(tone: DeskTone) {
   return `portfolio-action portfolio-action--${tone}`;
 }
@@ -204,14 +110,16 @@ export default function PortfolioHomeClient({
     () => initialBrands || shell?.brands || []
   );
   const [data, setData] = useState<PortfolioPayload | null>(() => {
+    if (initialPortfolio) return initialPortfolio;
     const desk = initialDeskMode || shell?.deskMode || 'live';
-    if (desk === 'demo') return demoPortfolio(initialBrands || shell?.brands || []);
-    return initialPortfolio || null;
+    if (desk === 'demo') return buildDemoPortfolio() as PortfolioPayload;
+    return null;
   });
   const [loading, setLoading] = useState(() => {
+    if (initialPortfolio) return false;
     const desk = initialDeskMode || shell?.deskMode || 'live';
     if (desk === 'demo') return false;
-    return !initialPortfolio;
+    return true;
   });
 
   useEffect(() => {
@@ -242,13 +150,19 @@ export default function PortfolioHomeClient({
   useEffect(() => {
     if (!hydrated) return;
     if (mode === 'demo') {
-      setData(demoPortfolio(owned));
+      // Keep SSR demo snapshot — re-rolling Date-based series causes hydration churn.
+      if (initialDeskMode === 'demo' && initialPortfolio) {
+        setData(initialPortfolio);
+        setLoading(false);
+        return;
+      }
+      setData(buildDemoPortfolio() as PortfolioPayload);
       setLoading(false);
       return;
     }
 
     let cancelled = false;
-    if (!initialPortfolio) setLoading(true);
+    if (!initialPortfolio || initialDeskMode === 'demo') setLoading(true);
     fetch('/api/brands/portfolio')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -264,7 +178,7 @@ export default function PortfolioHomeClient({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, mode, owned]);
+  }, [hydrated, mode]);
 
   const series = useMemo(() => {
     if (!data?.brands.length) return [];
@@ -523,26 +437,28 @@ export default function PortfolioHomeClient({
                 >
                   <div className="portfolio-home__table-brand">
                     <BrandLogo name={b.name} slug={b.slug} logoUrl={b.logoUrl} size="sm" />
-                    <strong>{b.name}</strong>
+                    <strong title={b.name}>{b.name}</strong>
                   </div>
-                  <span className="portfolio-home__table-metric">
-                    {e.goalsInPeriod} goals
-                  </span>
-                  <span className="portfolio-home__table-metric">
-                    Runway {formatDays(e.leadRunwayDays)}
-                  </span>
-                  <span className="portfolio-home__table-metric">
-                    {e.budget.status === 'uncapped'
-                      ? 'Uncapped'
-                      : e.budget.status === 'exhausted'
-                        ? 'Exhausted'
-                        : `${formatUsd(e.budget.remainingCents)} left`}
-                  </span>
                   <span
                     className={`portfolio-home__risk${b.risk >= 80 ? ' is-bad' : b.risk >= 50 ? ' is-warn' : ' is-ok'}`}
                   >
                     {b.risk >= 80 ? 'Risk' : b.risk >= 50 ? 'Watch' : 'OK'}
                   </span>
+                  <div className="portfolio-home__table-metrics">
+                    <span className="portfolio-home__table-metric">
+                      {e.goalsInPeriod} goals
+                    </span>
+                    <span className="portfolio-home__table-metric">
+                      Runway {formatDays(e.leadRunwayDays)}
+                    </span>
+                    <span className="portfolio-home__table-metric">
+                      {e.budget.status === 'uncapped'
+                        ? 'Uncapped'
+                        : e.budget.status === 'exhausted'
+                          ? 'Exhausted'
+                          : `${formatUsd(e.budget.remainingCents)} left`}
+                    </span>
+                  </div>
                 </Link>
               );
             })}

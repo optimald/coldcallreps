@@ -22,7 +22,7 @@ export function buildRecommendations(ctx: RecCtx): Recommendation[] {
   const campaign = ctx.payload.campaignTitle || 'the campaign';
   const practice = ctx.payload.practiceHref || '/practice';
   const brandHome = slug ? `/brands/${slug}` : '/dashboard';
-  const apps = slug ? `/brands/${slug}/sdrs/applications` : '/dashboard';
+  const apps = slug ? `/recruit?brand=${encodeURIComponent(slug)}` : '/recruit';
   const campaigns = slug ? `/brands/${slug}/campaigns` : '/dashboard';
   const calls = slug ? `/brands/${slug}/calls` : '/dashboard';
   const phones = slug ? `/brands/${slug}/settings` : '/billing';
@@ -106,7 +106,7 @@ export function buildRecommendations(ctx: RecCtx): Recommendation[] {
           {
             title: 'Add a featured call to your resume',
             detail: 'Brands listen to these before accepting.',
-            href: '/hiring',
+            href: '/resume',
           },
           {
             title: 'Re-apply when the gate clears',
@@ -332,7 +332,7 @@ export function buildRecommendations(ctx: RecCtx): Recommendation[] {
       if (ctx.audience === 'sdr') {
         auto = [
           { title: 'Practice with the AI trainer', href: '/practice' },
-          { title: 'Build resume featured calls', href: '/hiring' },
+          { title: 'Build resume featured calls', href: '/resume' },
           { title: 'Browse Brand deals', href: '/gigs' },
           { title: 'Connect Stripe for payouts', href: '/billing' },
         ];

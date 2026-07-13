@@ -21,6 +21,44 @@ export function campaignLeadWhere(extra: Record<string, unknown> = {}) {
   };
 }
 
+/** List/detail projection for mobile-friendly CRM payloads. */
+export const PROSPECT_LIST_SELECT = {
+  id: true,
+  brandId: true,
+  campaignId: true,
+  companyName: true,
+  industry: true,
+  city: true,
+  state: true,
+  phone: true,
+  website: true,
+  ownerName: true,
+  ownerTitle: true,
+  reviewRating: true,
+  reviewCount: true,
+  hooksJSON: true,
+  status: true,
+  enrichmentStatus: true,
+  scrapeStatus: true,
+  webScanStatus: true,
+  qualifyPhase1: true,
+  qualifyPhase2: true,
+  qualifyPhase3: true,
+  outreachReady: true,
+  bookingUrlFound: true,
+  source: true,
+  attemptCount: true,
+  nextCallAt: true,
+  lastDisposition: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export const PROSPECT_DIAL_SELECT = {
+  ...PROSPECT_LIST_SELECT,
+  notes: true,
+} as const;
+
 /** True if profile can manage this brand's lead list. */
 export async function canManageBrandLeads(
   profile: Pick<UserProfile, 'id' | 'platformRole' | 'email'>,

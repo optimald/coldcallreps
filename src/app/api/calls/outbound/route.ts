@@ -25,6 +25,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'toNumber is required' }, { status: 400 });
     }
 
+    if (!prospectId && !campaignId) {
+      return NextResponse.json(
+        { error: 'prospectId or campaignId is required' },
+        { status: 400 }
+      );
+    }
+
     const e164 = toE164(toNumber);
     if (e164.replace(/\D/g, '').length < 10) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });

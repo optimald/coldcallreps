@@ -77,9 +77,9 @@ function ctaFor(key: string): { href: string; label: string; primary: boolean } 
     case 'BRAND_FREE':
       return { href: '/sign-up?role=BRAND', label: 'Start free', primary: false };
     case 'BRAND_LEAD':
-      return { href: '/billing', label: 'Upgrade on billing', primary: true };
+      return { href: '/subscribe/brand', label: 'Upgrade lead plan', primary: true };
     case 'BRAND_PACKS':
-      return { href: '/billing', label: 'Buy packs', primary: false };
+      return { href: '/subscribe/brand', label: 'Buy packs', primary: false };
     default:
       return { href: '/sign-up', label: 'Get started', primary: false };
   }
@@ -213,9 +213,13 @@ export default function PricingPage() {
         Free includes {BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo. Brand Lead Plan $
         {BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo for{' '}
         {BRAND_LEAD_PLAN.LEAD_MONTHLY.allotment.toLocaleString()} · Annual $
-        {BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr. Manage usage, packs, cards, and escrow on{' '}
+        {BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr. Manage cards, charges, and escrow on{' '}
         <Link href="/billing" className="soft-link">
           billing
+        </Link>
+        ; pick a plan on{' '}
+        <Link href="/subscribe/brand" className="soft-link">
+          subscribe
         </Link>
         .
       </p>
@@ -234,8 +238,8 @@ export default function PricingPage() {
           For brands
         </Link>
         {' · '}
-        <Link href="/billing" className="soft-link">
-          Open billing dashboard
+        <Link href="/subscribe" className="soft-link">
+          Open subscribe
         </Link>
       </p>
     </main>

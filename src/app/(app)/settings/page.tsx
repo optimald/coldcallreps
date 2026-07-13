@@ -7,6 +7,7 @@ import { PLAN, REFERRAL_BONUS_MINUTES, REFERRAL_REWARD_LABEL } from '@/lib/produ
 import { PageHeader, Panel, SoftLink } from '@/components/ui/PagePrimitives';
 import { repPublicPath } from '@/lib/public-urls';
 import { useShell } from '@/components/ShellProvider';
+import NotificationPrefsPanel from '@/components/NotificationPrefsPanel';
 
 type ReferralState = {
   code?: string;
@@ -41,32 +42,6 @@ export default function SettingsPage() {
   const [loadError, setLoadError] = useState('');
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [applying, setApplying] = useState(false);
-
-  const [emailOn, setEmailOn] = useState(true);
-  const [emailBusy, setEmailBusy] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/notifications/prefs')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.prefs) setEmailOn(d.prefs.emailEnabled !== false);
-      })
-      .catch(() => {});
-  }, []);
-
-  async function saveEmailPrefs(next: boolean) {
-    setEmailBusy(true);
-    setEmailOn(next);
-    try {
-      await fetch('/api/notifications/prefs', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailEnabled: next }),
-      });
-    } finally {
-      setEmailBusy(false);
-    }
-  }
 
   const role = me.platformRole || shell?.role || 'REP';
   const isBrand = role === 'BRAND' || role === 'RECRUITER';
@@ -273,23 +248,24 @@ export default function SettingsPage() {
               Manage subscription
             </button>
           )}
-          <Link href="/billing" className="btn-ghost">
+          <Link href="/subscribe" className="btn-ghost">
             Compare plans
           </Link>
         </div>
       </Panel>
 
       {isRepFacing && (
-        <Panel title="Public profile" description="Resume, handle, and open-to-work status.">
+        <Panel title="Public profile" description="Handle on Profile; career copy and featured calls on Resume.">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-            <SoftLink href="/hiring">Edit resume →</SoftLink>
+            <SoftLink href="/hiring">Edit profile →</SoftLink>
+            <SoftLink href="/resume">Edit resume →</SoftLink>
             {me.profileSlug ? (
               <SoftLink href={repPublicPath(me.profileSlug)}>
                 View live page → /{me.profileSlug}
               </SoftLink>
             ) : (
               <p className="muted" style={{ margin: 0, fontSize: '0.9rem' }}>
-                Claim a handle on your resume to get a public URL.
+                Claim a handle on Profile to get a public URL.
               </p>
             )}
           </div>
@@ -463,20 +439,9 @@ export default function SettingsPage() {
 
       <Panel
         title="Email notifications"
-        description="Transactional emails for applications, campaigns, bookings, and payouts. Brand emails come from “Brand via ColdCallReps”."
+        description="Choose which transactional emails you want. In-app alerts may still appear for critical events."
       >
-        <label
-          className="muted"
-          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.9rem' }}
-        >
-          <input
-            type="checkbox"
-            checked={emailOn}
-            disabled={emailBusy}
-            onChange={(e) => void saveEmailPrefs(e.target.checked)}
-          />
-          Receive platform & brand emails
-        </label>
+        <NotificationPrefsPanel roleAudience={isBrand ? 'brand' : 'sdr'} />
       </Panel>
 
       {isRepFacing && (
@@ -488,20 +453,11 @@ export default function SettingsPage() {
         </Panel>
       )}
 
-      <Panel title="More">
-        <div className="stack" style={{ gap: '0.45rem' }}>
-          {isRepFacing && (
-            <>
-              <SoftLink href="/academy">Org academy →</SoftLink>
-              <SoftLink href="/playbooks">Playbooks →</SoftLink>
-            </>
-          )}
-          {isBrand && <SoftLink href="/leads">Leads →</SoftLink>}
-          {isBrand && <SoftLink href="/brands">My brands →</SoftLink>}
-          <SoftLink href="/developers">Developer API →</SoftLink>
-          {role === 'SUPERADMIN' && <SoftLink href="/admin">Superadmin command center →</SoftLink>}
-        </div>
-      </Panel>
+      {role === 'SUPERADMIN' ? (
+        <Panel title="Admin">
+          <SoftLink href="/admin">Superadmin command center →</SoftLink>
+        </Panel>
+      ) : null}
 
       <Panel title="Privacy">
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

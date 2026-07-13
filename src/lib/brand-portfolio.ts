@@ -6,6 +6,7 @@ import {
   buildBrandEconomics,
   formatUsd,
   riskScore,
+  weekdayLabelFromDayKey,
   type BrandEconomics,
 } from '@/lib/desk-economics';
 import { getOrCreateBrandWallet } from '@/lib/escrow';
@@ -242,9 +243,7 @@ export async function loadBrandPortfolio(profile: UserProfile) {
     },
     dialVolume: [...byDay.entries()].map(([key, count]) => ({
       key,
-      label: new Date(`${key}T12:00:00`).toLocaleDateString(undefined, {
-        weekday: 'short',
-      }),
+      label: weekdayLabelFromDayKey(key),
       count,
     })),
     brands: brandRows,

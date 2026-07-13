@@ -375,15 +375,37 @@ export async function POST(req: Request) {
     ) {
       const brandId = session.metadata.brandId;
       const amountCents = parseInt(session.metadata.amountCents || '0', 10) || 0;
+      const campaignId = String(session.metadata.campaignId || '').trim() || undefined;
       if (brandId && amountCents > 0) {
-        const { creditWallet } = await import('@/lib/escrow');
+        const { creditWallet, lockEscrowForCampaign } = await import('@/lib/escrow');
         await creditWallet({
           brandId,
           amountCents,
           type: 'FUND',
           stripeSessionId: session.id,
-          note: 'Stripe wallet fund',
+          campaignId,
+          note: campaignId ? 'Stripe campaign fund' : 'Stripe wallet fund',
         });
+        if (campaignId) {
+          try {
+            await lockEscrowForCampaign({ brandId, campaignId, amountCents });
+            const camp = await prisma.campaign.findUnique({
+              where: { id: campaignId },
+              select: { budgetCents: true, escrowLockedCents: true },
+            });
+            if (camp) {
+              const floor = Math.max(camp.budgetCents || 0, camp.escrowLockedCents || 0);
+              if (floor > (camp.budgetCents || 0)) {
+                await prisma.campaign.update({
+                  where: { id: campaignId },
+                  data: { budgetCents: floor },
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('[webhook] campaign escrow lock after fund failed', e);
+          }
+        }
         try {
           const { notifyAsync } = await import('@/lib/notifications');
           const { formatPayout } = await import('@/lib/campaigns');
@@ -404,7 +426,9 @@ export async function POST(req: Request) {
               brand,
               payload: {
                 amountLabel: formatPayout(amountCents),
-                ctaUrl: `/brands/${brand.slug}/campaigns`,
+                ctaUrl: campaignId
+                  ? `/brands/${brand.slug}/campaigns/${campaignId}`
+                  : `/brands/${brand.slug}/campaigns`,
                 forAudience: 'brand',
               },
               idempotencyKey: `wallet.funded:${session.id}`,

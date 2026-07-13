@@ -11,6 +11,21 @@ export function normalizeWebsiteUrl(input: string): string | null {
   try {
     const u = new URL(withScheme);
     if (!u.hostname || u.hostname === 'localhost') return null;
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    // Block obvious SSRF targets (metadata / private DNS names)
+    if (
+      host === 'metadata.google.internal' ||
+      host.endsWith('.local') ||
+      host === '0.0.0.0' ||
+      (/^\d+\.\d+\.\d+\.\d+$/.test(host) &&
+        (host.startsWith('10.') ||
+          host.startsWith('127.') ||
+          host.startsWith('169.254.') ||
+          host.startsWith('192.168.') ||
+          /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)))
+    ) {
+      return null;
+    }
     u.hash = '';
     return u.toString().replace(/\/$/, '') || null;
   } catch {

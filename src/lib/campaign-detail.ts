@@ -2,6 +2,7 @@ import type { UserProfile } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import { serializeCampaign } from '@/lib/campaigns';
+import { shouldAutoDeactivate } from '@/lib/campaign-schedule';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { matchProgressOf } from '@/lib/brand-lead-match';
 import { GOOGLE_CALENDAR_PROVIDER } from '@/lib/google-calendar';
@@ -74,6 +75,14 @@ export async function loadCampaignDetailBundle(
     },
   });
   if (!campaign) return null;
+
+  if (shouldAutoDeactivate(campaign.status, campaign)) {
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { status: 'PAUSED' },
+    });
+    campaign.status = 'PAUSED';
+  }
 
   const manage = canManageBrand(profile, campaign.brand.ownerId);
   const hasApplication = campaign.applications.length > 0;

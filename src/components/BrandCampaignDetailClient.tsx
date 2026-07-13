@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { brandHref } from '@/lib/brand-context';
 import { matchProgressOf } from '@/lib/brand-lead-match';
+import { scheduleStatusHint } from '@/lib/campaign-schedule';
 import {
   DEMO_MSG,
   getDemoApplications,
@@ -14,7 +15,78 @@ import {
 } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { EmptyState, PageHeader, Panel } from '@/components/ui/PagePrimitives';
+import Modal from '@/components/ui/Modal';
+import Toggle from '@/components/ui/Toggle';
 import type { CampaignDetailBundle } from '@/lib/campaign-detail';
+
+const FUND_PRESETS = [100, 250, 500, 1000, 2500];
+
+type LedgerEntry = {
+  id: string;
+  type: string;
+  amountCents: number;
+  createdAt: string;
+  description: string;
+  direction: 'credit' | 'debit' | 'neutral';
+};
+
+function money(cents: number) {
+  const abs = Math.abs(cents) / 100;
+  const formatted = abs.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: abs % 1 === 0 ? 0 : 2,
+  });
+  if (cents < 0) return `−${formatted}`;
+  if (cents > 0) return `+${formatted}`;
+  return formatted;
+}
+
+function demoLedgerForCampaign(c: {
+  id: string;
+  escrowLabel?: string | null;
+  remainingOverallCents?: number | null;
+  budgetCents?: number | null;
+}): LedgerEntry[] {
+  const escrow =
+    typeof c.escrowLabel === 'string'
+      ? Math.round(Number(String(c.escrowLabel).replace(/[^0-9.]/g, '')) * 100) || 0
+      : 0;
+  const budget = c.budgetCents ?? 0;
+  const remaining = c.remainingOverallCents ?? budget;
+  const spent = Math.max(0, budget - remaining);
+  const rows: LedgerEntry[] = [];
+  if (escrow > 0 || budget > 0) {
+    const funded = Math.max(escrow, budget);
+    rows.push({
+      id: `demo-fund-${c.id}`,
+      type: 'FUND',
+      amountCents: funded,
+      createdAt: new Date(Date.now() - 12 * 86400_000).toISOString(),
+      description: `Credited $${(funded / 100).toLocaleString()} on campaign to fund the campaign`,
+      direction: 'credit',
+    });
+    rows.push({
+      id: `demo-lock-${c.id}`,
+      type: 'ESCROW_LOCK',
+      amountCents: -funded,
+      createdAt: new Date(Date.now() - 12 * 86400_000 + 60_000).toISOString(),
+      description: `Debited $${(funded / 100).toLocaleString()} — locked to campaign`,
+      direction: 'debit',
+    });
+  }
+  if (spent > 0) {
+    rows.push({
+      id: `demo-release-${c.id}`,
+      type: 'ESCROW_RELEASE',
+      amountCents: -spent,
+      createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
+      description: `Goal met — $${(spent / 100).toLocaleString()} debit on campaign`,
+      direction: 'debit',
+    });
+  }
+  return rows;
+}
 
 function defaultStartLocal(): string {
   const d = new Date();
@@ -111,6 +183,13 @@ export default function BrandCampaignDetailClient({
   const [ongoing, setOngoing] = useState(seeded?.ongoing ?? true);
   const [activateOn, setActivateOn] = useState(seeded?.activateOn ?? false);
   const [configBusy, setConfigBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
+  const [walletBalanceCents, setWalletBalanceCents] = useState(0);
+  const [fundBusy, setFundBusy] = useState(false);
+  const [customFund, setCustomFund] = useState('250');
+  const [allocateDollars, setAllocateDollars] = useState('100');
+  const searchParams = useSearchParams();
   const [progress, setProgress] = useState(
     seeded?.progress ?? {
       targeting: 0,
@@ -168,6 +247,8 @@ export default function BrandCampaignDetailClient({
     setStartsAt(demo.startsAt ? demo.startsAt.slice(0, 10) : '');
     setEndsAt(demo.endsAt ? demo.endsAt.slice(0, 10) : '');
     setOngoing(!demo.endsAt);
+    setLedger(demoLedgerForCampaign(demo));
+    setWalletBalanceCents(245000);
     const p = demo.progress;
     setProgress({
       targeting: p?.targeting ?? 0,
@@ -223,6 +304,30 @@ export default function BrandCampaignDetailClient({
     setBookings(d.bookings || []);
   }
 
+  const loadLedger = useCallback(async (brandId: string, campaignId: string) => {
+    if (!brandId || !campaignId || isDemoEntityId(campaignId)) return;
+    const [ledgerRes, walletRes] = await Promise.all([
+      fetch(
+        `/api/billing/ledger?brandId=${encodeURIComponent(brandId)}&campaignId=${encodeURIComponent(campaignId)}`
+      ),
+      fetch(`/api/brands/${encodeURIComponent(brandId)}/wallet`),
+    ]);
+    if (ledgerRes.ok) {
+      const data = await ledgerRes.json();
+      setLedger(data.entries || []);
+    }
+    if (walletRes.ok) {
+      const data = await walletRes.json();
+      if (typeof data.balanceCents === 'number') setWalletBalanceCents(data.balanceCents);
+    }
+  }, []);
+
+  useEffect(() => {
+    const funded = searchParams.get('wallet');
+    if (funded === 'funded') setMsg('Wallet funded — escrow updated for this campaign.');
+    if (funded === 'cancel') setErr('Checkout canceled.');
+  }, [searchParams]);
+
   useEffect(() => {
     if (!id) return;
 
@@ -239,6 +344,12 @@ export default function BrandCampaignDetailClient({
       // Already SSR-seeded for live
       if (initialBundle && campaign) {
         setLoading(false);
+        if (initialBundle.canManage && initialBundle.campaign) {
+          const brandId =
+            (initialBundle.campaign as { brandId?: string; brand?: { id?: string } }).brandId ||
+            (initialBundle.campaign as { brand?: { id?: string } }).brand?.id;
+          if (brandId) void loadLedger(brandId, id);
+        }
         return;
       }
       setLoading(true);
@@ -280,6 +391,8 @@ export default function BrandCampaignDetailClient({
             const apps = await appsRes.json();
             if (!cancelled) setApplications(apps.applications || []);
           }
+          const brandIdForLedger = d.campaign?.brandId || d.campaign?.brand?.id;
+          if (brandIdForLedger && !cancelled) await loadLedger(brandIdForLedger, id);
         }
         // Progress from campaign leads + pipeline jobs
         const brandId = d.campaign?.brandId || d.campaign?.brand?.id;
@@ -325,8 +438,8 @@ export default function BrandCampaignDetailClient({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per id/mode
+  }, [id, mode, loadLedger]);
 
   useEffect(() => {
     setBookEnd(defaultEndLocal(bookStart));
@@ -369,25 +482,13 @@ export default function BrandCampaignDetailClient({
     }
   }
 
-  async function saveStatus() {
+  async function saveConfig() {
     if (isDemo || isDemoEntityId(id)) {
       setMsg(DEMO_MSG);
       return;
     }
-    const res = await fetch(`/api/campaigns/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setMsg(res.ok ? 'Status updated.' : '');
-    setErr(res.ok ? '' : data.error || 'Update failed');
-    if (res.ok) setCampaign(data.campaign);
-  }
-
-  async function saveConfig() {
-    if (isDemo || isDemoEntityId(id)) {
-      setMsg(DEMO_MSG);
+    if (campaign?.status === 'OPEN') {
+      setErr('Deactivate the campaign before editing.');
       return;
     }
     setConfigBusy(true);
@@ -409,7 +510,6 @@ export default function BrandCampaignDetailClient({
               : null,
           startsAt: startsAt ? new Date(`${startsAt}T00:00:00`).toISOString() : null,
           endsAt: ongoing || !endsAt ? null : new Date(`${endsAt}T23:59:59`).toISOString(),
-          activateOn: campaign?.status === 'CLOSED' ? undefined : activateOn,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -417,11 +517,114 @@ export default function BrandCampaignDetailClient({
       setCampaign(data.campaign);
       setStatus(data.campaign?.status || status);
       setActivateOn(Boolean(data.campaign?.activateOn));
-      setMsg('Config saved. Pause / budget changes never hang up live calls.');
+      setEditOpen(false);
+      setMsg('Config saved. Activate when ready — dials follow the start/end dates.');
     } catch (e: any) {
       setErr(e.message || 'Could not save config');
     } finally {
       setConfigBusy(false);
+    }
+  }
+
+  async function setActive(next: boolean) {
+    if (isDemo || isDemoEntityId(id)) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    if (campaign?.status === 'CLOSED') return;
+    setConfigBusy(true);
+    setMsg('');
+    setErr('');
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activateOn: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not update status');
+      setCampaign(data.campaign);
+      setStatus(data.campaign?.status || status);
+      setActivateOn(Boolean(data.campaign?.activateOn));
+      setMsg(
+        next
+          ? 'Campaign armed. Dials unlock on the start date and stop on the end date.'
+          : 'Deactivated. Live calls finish; you can edit config now.'
+      );
+    } catch (e: any) {
+      setErr(e.message || 'Could not update status');
+    } finally {
+      setConfigBusy(false);
+    }
+  }
+
+  async function fundCampaign(dollars: number) {
+    if (isDemo || isDemoEntityId(id)) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    const brandId = campaign?.brandId || campaign?.brand?.id || brandKey;
+    const amountCents = Math.round(dollars * 100);
+    if (amountCents < 5000) {
+      setErr('Minimum fund is $50');
+      return;
+    }
+    setFundBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      const res = await fetch(`/api/brands/${brandId}/wallet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amountCents,
+          returnTo: 'campaign',
+          campaignId: id,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Checkout failed');
+      if (json.url) {
+        window.location.href = json.url;
+        return;
+      }
+      throw new Error('No checkout URL');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Fund failed');
+    } finally {
+      setFundBusy(false);
+    }
+  }
+
+  async function allocateFromWallet() {
+    if (isDemo || isDemoEntityId(id)) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    const amountCents = Math.round(Number(allocateDollars) * 100);
+    if (amountCents < 1000) {
+      setErr('Minimum allocate is $10');
+      return;
+    }
+    setFundBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      const res = await fetch(`/api/campaigns/${id}/escrow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountCents }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Allocate failed');
+      setCampaign(data.campaign);
+      setMsg(data.notice || 'Escrow updated.');
+      const brandId = campaign?.brandId || campaign?.brand?.id;
+      if (brandId) await loadLedger(brandId, id);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Allocate failed');
+    } finally {
+      setFundBusy(false);
     }
   }
 
@@ -542,6 +745,9 @@ export default function BrandCampaignDetailClient({
         }
       />
 
+      {msg ? <p className="msg-ok">{msg}</p> : null}
+      {err ? <p className="msg-err">{err}</p> : null}
+
       <Panel>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{campaign.description}</p>
         {campaign.icpText && (
@@ -564,29 +770,218 @@ export default function BrandCampaignDetailClient({
       {canManage && (
         <>
           <Panel
-            title="Campaign config"
-            description="Schedule, budget, and targeting. Pausing or lowering budget never hangs up mid-call dials — only new dials and awards are gated."
-          >
-            <div className="stack" style={{ gap: '0.75rem', maxWidth: 560 }}>
-              {campaign.status !== 'CLOSED' ? (
-                <label
-                  className="muted"
-                  style={{
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
+            title="Campaign"
+            description="Deactivate to edit schedule or targeting. Start/end dates control when dials unlock; end date auto-deactivates."
+            actions={
+              <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={campaign.status === 'OPEN' || campaign.status === 'CLOSED'}
+                  title={
+                    campaign.status === 'OPEN'
+                      ? 'Deactivate first to edit'
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (campaign.status === 'OPEN') {
+                      setErr('Deactivate the campaign before editing.');
+                      return;
+                    }
+                    setEditOpen(true);
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={activateOn}
-                    onChange={(e) => setActivateOn(e.target.checked)}
-                  />
-                  Activate (OPEN) — SDRs can start new dials when eligible
-                </label>
-              ) : null}
+                  Edit
+                </button>
+                <Link href={brandHref(campaign.brand || brandKey, 'pipeline')} className="btn-ghost">
+                  Pipeline
+                </Link>
+              </div>
+            }
+          >
+            {campaign.status !== 'CLOSED' ? (
+              <Toggle
+                checked={activateOn}
+                disabled={configBusy || isDemo}
+                onChange={(next) => void setActive(next)}
+                label={activateOn ? 'Active' : 'Deactivated'}
+                description={
+                  scheduleStatusHint(
+                    { startsAt: campaign.startsAt, endsAt: campaign.endsAt },
+                    campaign.status
+                  ) ||
+                  (activateOn
+                    ? 'SDRs can dial when the schedule window is open. Live calls always finish.'
+                    : 'New dials blocked. Edit schedule, targeting, or spend cap while deactivated.')
+                }
+              />
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                This campaign is closed.
+              </p>
+            )}
+
+            <dl className="brand-campaign__meta" style={{ marginTop: '1rem' }}>
+              <div>
+                <dt>Payout / set</dt>
+                <dd>{campaign.payoutLabel}</dd>
+              </div>
+              <div>
+                <dt>Schedule</dt>
+                <dd>{campaign.dateRangeLabel || '—'}</dd>
+              </div>
+              <div>
+                <dt>Escrow locked</dt>
+                <dd>
+                  {isDemo
+                    ? campaign.escrowLabel || '—'
+                    : campaign.escrowLockedCents != null
+                      ? `$${((campaign.escrowLockedCents || 0) / 100).toLocaleString()}`
+                      : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Spend remaining</dt>
+                <dd>
+                  {campaign.remainingOverallCents != null
+                    ? `$${(campaign.remainingOverallCents / 100).toLocaleString()}`
+                    : campaign.budgetLabel || '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>
+                  {[campaign.targetVertical, campaign.targetLocation]
+                    .filter(Boolean)
+                    .join(' · ') || '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Dial eligible</dt>
+                <dd>{campaign.dialEligible ? 'Yes' : campaign.dialEligibleReason || 'No'}</dd>
+              </div>
+            </dl>
+          </Panel>
+
+          <Panel
+            title="Campaign funding"
+            description="Credits fund this campaign escrow. Debits are locks and verified goal payouts."
+          >
+            <p className="muted" style={{ margin: '0 0 0.75rem', fontSize: '0.85rem' }}>
+              Brand wallet available:{' '}
+              <strong>${(walletBalanceCents / 100).toLocaleString()}</strong>
+              {isDemo ? ' (demo)' : ''}
+            </p>
+            <div className="billing-fund-presets">
+              {FUND_PRESETS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className="btn"
+                  disabled={fundBusy || isDemo}
+                  onClick={() => void fundCampaign(d)}
+                >
+                  ${d.toLocaleString()}
+                </button>
+              ))}
+            </div>
+            <div className="billing-fund-custom" style={{ marginTop: '0.65rem' }}>
+              <input
+                className="field"
+                type="number"
+                min={50}
+                max={5000}
+                step={50}
+                value={customFund}
+                onChange={(e) => setCustomFund(e.target.value)}
+                aria-label="Custom fund amount USD"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={fundBusy || isDemo}
+                onClick={() => void fundCampaign(Number(customFund) || 0)}
+              >
+                {fundBusy ? 'Opening Stripe…' : 'Fund via Stripe'}
+              </button>
+            </div>
+            <div className="billing-fund-custom" style={{ marginTop: '0.65rem' }}>
+              <input
+                className="field"
+                type="number"
+                min={10}
+                step={10}
+                value={allocateDollars}
+                onChange={(e) => setAllocateDollars(e.target.value)}
+                aria-label="Allocate from wallet USD"
+              />
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={fundBusy || isDemo || walletBalanceCents < 1000}
+                onClick={() => void allocateFromWallet()}
+              >
+                Lock from wallet
+              </button>
+            </div>
+
+            {ledger.length === 0 ? (
+              <EmptyState
+                title="No ledger activity"
+                description="Fund this campaign to see credits and debits here."
+              />
+            ) : (
+              <div className="billing-ledger-wrap" style={{ marginTop: '1rem' }}>
+                <table className="billing-ledger">
+                  <thead>
+                    <tr>
+                      <th scope="col">When</th>
+                      <th scope="col">Entry</th>
+                      <th scope="col">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.map((row) => (
+                      <tr key={row.id}>
+                        <td className="muted" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                          {new Date(row.createdAt).toLocaleString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td>{row.description}</td>
+                        <td
+                          style={{
+                            color:
+                              row.direction === 'debit'
+                                ? 'var(--bad)'
+                                : row.direction === 'credit'
+                                  ? 'var(--good)'
+                                  : undefined,
+                            fontWeight: 650,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {money(row.amountCents)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          <Modal
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            title="Edit campaign"
+            description="Schedule and targeting. Start/end dates auto-control dials once you activate."
+            wide
+          >
+            <div className="stack" style={{ gap: '0.85rem' }}>
               <div className="search-row" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
                 <label className="muted" style={{ fontSize: '0.85rem', flex: 1, minWidth: 140 }}>
                   Start date
@@ -612,30 +1007,20 @@ export default function BrandCampaignDetailClient({
                     style={{ display: 'block', width: '100%', marginTop: 4 }}
                   />
                 </label>
-                <label
-                  className="muted"
-                  style={{
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    gap: '0.4rem',
-                    paddingBottom: '0.45rem',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={ongoing}
-                    onChange={(e) => {
-                      setOngoing(e.target.checked);
-                      if (e.target.checked) setEndsAt('');
-                    }}
-                  />
-                  Ongoing
-                </label>
               </div>
+              <Toggle
+                checked={ongoing}
+                onChange={(on) => {
+                  setOngoing(on);
+                  if (on) setEndsAt('');
+                }}
+                label="Ongoing"
+                description="No end date — stays active until you deactivate."
+                compact
+              />
               <div className="search-row" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
                 <label className="muted" style={{ fontSize: '0.85rem', flex: 1, minWidth: 140 }}>
-                  Budget mode
+                  Spend cap mode
                   <select
                     className="field"
                     value={budgetMode}
@@ -701,51 +1086,21 @@ export default function BrandCampaignDetailClient({
                   style={{ display: 'block', width: '100%', marginTop: 4 }}
                 />
               </label>
-              <dl className="brand-campaign__meta">
-                <div>
-                  <dt>Payout / set</dt>
-                  <dd>{campaign.payoutLabel}</dd>
-                </div>
-                <div>
-                  <dt>Schedule</dt>
-                  <dd>{campaign.dateRangeLabel || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Budget</dt>
-                  <dd>{campaign.budgetLabel || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Escrow</dt>
-                  <dd>
-                    {isDemo
-                      ? campaign.escrowLabel || '—'
-                      : campaign.escrowLockedCents != null
-                        ? `$${((campaign.escrowLockedCents || 0) / 100).toFixed(0)} locked`
-                        : '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Goal cap</dt>
-                  <dd>{campaign.maxAwards != null ? `${campaign.maxAwards} awards` : 'Unlimited'}</dd>
-                </div>
-                <div>
-                  <dt>Dial eligible</dt>
-                  <dd>{campaign.dialEligible ? 'Yes' : campaign.dialEligibleReason || 'No'}</dd>
-                </div>
-              </dl>
-              <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
-                <button type="button" className="btn" disabled={configBusy} onClick={() => void saveConfig()}>
-                  {configBusy ? 'Saving…' : 'Save config'}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-ghost" onClick={() => setEditOpen(false)}>
+                  Cancel
                 </button>
-                <Link href={brandHref(campaign.brand || brandKey, 'pipeline')} className="btn btn-ghost">
-                  Open pipeline
-                </Link>
-                <Link href="/billing" className="btn btn-ghost">
-                  Wallet / billing
-                </Link>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={configBusy}
+                  onClick={() => void saveConfig()}
+                >
+                  {configBusy ? 'Saving…' : 'Save changes'}
+                </button>
               </div>
             </div>
-          </Panel>
+          </Modal>
 
           <Panel
             title="Progress snapshot"
@@ -859,20 +1214,6 @@ export default function BrandCampaignDetailClient({
 
       {canManage && (
         <>
-          <Panel title="Status" description="OPEN = activated for new dials. Pausing does not hang up live calls.">
-            <div className="search-row" style={{ flexWrap: 'wrap' }}>
-              <select className="field" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="DRAFT">Draft</option>
-                <option value="OPEN">Open (activated)</option>
-                <option value="PAUSED">Paused</option>
-                <option value="CLOSED">Closed</option>
-              </select>
-              <button type="button" className="btn" onClick={saveStatus}>
-                Save status
-              </button>
-            </div>
-          </Panel>
-
           <Panel
             title="Applicants"
             description="Accept → Active to start work. When the outcome is delivered, pay the SDR (~20% platform fee). SDRs must finish payout setup under Billing."
@@ -1078,9 +1419,6 @@ export default function BrandCampaignDetailClient({
           )}
         </Panel>
       )}
-
-      {msg && <p className="msg-ok">{msg}</p>}
-      {err && <p style={{ color: 'crimson' }}>{err}</p>}
 
       {!canManage && myAppStatus && ['ACCEPTED', 'ACTIVE', 'COMPLETED'].includes(myAppStatus) && (
         <Panel

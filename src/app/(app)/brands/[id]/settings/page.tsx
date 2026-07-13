@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import BrandLogo from '@/components/BrandLogo';
 import BrandPhonePoolPanel from '@/components/BrandPhonePoolPanel';
 import { EmptyState } from '@/components/ui/PagePrimitives';
+import { brandHref } from '@/lib/brand-context';
 
 export default function BrandDetailPage() {
   const params = useParams();
@@ -151,7 +152,7 @@ export default function BrandDetailPage() {
     const data = await res.json();
     if (res.ok && data.playbook?.id) {
       setPlaybookTitle('');
-      window.location.href = `/playbooks/${data.playbook.id}`;
+      window.location.href = brandHref(id, 'playbooks', data.playbook.id);
       return;
     }
     setMsg(data.error || 'Could not create playbook');
@@ -361,7 +362,7 @@ export default function BrandDetailPage() {
                     <li key={pb.id}>
                       <span>{pb.title}</span>
                       <span className="brand-list__links">
-                        <Link href={`/playbooks/${pb.id}`}>Edit</Link>
+                        <Link href={brandHref(id, 'playbooks', pb.id)}>Edit</Link>
                         <Link href={`/practice?${qs.toString()}`}>Practice →</Link>
                       </span>
                     </li>

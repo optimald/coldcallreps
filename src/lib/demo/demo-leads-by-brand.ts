@@ -219,7 +219,7 @@ function buildPoolLeads(
       qualifyPhase2: ready || i % 2 === 0,
       qualifyPhase3: ready,
       outreachReady: ready,
-      source: 'maps',
+      source: i % 11 === 0 ? 'manual' : i % 7 === 0 ? 'import' : 'maps',
       hooksJSON: demoHooks(hooks, intel),
       status: ready ? (i % 7 === 0 ? 'dialing' : 'new') : 'warming',
       notes: `Demo · ${pool.industry}`,

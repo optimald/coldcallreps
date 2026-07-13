@@ -17,6 +17,7 @@ import {
   SdrVitalsStrip,
 } from '@/components/SdrVitalsDesk';
 import { loadSdrVitals } from '@/lib/sdr-vitals';
+import { buildDemoPortfolio } from '@/lib/demo/brand-demo-data';
 import { effectiveRole, ROLE_LABELS } from '@/lib/roles';
 import {
   EmptyState,
@@ -53,7 +54,7 @@ export default async function DashboardPage() {
       }),
       initialDeskMode === 'live'
         ? loadBrandPortfolio(profile)
-        : Promise.resolve(null),
+        : Promise.resolve(buildDemoPortfolio()),
     ]);
     return (
       <>
@@ -297,7 +298,7 @@ export default async function DashboardPage() {
               </SoftLink>
               <SoftLink href="/academy">Academy curricula</SoftLink>
               <SoftLink href="/campaigns">Team campaigns</SoftLink>
-              <SoftLink href="/playbooks">Playbooks</SoftLink>
+              <SoftLink href="/practice">Playbooks</SoftLink>
             </div>
           </Panel>
         )}

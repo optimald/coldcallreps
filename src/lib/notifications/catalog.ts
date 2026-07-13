@@ -191,4 +191,11 @@ export const NOTIFICATION_CATALOG: Record<NotificationEventKey, CatalogEntry> = 
     mirrorInApp: true,
     description: 'Stripe Connect payouts enabled',
   },
+  'talent.interested': {
+    eventKey: 'talent.interested',
+    context: 'brand',
+    audience: 'sdr',
+    mirrorInApp: true,
+    description: 'A brand shortlisted you from Recruit',
+  },
 };

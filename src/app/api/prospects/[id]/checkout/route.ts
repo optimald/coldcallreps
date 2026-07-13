@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { checkoutLead, releaseCheckout } from '@/lib/lead-queue';
+import { resolveProspectAccess } from '@/lib/prospect-access';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -9,6 +10,10 @@ export async function POST(_req: Request, ctx: Ctx) {
   try {
     const profile = await requireUser();
     const { id } = await ctx.params;
+    const access = await resolveProspectAccess(profile, id);
+    if (!access) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const result = await checkoutLead(id, profile.id);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
@@ -22,10 +27,7 @@ export async function POST(_req: Request, ctx: Ctx) {
     if (e instanceof Error && e.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Checkout failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -40,9 +42,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     if (e instanceof Error && e.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Release failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

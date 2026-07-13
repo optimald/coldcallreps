@@ -52,7 +52,7 @@ export const PLAN = {
       `${TRIAL_MINUTES} practice minutes to start`,
       'All practice scenarios + scorecards',
       'Brand deals free for reps',
-      'Train → prove → apply → Stripe Connect → get paid',
+      'Train → prove → apply → get paid on approved brand deals',
       'Global leaderboard',
       'Public profile when you’re ready',
     ],
@@ -60,13 +60,15 @@ export const PLAN = {
   STARTER: {
     key: 'STARTER' as const,
     price: 7,
+    /** Yearly total when billed annually (~20% off). */
+    annualPriceUsd: 67,
     label: 'Starter',
     audience: 'SDRs & reps',
     minutes: Number(process.env.STARTER_MONTHLY_MINUTES || 100),
     features: [
       'Daily practice + live coach',
       'Brand deals free for reps',
-      'Stripe Connect payouts on approved results',
+      'Get paid on approved brand-deal results',
       'Global leaderboard + public profile',
       'Scorecards (recording storage on Pro/Org)',
     ],
@@ -74,6 +76,8 @@ export const PLAN = {
   PRO: {
     key: 'PRO' as const,
     price: 29,
+    /** Yearly total when billed annually (~20% off). */
+    annualPriceUsd: 278,
     label: 'Pro',
     audience: 'SDRs & reps',
     minutes: Number(process.env.PRO_MONTHLY_MINUTES || 600),
@@ -83,7 +87,7 @@ export const PLAN = {
       'Priority coach model',
       'Verified badge path (faster)',
       'Brand deals free for reps',
-      'Stripe Connect payouts on approved results',
+      'Get paid on approved brand-deal results',
       'Top-10 weekly digest highlight eligibility',
       'Public profile + shareable highlights',
     ],
@@ -166,6 +170,7 @@ export function priceIdForPack(key: MinutePackKey): string | undefined {
 /**
  * Brand lead credits (Maps scrape + enhanced enrichment).
  * Ratified Option B — July 2026. Imports / manual adds do not consume credits.
+ * Credits = enriched, dial-ready leads (phone + intel) — that is what brands buy.
  */
 export type BrandLeadPlanKey = 'FREE' | 'LEAD_MONTHLY' | 'LEAD_ANNUAL';
 
@@ -179,41 +184,44 @@ export const BRAND_LEAD_PLAN = {
     priceUsd: 0,
     allotment: BRAND_LEAD_FREE_MONTHLY,
     interval: 'month' as const,
+    tagline: 'Try enrichment on a small batch',
     features: [
-      `${BRAND_LEAD_FREE_MONTHLY} enriched leads / mo`,
-      'Generate Leads (Maps scrape + enrichment)',
-      'Unlimited CSV / manual import',
-      'Quick Intel table + campaign escrow',
+      `${BRAND_LEAD_FREE_MONTHLY} enrichment credits / mo`,
+      'Maps scrape → phone + business intel enrichment',
+      'Dial-ready leads for your SDR campaigns',
+      'Unlimited CSV / manual import (no credits)',
     ],
   },
   LEAD_MONTHLY: {
     key: 'LEAD_MONTHLY' as const,
-    label: 'Brand Lead Plan',
+    label: 'Enrichment Plan',
     priceUsd: 149,
     allotment: BRAND_LEAD_PLAN_ALLOTMENT,
     interval: 'month' as const,
     priceEnv: 'STRIPE_BRAND_LEAD_MONTHLY_PRICE_ID',
+    tagline: 'Scale enriched, dial-ready leads every month',
     features: [
-      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enriched leads / mo`,
-      'Priority scrape queue',
-      'Unlimited CSV / manual import',
-      'Campaign escrow + SDR payouts',
+      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enrichment credits / mo`,
+      'Full enrichment stack: phones, site intel, outreach signals',
+      'Priority Generate Leads queue',
+      'Feed campaign escrow with leads SDRs can actually dial',
     ],
   },
   LEAD_ANNUAL: {
     key: 'LEAD_ANNUAL' as const,
-    label: 'Brand Lead Plan (Annual)',
+    label: 'Enrichment Plan',
     priceUsd: 1190,
     /** Effective ~$99/mo (20% off). */
     monthlyEquivalentUsd: 99,
     allotment: BRAND_LEAD_PLAN_ALLOTMENT,
     interval: 'year' as const,
     priceEnv: 'STRIPE_BRAND_LEAD_ANNUAL_PRICE_ID',
+    tagline: 'Same enrichment volume — billed yearly',
     features: [
-      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enriched leads / mo`,
-      '20% off vs monthly ($1,190/yr)',
-      'Unlimited CSV / manual import',
-      'Campaign escrow + SDR payouts',
+      `${BRAND_LEAD_PLAN_ALLOTMENT.toLocaleString()} enrichment credits / mo`,
+      'Full enrichment stack: phones, site intel, outreach signals',
+      'Priority Generate Leads queue · 20% off vs monthly',
+      'Feed campaign escrow with leads SDRs can actually dial',
     ],
   },
 } as const;
@@ -224,21 +232,24 @@ export const LEAD_PACKS = [
     credits: 250,
     priceUsd: 79,
     priceEnv: 'STRIPE_LEAD_PACK_250_PRICE_ID',
-    label: '250 leads',
+    label: '250 enrichments',
+    blurb: 'Top up when allotment runs out',
   },
   {
     key: 'lead_pack_1000' as const,
     credits: 1000,
     priceUsd: 249,
     priceEnv: 'STRIPE_LEAD_PACK_1000_PRICE_ID',
-    label: '1,000 leads',
+    label: '1,000 enrichments',
+    blurb: 'Best for a big Generate Leads run',
   },
   {
     key: 'lead_pack_5000' as const,
     credits: 5000,
     priceUsd: 799,
     priceEnv: 'STRIPE_LEAD_PACK_5000_PRICE_ID',
-    label: '5,000 leads',
+    label: '5,000 enrichments',
+    blurb: 'High-volume enrichment burst',
   },
 ] as const;
 
@@ -266,7 +277,22 @@ export function brandLeadPlanFromPriceId(
   return null;
 }
 
-export function priceIdForTier(tier: PaidPlanKey | PlanKey): string | undefined {
+export function priceIdForTier(
+  tier: PaidPlanKey | PlanKey,
+  interval: 'month' | 'year' = 'month'
+): string | undefined {
+  if (interval === 'year') {
+    switch (tier) {
+      case 'STARTER':
+        return process.env.STRIPE_STARTER_ANNUAL_PRICE_ID || process.env.STRIPE_STARTER_PRICE_ID;
+      case 'PRO':
+        return process.env.STRIPE_PRO_ANNUAL_PRICE_ID || process.env.STRIPE_PRO_PRICE_ID;
+      case 'TEAM':
+        return process.env.STRIPE_TEAM_ANNUAL_PRICE_ID || process.env.STRIPE_TEAM_PRICE_ID;
+      default:
+        break;
+    }
+  }
   switch (tier) {
     case 'FREE':
       return undefined;

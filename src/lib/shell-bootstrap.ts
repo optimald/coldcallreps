@@ -6,10 +6,12 @@ import { ensureRepProfile } from '@/lib/profile-slug';
 import {
   NAV_SECTIONS_BY_ROLE,
   brandNavSections,
+  repNavSections,
   effectiveRole,
   type AppRole,
   type NavSection,
 } from '@/lib/roles';
+import { loadBrandNavCounts, loadRepNavCounts } from '@/lib/nav-counts';
 import { buildRoleModeState, type RoleModeState } from '@/lib/role-mode';
 import {
   SELECTED_BRAND_COOKIE,
@@ -19,6 +21,8 @@ import {
   type BrandDeskMode,
   type BrandRef,
 } from '@/lib/brand-context';
+import { canonicalDemoBrandBySlug, CANONICAL_DEMO_BRANDS } from '@/lib/demo/canonical-brands';
+import { getDemoBrandNavCounts } from '@/lib/demo/brand-demo-data';
 
 export type ShellMetrics = {
   minutesRemaining: number | null;
@@ -104,40 +108,48 @@ export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
         name: b.name,
         logoUrl: b.logoUrl,
       }));
-      selectedBrand = resolveSelectedBrand(brands, pathBrand || brandCookie);
+      if (deskMode === 'demo') {
+        const demo =
+          canonicalDemoBrandBySlug(pathBrand) ||
+          canonicalDemoBrandBySlug(brandCookie) ||
+          CANONICAL_DEMO_BRANDS[0];
+        selectedBrand = {
+          id: demo.id,
+          slug: demo.slug,
+          name: demo.name,
+          logoUrl: demo.logoUrl,
+        };
+      } else {
+        selectedBrand = resolveSelectedBrand(brands, pathBrand || brandCookie);
+      }
       const brandId = selectedBrand?.id;
       let counts:
-        | { leads?: number; generateLeads?: number; liveCalls?: number; campaigns?: number }
+        | ReturnType<typeof getDemoBrandNavCounts>
+        | Awaited<ReturnType<typeof loadBrandNavCounts>>
         | undefined;
       if (deskMode === 'demo') {
-        counts = { leads: 137, generateLeads: 4, liveCalls: 0, campaigns: 2 };
+        counts = getDemoBrandNavCounts(
+          selectedBrand ? brandPathKey(selectedBrand) : 'demo-meridianops',
+          CANONICAL_DEMO_BRANDS.length
+        );
       } else if (brandId) {
-        const [leadCount, jobCount, callCount, campCount] = await Promise.all([
-          prisma.prospect.count({ where: { brandId } }),
-          prisma.pipelineJob.count({
-            where: { brandId, status: { in: ['queued', 'running'] } },
-          }),
-          prisma.callLog.count({
-            where: {
-              brandId,
-              createdAt: { gte: new Date(Date.now() - 24 * 3600_000) },
-            },
-          }),
-          prisma.campaign.count({
-            where: { brandId, status: 'OPEN' },
-          }),
-        ]);
         counts = {
-          leads: leadCount,
-          generateLeads: jobCount,
-          liveCalls: callCount,
-          campaigns: campCount,
+          ...(await loadBrandNavCounts(brandId)),
+          brands: brands.length,
         };
+      } else if (brands.length > 0) {
+        counts = { brands: brands.length };
       }
       sections = brandNavSections(
         selectedBrand ? brandPathKey(selectedBrand) : null,
         counts
       );
+    } else if (role === 'REP' || role === 'MANAGER') {
+      const repCounts = await loadRepNavCounts(profile);
+      sections =
+        role === 'REP'
+          ? repNavSections(repCounts)
+          : NAV_SECTIONS_BY_ROLE.MANAGER;
     } else if (pathBrand) {
       // Path hint: never flash SDR nav on /brands/[id] while role resolves client-side.
       sections = brandNavSections(pathBrand);

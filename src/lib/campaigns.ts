@@ -318,6 +318,8 @@ export function serializeCampaign(c: CampaignWithRelations, now: Date = new Date
     minPracticeSessions: (c as { minPracticeSessions?: number }).minPracticeSessions ?? 1,
     packId: c.packId,
     playbookId: c.playbookId,
+    playbookTitle:
+      (c as { playbook?: { title?: string } | null }).playbook?.title || null,
     budgetCents: c.budgetCents,
     budgetMode,
     dailyBudgetCents,

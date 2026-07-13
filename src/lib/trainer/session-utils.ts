@@ -86,8 +86,37 @@ export function formatDuration(secs: number): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+/** Practice minutes billed for a session (matches scorecard: ceil seconds → minutes, min 1). */
+export function billablePracticeMinutes(durationSecs: number): number {
+  const secs = Math.max(0, Number(durationSecs) || 0);
+  if (secs <= 0) return 1;
+  return Math.max(1, Math.ceil(secs / 60));
+}
+
 export function scoreColor(score: number): string {
   if (score >= 80) return 'var(--good)';
   if (score >= 60) return 'var(--warn)';
   return 'var(--bad)';
+}
+
+const DISPOSITION_LABELS: Record<string, string> = {
+  appointment_set: 'Appointment set',
+  not_interested: 'Not interested',
+  no_answer: 'No answer / VM',
+  gatekeeper_blocked: 'Gatekeeper blocked',
+  interested: 'Interested',
+  callback: 'Callback',
+  voicemail: 'Voicemail',
+  other: 'Other',
+};
+
+export function formatDisposition(outcome: string | null | undefined): string | null {
+  if (!outcome) return null;
+  return DISPOSITION_LABELS[outcome] || outcome.replace(/_/g, ' ');
+}
+
+export function formatUsdCents(cents: number | null | undefined): string | null {
+  if (cents == null || !Number.isFinite(cents)) return null;
+  const dollars = cents / 100;
+  return dollars % 1 === 0 ? `$${dollars.toFixed(0)}` : `$${dollars.toFixed(2)}`;
 }

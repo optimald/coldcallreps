@@ -8,9 +8,9 @@ import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
 
 type ProfileAuth = Pick<UserProfile, 'id' | 'orgId' | 'plan' | 'platformRole' | 'email'>;
 
-/** Any signed-in user may read personal/org (if member) or brand practice playbooks. */
-async function canAccess(profile: { id: string; orgId: string | null }, playbookId: string) {
-  return prisma.playbook.findFirst({
+/** Brand practice playbooks: manager, accepted SDR, or demo brand. */
+async function canAccess(profile: ProfileAuth, playbookId: string) {
+  const playbook = await prisma.playbook.findFirst({
     where: {
       id: playbookId,
       OR: [
@@ -21,6 +21,13 @@ async function canAccess(profile: { id: string; orgId: string | null }, playbook
     },
     include: { brand: { select: { id: true, name: true, slug: true, ownerId: true } } },
   });
+  if (!playbook) return null;
+  if (!playbook.brandId || !playbook.brand) return playbook;
+
+  const { assertTrainerBrandAccess } = await import('@/lib/trainer-brand-access');
+  const access = await assertTrainerBrandAccess(profile, playbook.brandId);
+  if (!access.ok) return null;
+  return playbook;
 }
 
 /** Owner, org manager, or brand manager. */
@@ -64,7 +71,7 @@ export async function GET(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -96,7 +103,7 @@ export async function PATCH(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -117,6 +124,6 @@ export async function DELETE(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

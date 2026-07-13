@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
 import Toggle from '@/components/ui/Toggle';
+import { brandHref } from '@/lib/brand-context';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import {
   activeMatchStage,
@@ -110,6 +111,12 @@ export default function BrandPipelineClient({
   const [creditsLeft, setCreditsLeft] = useState<number | null>(null);
 
   useEffect(() => {
+    if (mapsCampaignId && brandCampaigns.some((c) => c.id === mapsCampaignId)) return;
+    const next = brandCampaigns[0]?.id || '';
+    if (next) setMapsCampaignId(next);
+  }, [brandCampaigns, mapsCampaignId]);
+
+  useEffect(() => {
     if (searchParams.get('find') === '1') setFindOpen(true);
   }, [searchParams]);
 
@@ -140,6 +147,14 @@ export default function BrandPipelineClient({
     void load();
   }, [load]);
 
+  // Auto-refresh while jobs are queued/running
+  useEffect(() => {
+    const active = jobs.some((j) => j.status === 'queued' || j.status === 'running');
+    if (!active) return;
+    const t = setInterval(() => void load(), 8000);
+    return () => clearInterval(t);
+  }, [jobs, load]);
+
   useEffect(() => {
     if (!findOpen || !brandId || isDemo) {
       setCreditsLeft(isDemo ? 100 : null);
@@ -163,13 +178,17 @@ export default function BrandPipelineClient({
       setMsg('Keyword and geo area are required');
       return;
     }
+    if (!mapsCampaignId) {
+      setMsg('Pick a campaign — generated leads must be enrolled');
+      return;
+    }
     const location =
       geoMode === 'nationwide'
         ? mapsLocation.trim() || 'United States'
         : mapsLocation.trim();
     if (isDemo) {
       setMsg(
-        `Demo: scrape plan “${mapsQuery.trim()}” · ${geoMode} · ${location} (credits not deducted).`
+        `Demo: generate plan “${mapsQuery.trim()}” · ${geoMode} · ${location} (credits not deducted).`
       );
       setFindOpen(false);
       return;
@@ -183,7 +202,7 @@ export default function BrandPipelineClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandId,
-          campaignId: mapsCampaignId || null,
+          campaignId: mapsCampaignId,
           query: mapsQuery.trim(),
           keyword: mapsQuery.trim(),
           location,
@@ -194,7 +213,7 @@ export default function BrandPipelineClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Scrape failed');
+      if (!res.ok) throw new Error(data.error || 'Generate failed');
       if (data.creditBlocked) {
         setMsg(
           `Credits exhausted mid-run · ${data.saved || 0} saved. Upgrade on Billing to continue.`
@@ -208,7 +227,7 @@ export default function BrandPipelineClient({
       setFindOpen(false);
       await load();
     } catch (err: unknown) {
-      setMsg(err instanceof Error ? err.message : 'Scrape failed');
+      setMsg(err instanceof Error ? err.message : 'Generate failed');
     } finally {
       setMapsBusy(false);
     }
@@ -219,28 +238,20 @@ export default function BrandPipelineClient({
       <div className="brand-pipeline__toolbar">
         <div>
           <p className="muted small" style={{ margin: 0 }}>
-            Scrape jobs are the main queue. New scrape plan opens as a popup — Maps keyword + geo →
+            Generate jobs are the main queue. New generate plan opens as a popup — Maps keyword + geo →
             enrich (1 credit / saved lead).
           </p>
         </div>
         <div className="brand-leads__actions" style={{ marginLeft: 'auto' }}>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setFindOpen(true)}>
-            New scrape plan
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            Refresh
+            New generate plan
           </button>
           {brandKey ? (
             <Link href={`/brands/${brandKey}/leads`} className="btn btn-ghost btn-sm">
               View leads
             </Link>
           ) : null}
-          <Link href="/billing" className="btn btn-ghost btn-sm">
+          <Link href="/subscribe/brand" className="btn btn-ghost btn-sm">
             Lead credits
           </Link>
         </div>
@@ -313,7 +324,7 @@ export default function BrandPipelineClient({
 
       <div className="brand-leads__panel">
         <div className="brand-pipeline__jobs-head">
-          <h2 className="brand-pipeline__jobs-title">Scrape jobs</h2>
+          <h2 className="brand-pipeline__jobs-title">Generate jobs</h2>
         </div>
         {loading && jobs.length === 0 ? (
           <div className="brand-leads__empty">
@@ -321,13 +332,59 @@ export default function BrandPipelineClient({
           </div>
         ) : jobs.length === 0 ? (
           <div className="brand-leads__empty">
-            <p className="muted">No scrape jobs yet. Create a scrape plan to start.</p>
+            <p className="muted">No generate jobs yet. Create a generate plan to start.</p>
             <button type="button" className="btn btn-primary" onClick={() => setFindOpen(true)}>
-              New scrape plan
+              New generate plan
             </button>
           </div>
         ) : (
-          <div className="brand-leads__table-wrap">
+          <>
+            <ul className="brand-pipeline__job-cards" aria-label="Generate jobs">
+              {jobs.map((j) => {
+                const leadsHref = brandKey
+                  ? `${brandHref(brandKey, 'leads')}?source=generate${
+                      j.campaignId || j.campaign?.id
+                        ? `&campaignId=${encodeURIComponent(j.campaignId || j.campaign?.id || '')}`
+                        : ''
+                    }`
+                  : '#';
+                return (
+                <li key={j.id}>
+                  <Link href={leadsHref} className="brand-pipeline__job-card brand-pipeline__job-card--link">
+                  <div className="brand-pipeline__job-card-top">
+                    <span className={`brand-pipeline__job-status ${jobStatusClass(j.status)}`}>
+                      {j.status}
+                    </span>
+                    <span className="muted small">{formatTs(j.createdAt)}</span>
+                  </div>
+                  <strong className="brand-pipeline__job-card-query">{j.query}</strong>
+                  <p className="muted small" style={{ margin: 0 }}>
+                    {j.location}
+                    {j.campaign?.title ? ` · ${j.campaign.title}` : ''}
+                  </p>
+                  <div className="brand-pipeline__job-card-stats">
+                    <span>
+                      Saved <strong>{j.savedCount}</strong>
+                    </span>
+                    <span>
+                      Dial-ready <strong>{j.readyCount}</strong>
+                    </span>
+                    {j.completedAt ? (
+                      <span className="muted">Done {formatTs(j.completedAt)}</span>
+                    ) : null}
+                  </div>
+                  {j.errorMessage ? (
+                    <p className="muted small" style={{ margin: 0 }} title={j.errorMessage}>
+                      {j.errorMessage.slice(0, 80)}
+                    </p>
+                  ) : null}
+                  <span className="brand-pipeline__job-card-cta muted small">View leads →</span>
+                  </Link>
+                </li>
+                );
+              })}
+            </ul>
+            <div className="brand-leads__table-wrap brand-pipeline__table-wrap">
             <table className="brand-leads__table brand-pipeline__jobs-table">
               <thead>
                 <tr>
@@ -342,8 +399,30 @@ export default function BrandPipelineClient({
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((j) => (
-                  <tr key={j.id}>
+                {jobs.map((j) => {
+                  const leadsHref = brandKey
+                    ? `${brandHref(brandKey, 'leads')}?source=generate${
+                        j.campaignId || j.campaign?.id
+                          ? `&campaignId=${encodeURIComponent(j.campaignId || j.campaign?.id || '')}`
+                          : ''
+                      }`
+                    : '#';
+                  return (
+                  <tr
+                    key={j.id}
+                    className="brand-pipeline__job-row"
+                    tabIndex={0}
+                    role="link"
+                    onClick={() => {
+                      if (brandKey) window.location.href = leadsHref;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (brandKey) window.location.href = leadsHref;
+                      }
+                    }}
+                  >
                     <td>
                       <span className={`brand-pipeline__job-status ${jobStatusClass(j.status)}`}>
                         {j.status}
@@ -362,17 +441,19 @@ export default function BrandPipelineClient({
                     <td className="muted small">{formatTs(j.createdAt)}</td>
                     <td className="muted small">{formatTs(j.completedAt)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
       <Modal
         open={findOpen}
         onClose={() => !mapsBusy && setFindOpen(false)}
-        title="New scrape plan"
+        title="New generate plan"
         wide
       >
         <form className="stack gap-sm" onSubmit={findLeads}>
@@ -438,13 +519,18 @@ export default function BrandPipelineClient({
               />
             </label>
             <label className="field-label">
-              Assign campaign (optional)
+              Enroll in campaign
               <select
                 className="field"
                 value={mapsCampaignId}
                 onChange={(e) => setMapsCampaignId(e.target.value)}
+                required
               >
-                <option value="">Unassigned</option>
+                {!mapsCampaignId ? (
+                  <option value="" disabled>
+                    Select campaign…
+                  </option>
+                ) : null}
                 {brandCampaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
@@ -472,7 +558,7 @@ export default function BrandPipelineClient({
           {creditsLeft != null && creditsLeft <= 0 ? (
             <p className="msg-err">
               No lead credits left.{' '}
-              <Link href="/billing" className="soft-link">
+              <Link href="/subscribe/brand" className="soft-link">
                 Upgrade or buy a pack →
               </Link>
             </p>
@@ -491,7 +577,7 @@ export default function BrandPipelineClient({
               className="btn btn-primary"
               disabled={mapsBusy || (creditsLeft != null && creditsLeft <= 0 && isLive)}
             >
-              {mapsBusy ? 'Executing…' : isDemo ? 'Execute (demo)' : 'Execute scrape'}
+              {mapsBusy ? 'Executing…' : isDemo ? 'Execute (demo)' : 'Generate leads'}
             </button>
           </div>
           {isDemo ? <p className="muted small">{DEMO_MSG}</p> : null}

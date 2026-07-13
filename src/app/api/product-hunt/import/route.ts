@@ -95,15 +95,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[product-hunt/import]', error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 /** GET — list recent imports */
 export async function GET(req: NextRequest) {
   try {
-    await requireUser();
+    const profile = await requireUser();
     const brandId = req.nextUrl.searchParams.get('brandId');
+    if (brandId) {
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { ownerId: true },
+      });
+      if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const role = effectiveRole(profile);
+      if (!canManageBrand(profile, brand.ownerId) && role !== 'SUPERADMIN') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else if (effectiveRole(profile) !== 'SUPERADMIN') {
+      return NextResponse.json(
+        { error: 'brandId required' },
+        { status: 400 }
+      );
+    }
     const rows = await prisma.productHuntImport.findMany({
       where: brandId ? { brandId } : {},
       orderBy: { createdAt: 'desc' },
@@ -115,6 +131,6 @@ export async function GET(req: NextRequest) {
     if (message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

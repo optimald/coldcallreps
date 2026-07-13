@@ -25,7 +25,7 @@ import {
 type Difficulty = 'easy' | 'medium' | 'hard';
 type LeadTab = 'training' | 'brand';
 
-const TRAINING_PAGE_SIZE = 7;
+const TRAINING_PAGE_SIZE = 80;
 
 interface ProspectRow {
   id: string;
@@ -106,7 +106,7 @@ export default function TrainerView() {
   const [soloVoice, setSoloVoice] = useState<TrainerVoiceId>('leo');
   const [coachOn, setCoachOn] = useState(true);
   const [trainingLeads, setTrainingLeads] = useState<ProspectRow[]>([]);
-  const [trainingTotal, setTrainingTotal] = useState<number | null>(null);
+  const [trainingHasMore, setTrainingHasMore] = useState(false);
   const [brandLeads, setBrandLeads] = useState<ProspectRow[]>([]);
   const [leadTab, setLeadTab] = useState<LeadTab>('training');
   const [prospectId, setProspectId] = useState<string>('');
@@ -157,6 +157,7 @@ export default function TrainerView() {
   const [wrapDuration, setWrapDuration] = useState(0);
   const [scoring, setScoring] = useState(false);
   const [lastTranscriptText, setLastTranscriptText] = useState('');
+  const [mobilePane, setMobilePane] = useState<'queue' | 'dial' | 'intel'>('dial');
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [recordingClipId, setRecordingClipId] = useState<string | null>(null);
   const endingCallRef = useRef(false);
@@ -231,7 +232,7 @@ export default function TrainerView() {
       setTrainingLeads(
         (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
       );
-      setTrainingTotal(typeof data.total === 'number' ? data.total : null);
+      setTrainingHasMore(Boolean(data.hasMore));
     } else {
       const legacy = await fetch('/api/prospects/search');
       if (legacy.ok) {
@@ -240,7 +241,7 @@ export default function TrainerView() {
           .map((p: Record<string, unknown>) => mapLead(p, 'training'))
           .slice(0, TRAINING_PAGE_SIZE);
         setTrainingLeads(rows);
-        setTrainingTotal(rows.length);
+        setTrainingHasMore(false);
       }
     }
 
@@ -876,7 +877,7 @@ export default function TrainerView() {
             <Link href="/cold_calls" className="btn-ghost">
               Cold Call
             </Link>
-            <Link href="/billing" className="btn-ghost">
+            <Link href="/subscribe/sdr" className="btn-ghost">
               Minutes
             </Link>
           </>
@@ -1103,7 +1104,40 @@ export default function TrainerView() {
         </div>
       </Modal>
 
-      <div className="cc-desk">
+      <div className="cc-desk" data-mobile-pane={mobilePane}>
+        <div className="cc-desk__mobile-tabs" role="tablist" aria-label="Practice panels">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'queue'}
+            className={`cc-desk__mobile-tab${mobilePane === 'queue' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('queue')}
+          >
+            Queue
+            <span className="cc-desk__mobile-tab-count">
+              {leadTab === 'brand' ? brandLeads.length : trainingLeads.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'dial'}
+            className={`cc-desk__mobile-tab${mobilePane === 'dial' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('dial')}
+          >
+            Practice
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'intel'}
+            className={`cc-desk__mobile-tab${mobilePane === 'intel' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('intel')}
+          >
+            Intel
+          </button>
+        </div>
+
         {/* Left: practice leads */}
         <section className="cc-desk__col cc-desk__queue" aria-label="Practice leads">
           <div className="cc-desk__col-head">
@@ -1119,7 +1153,8 @@ export default function TrainerView() {
                 >
                   Practice
                   <span className="cc-desk__tab-count">
-                    {trainingTotal ?? trainingLeads.length}
+                    {trainingLeads.length}
+                    {trainingHasMore ? '+' : ''}
                   </span>
                 </button>
                 <button
@@ -1137,9 +1172,7 @@ export default function TrainerView() {
             ) : (
               <>
                 <strong>Call queue</strong>
-                <span className="cc-desk__tab-count">
-                  {trainingTotal ?? trainingLeads.length}
-                </span>
+                <span className="cc-desk__tab-count">{queue.length}</span>
               </>
             )}
           </div>
@@ -1180,7 +1213,11 @@ export default function TrainerView() {
                       <button
                         type="button"
                         className={`cc-desk__row${isSelected ? ' is-selected' : ''}${isLive ? ' is-live' : ''}`}
-                        onClick={() => !realtime.isConnected && setProspectId(p.id)}
+                        onClick={() => {
+                          if (realtime.isConnected) return;
+                          setProspectId(p.id);
+                          setMobilePane('dial');
+                        }}
                         disabled={realtime.isConnected && !isSelected}
                       >
                         <span className="cc-desk__row-main">
@@ -1225,7 +1262,7 @@ export default function TrainerView() {
                 {error.toLowerCase().includes('minute') && (
                   <>
                     {' '}
-                    <Link href="/billing">Upgrade →</Link>
+                    <Link href="/subscribe/sdr">Upgrade →</Link>
                   </>
                 )}
               </p>
@@ -1251,7 +1288,7 @@ export default function TrainerView() {
                 {!realtime.isConnected && selected ? (
                   <div className="cc-desk__start-strip">
                     {minutesRemaining != null && minutesRemaining <= 0 ? (
-                      <Link href="/billing" className="btn cc-desk__call-btn">
+                      <Link href="/subscribe/sdr" className="btn cc-desk__call-btn">
                         Upgrade minutes
                       </Link>
                     ) : (
@@ -1419,7 +1456,7 @@ export default function TrainerView() {
                       <div
                         className={`cc-desk__enrich-chip cc-desk__enrich-chip--${webGrade.tone === 'warn' ? 'mid' : webGrade.tone}`}
                       >
-                        <span>WebEvo</span>
+                        <span>Site</span>
                         <strong>
                           {intel.webEvoScore != null
                             ? `${webGrade.grade} ${Math.round(intel.webEvoScore)}`

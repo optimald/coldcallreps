@@ -7,7 +7,7 @@ import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheet
 import FloatingCallWidget, { type CallDisposition } from '@/components/FloatingCallWidget';
 import CallWrapUpPanel from '@/components/CallWrapUpPanel';
 import { useTwilioCall } from '@/hooks/useTwilioCall';
-import { MAX_DIAL_ATTEMPTS } from '@/lib/lead-queue';
+import { MAX_DIAL_ATTEMPTS } from '@/lib/lead-queue-shared';
 import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
 
 export type OutboundProspect = {
@@ -131,6 +131,7 @@ export default function OutboundDialer({
   const [cheatTrainingImages, setCheatTrainingImages] = useState<string[]>([]);
   const [cheatTrainingVideoUrl, setCheatTrainingVideoUrl] = useState<string | undefined>();
   const [cheatLoading, setCheatLoading] = useState(false);
+  const [mobilePane, setMobilePane] = useState<'queue' | 'dial' | 'intel'>('dial');
 
   const withPhone = useMemo(
     () => campaignProspects.filter((p) => p.phone?.trim()),
@@ -365,7 +366,40 @@ export default function OutboundDialer({
 
   return (
     <>
-      <div className="cc-desk">
+      <div className="cc-desk" data-mobile-pane={mobilePane}>
+        <div className="cc-desk__mobile-tabs" role="tablist" aria-label="Cold call panels">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'queue'}
+            className={`cc-desk__mobile-tab${mobilePane === 'queue' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('queue')}
+          >
+            Queue
+            <span className="cc-desk__mobile-tab-count">
+              {hasAcceptedCampaign ? withPhone.length : 0}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'dial'}
+            className={`cc-desk__mobile-tab${mobilePane === 'dial' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('dial')}
+          >
+            Dial
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === 'intel'}
+            className={`cc-desk__mobile-tab${mobilePane === 'intel' ? ' is-active' : ''}`}
+            onClick={() => setMobilePane('intel')}
+          >
+            Intel
+          </button>
+        </div>
+
         {/* Left: campaign queue */}
         <section className="cc-desk__col cc-desk__queue" aria-label="Call queue">
           <div className="cc-desk__col-head">
@@ -431,7 +465,10 @@ export default function OutboundDialer({
                       <button
                         type="button"
                         className={`cc-desk__row${isSelected ? ' is-selected' : ''}${isLive ? ' is-live' : ''}`}
-                        onClick={() => setSelectedId(p.id)}
+                        onClick={() => {
+                          setSelectedId(p.id);
+                          setMobilePane('dial');
+                        }}
                       >
                         <span className="cc-desk__row-main">
                           <span className="cc-desk__row-name">{p.companyName}</span>

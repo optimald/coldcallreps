@@ -10,6 +10,7 @@ import {
   serializeCampaign,
 } from '@/lib/campaigns';
 import { loadCampaignSpendStats } from '@/lib/campaign-spend';
+import { loadCampaignListStats } from '@/lib/campaign-list-stats';
 import {
   DEFAULT_CAMPAIGN_MIN_SCORE,
   DEFAULT_MIN_PRACTICE_SESSIONS,
@@ -26,6 +27,28 @@ async function serializeWithSpend<T extends { id: string }>(
   return campaigns.map((c) => {
     const s = spend.get(c.id) || { spentCents: 0, spentTodayCents: 0 };
     return mapFn({ ...c, ...s });
+  });
+}
+
+async function serializeBrandCampaigns<T extends { id: string }>(campaigns: T[]) {
+  const [withSpend, listStats] = await Promise.all([
+    serializeWithSpend(campaigns, (c) =>
+      serializeCampaign(c as unknown as Parameters<typeof serializeCampaign>[0])
+    ),
+    loadCampaignListStats(campaigns.map((c) => c.id)),
+  ]);
+  return withSpend.map((row) => {
+    const stats = listStats.get(row.id);
+    return {
+      ...row,
+      teamApproved: stats?.teamApproved ?? 0,
+      teamApplicants: stats?.teamApplicants ?? 0,
+      leadCount: stats?.leadCount ?? 0,
+      calledCount: stats?.calledCount ?? 0,
+      calledPct: stats?.calledPct ?? 0,
+      goalsMet: stats?.goalsMet ?? 0,
+      goalsPerLead: stats?.goalsPerLead ?? 0,
+    };
   });
 }
 
@@ -106,7 +129,7 @@ export async function GET(req: Request) {
         },
       });
       return NextResponse.json({
-        campaigns: await serializeWithSpend(campaigns, (c) => serializeCampaign(c)),
+        campaigns: await serializeBrandCampaigns(campaigns),
         canManage: manage,
       });
     }
@@ -147,7 +170,7 @@ export async function GET(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -245,6 +268,14 @@ export async function POST(req: Request) {
         where: { id: playbookId, brandId },
       });
       if (!pb) return NextResponse.json({ error: 'Playbook not found on brand' }, { status: 400 });
+    } else {
+      return NextResponse.json(
+        {
+          error: 'Every campaign needs a playbook for practice and live coach.',
+          code: 'PLAYBOOK_REQUIRED',
+        },
+        { status: 400 }
+      );
     }
 
     const maxAwards =
@@ -392,6 +423,6 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

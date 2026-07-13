@@ -45,9 +45,6 @@ export async function GET(
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('[pipeline/jobs]', e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Failed to load jobs' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

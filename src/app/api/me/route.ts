@@ -16,19 +16,44 @@ import {
   serializeUnlockedRoles,
 } from '@/lib/role-mode';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const profile = await requireUser();
+    const { searchParams } = new URL(req.url);
+    const fields = searchParams.get('fields');
+    const metricsOnly = fields === 'metrics' || fields === 'shell';
+
+    const platformRole = effectiveRole(profile);
+    const roleMode = buildRoleModeState(profile);
+    const { getMinuteBalance } = await import('@/lib/minutes');
+    const balance = await getMinuteBalance(profile);
+
+    if (metricsOnly) {
+      return NextResponse.json(
+        {
+          id: profile.id,
+          platformRole,
+          roleMode,
+          plan: profile.plan,
+          minutesRemaining: balance.available,
+          minutesUsed: profile.minutesUsed,
+          totalPoints: profile.totalPoints,
+          currentStreak: profile.currentStreak,
+          profileSlug: null,
+          globalRank: null,
+          globalRankPool: null,
+        },
+        { headers: { 'Cache-Control': 'private, max-age=30' } }
+      );
+    }
+
     let badges: string[] = [];
     try {
       badges = JSON.parse(profile.badges || '[]');
     } catch {
       badges = [];
     }
-    const platformRole = effectiveRole(profile);
-    const roleMode = buildRoleModeState(profile);
     const { ensureRepProfile } = await import('@/lib/profile-slug');
-    const { getMinuteBalance } = await import('@/lib/minutes');
     const { currentUser } = await import('@clerk/nextjs/server');
     const clerkUser = await currentUser();
     const clerkImageUrl = clerkUser?.imageUrl || null;
@@ -36,8 +61,7 @@ export async function GET() {
       userId: profile.id,
       displayName: profile.displayName,
     });
-    const [balance, canStoreRecordings, isOrgAdmin] = await Promise.all([
-      getMinuteBalance(profile),
+    const [canStoreRecordings, isOrgAdmin] = await Promise.all([
       canStoreRecordingsForProfile(profile),
       isOrgAdminForProfile(profile),
     ]);
@@ -102,7 +126,7 @@ export async function GET() {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -114,17 +138,14 @@ export async function PATCH(req: Request) {
   try {
     const profile = await requireUser();
     const body = await req.json();
+    // Self-serve desk switch is REP ↔ BRAND only. MANAGER/SUPERADMIN are
+    // assigned by billing webhook or admin — never via this endpoint.
+    const rawRole = body.activeRole ?? body.platformRole;
     const requested =
-      assertSwitchableMode(body.activeRole) ||
-      assertSwitchableMode(body.platformRole) ||
-      (typeof body.platformRole === 'string' ? body.platformRole : null);
+      assertSwitchableMode(rawRole) ||
+      (rawRole === 'RECRUITER' ? 'BRAND' : null);
 
     if (!requested) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-    }
-
-    const allowed = ['REP', 'RECRUITER', 'BRAND', 'MANAGER'] as const;
-    if (!allowed.includes(requested as (typeof allowed)[number])) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
@@ -174,16 +195,16 @@ export async function PATCH(req: Request) {
     const { prisma } = await import('@/lib/prisma');
     const roleMode = buildRoleModeState(profile);
     const nextUnlocked = new Set(roleMode.unlockedRoles.map(String));
-    if (requested === 'BRAND' || requested === 'RECRUITER') nextUnlocked.add('BRAND');
+    if (requested === 'BRAND') nextUnlocked.add('BRAND');
     if (requested === 'REP') nextUnlocked.add('REP');
 
     const updated = await prisma.userProfile.update({
       where: { id: profile.id },
       data: {
-        platformRole: requested as 'REP' | 'RECRUITER' | 'BRAND' | 'MANAGER',
+        platformRole: requested,
         unlockedRolesJSON: serializeUnlockedRoles(nextUnlocked),
         // Heal legacy brand owners who never got brandOnboardedAt stamped.
-        ...(requested === 'BRAND' || requested === 'RECRUITER'
+        ...(requested === 'BRAND'
           ? { brandOnboardedAt: profile.brandOnboardedAt || new Date() }
           : {}),
       },
@@ -199,6 +220,6 @@ export async function PATCH(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,32 +1,150 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="ColdCallReps — Train. Prove. Get Paid.">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#081419"/>
-      <stop offset="55%" stop-color="#0c1c22"/>
+    <!-- Landscape canvas · square safe area: x=285..915 (630×630 centered) -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#061014"/>
+      <stop offset="42%" stop-color="#0a1a20"/>
       <stop offset="100%" stop-color="#081419"/>
     </linearGradient>
-    <radialGradient id="o" cx="78%" cy="18%" r="48%">
-      <stop offset="0%" stop-color="#d6ed28" stop-opacity="0.28"/>
+    <radialGradient id="glowChartreuse" cx="78%" cy="12%" r="46%">
+      <stop offset="0%" stop-color="#d6ed28" stop-opacity="0.34"/>
+      <stop offset="55%" stop-color="#d6ed28" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#d6ed28" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="m" cx="18%" cy="78%" r="42%">
-      <stop offset="0%" stop-color="#6fd4c8" stop-opacity="0.18"/>
+    <radialGradient id="glowTeal" cx="14%" cy="88%" r="44%">
+      <stop offset="0%" stop-color="#6fd4c8" stop-opacity="0.26"/>
+      <stop offset="60%" stop-color="#6fd4c8" stop-opacity="0.07"/>
       <stop offset="100%" stop-color="#6fd4c8" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="42%" r="32%">
+      <stop offset="0%" stop-color="#d6ed28" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#d6ed28" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edgeFadeL" x1="0" y1="0.5" x2="1" y2="0.5">
+      <stop offset="0%" stop-color="#081419" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#081419" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="edgeFadeR" x1="1" y1="0.5" x2="0" y2="0.5">
+      <stop offset="0%" stop-color="#081419" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#081419" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="tileStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6fd4c8" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#d6ed28" stop-opacity="0.28"/>
+    </linearGradient>
+    <filter id="softBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
   </defs>
-  <rect width="1200" height="630" fill="url(#g)"/>
-  <rect width="1200" height="630" fill="url(#o)"/>
-  <rect width="1200" height="630" fill="url(#m)"/>
-  <!-- barbell mark -->
-  <rect x="100" y="130" width="112" height="112" rx="20" fill="#081419" stroke="rgba(111,212,200,0.18)"/>
-  <rect x="133" y="183" width="46" height="6" fill="#f1f7f5"/>
-  <rect x="114" y="160" width="9" height="52" fill="#d6ed28"/>
-  <rect x="125" y="168" width="7" height="36" fill="#d6ed28"/>
-  <rect x="133" y="178" width="5" height="16" fill="#6fd4c8"/>
-  <rect x="174" y="178" width="5" height="16" fill="#6fd4c8"/>
-  <rect x="180" y="168" width="7" height="36" fill="#d6ed28"/>
-  <rect x="189" y="160" width="9" height="52" fill="#d6ed28"/>
-  <text x="240" y="200" font-family="Helvetica, Arial, sans-serif" font-size="72" font-weight="800" fill="#f1f7f5" letter-spacing="-2">ColdCallReps</text>
-  <text x="100" y="340" font-family="Helvetica, Arial, sans-serif" font-size="42" font-weight="600" fill="#f1f7f5">Put in the reps. Get the meetings.</text>
-  <text x="100" y="410" font-family="Helvetica, Arial, sans-serif" font-size="28" fill="#6fd4c8">AI voice trainer · rep profiles · recruiter desk · brand arena</text>
+
+  <!-- Full-bleed landscape atmosphere -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glowChartreuse)"/>
+  <rect width="1200" height="630" fill="url(#glowTeal)"/>
+  <rect width="1200" height="630" fill="url(#coreGlow)"/>
+
+  <!-- Side-gutter dial arcs (outside square safe — landscape only) -->
+  <g fill="none" stroke="#6fd4c8" stroke-opacity="0.07" stroke-width="1.25">
+    <circle cx="120" cy="315" r="168"/>
+    <circle cx="120" cy="315" r="128"/>
+    <circle cx="120" cy="315" r="88"/>
+    <circle cx="1080" cy="315" r="168"/>
+    <circle cx="1080" cy="315" r="128"/>
+    <circle cx="1080" cy="315" r="88"/>
+  </g>
+  <g fill="none" stroke="#d6ed28" stroke-opacity="0.06" stroke-width="1">
+    <path d="M40 180 C120 240,120 390,40 450"/>
+    <path d="M1160 180 C1080 240,1080 390,1160 450"/>
+  </g>
+
+  <!-- Hairline grid (very subtle) -->
+  <g stroke="#6fd4c8" stroke-opacity="0.035" stroke-width="1">
+    <path d="M0 210 H1200"/>
+    <path d="M0 315 H1200"/>
+    <path d="M0 420 H1200"/>
+    <path d="M285 0 V630"/>
+    <path d="M915 0 V630"/>
+  </g>
+
+  <!-- Soft edge vignette for landscape framing -->
+  <rect width="160" height="630" fill="url(#edgeFadeL)"/>
+  <rect x="1040" width="160" height="630" fill="url(#edgeFadeR)"/>
+
+  <!-- ========== SQUARE SAFE AREA (285,0 → 915,630) ========== -->
+  <g transform="translate(600 315)">
+    <!-- faint dial behind mark -->
+    <g fill="none" stroke="#f1f7f5" stroke-opacity="0.05" stroke-width="1.5">
+      <circle r="248"/>
+      <circle r="210" stroke-dasharray="3 14"/>
+    </g>
+    <g fill="none" stroke="#d6ed28" stroke-opacity="0.09" stroke-width="1.25">
+      <path d="M-198 -40 A202 202 0 0 1 198 -40"/>
+      <path d="M-170 70 A190 190 0 0 0 170 70"/>
+    </g>
+
+    <!-- Brand mark tile + geometric barbell (matches public/logo.svg) -->
+    <g transform="translate(0 -148)">
+      <rect x="-64" y="-64" width="128" height="128" rx="24" fill="#081419" stroke="url(#tileStroke)" stroke-width="2"/>
+      <!-- bar -->
+      <rect x="-38" y="-6" width="76" height="9" rx="1.5" fill="#f1f7f5"/>
+      <!-- left plates -->
+      <rect x="-56" y="-30" width="10" height="60" rx="2" fill="#d6ed28"/>
+      <rect x="-44" y="-21" width="8" height="42" rx="1.5" fill="#d6ed28"/>
+      <!-- collars -->
+      <rect x="-34.5" y="-10" width="5" height="20" rx="1" fill="#6fd4c8"/>
+      <rect x="29.5" y="-10" width="5" height="20" rx="1" fill="#6fd4c8"/>
+      <!-- right plates -->
+      <rect x="36" y="-21" width="8" height="42" rx="1.5" fill="#d6ed28"/>
+      <rect x="46" y="-30" width="10" height="60" rx="2" fill="#d6ed28"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text
+      y="-8"
+      text-anchor="middle"
+      font-family="Bricolage Grotesque, Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif"
+      font-size="72"
+      font-weight="800"
+      letter-spacing="-2.4"
+      fill="#f1f7f5"
+    >ColdCallReps</text>
+
+    <!-- Primary line -->
+    <text
+      y="52"
+      text-anchor="middle"
+      font-family="Bricolage Grotesque, Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif"
+      font-size="28"
+      font-weight="700"
+      letter-spacing="4.2"
+      fill="#d6ed28"
+    >TRAIN. PROVE. GET PAID.</text>
+
+    <!-- Accent rule -->
+    <rect x="-36" y="78" width="72" height="3" rx="1.5" fill="#6fd4c8" fill-opacity="0.85"/>
+
+    <!-- Supporting line -->
+    <text
+      y="118"
+      text-anchor="middle"
+      font-family="DM Sans, Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif"
+      font-size="20"
+      font-weight="500"
+      letter-spacing="1.6"
+      fill="#8aa3a0"
+    >AI voice trainer · paid outbound</text>
+  </g>
+
+  <!-- Domain chip — still inside safe square bottom -->
+  <text
+    x="600"
+    y="568"
+    text-anchor="middle"
+    font-family="DM Sans, Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif"
+    font-size="16"
+    font-weight="600"
+    letter-spacing="2.8"
+    fill="#6fd4c8"
+    fill-opacity="0.72"
+  >COLDCALLREPS.COM</text>
 </svg>

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
@@ -16,6 +16,16 @@ const body = DM_Sans({
   variable: '--font-body-loaded',
   weight: ['400', '500', '600', '700'],
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f4f7f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f1412' },
+  ],
+};
 
 export const metadata: Metadata = {
   title: {
@@ -41,14 +51,14 @@ export const metadata: Metadata = {
     url: 'https://coldcallreps.com',
     siteName: 'ColdCallReps',
     type: 'website',
-    images: [{ url: '/og.svg', width: 1200, height: 630, alt: 'ColdCallReps' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'ColdCallReps — Train. Prove. Get Paid.' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Cold Call Reps — Train. Prove. Get Paid.',
     description:
       'Train with AI voice. Prove your skills. Get paid to run outbound for other founders.',
-    images: ['/og.svg'],
+    images: ['/og.png'],
   },
 };
 

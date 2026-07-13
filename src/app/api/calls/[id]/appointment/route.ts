@@ -71,9 +71,6 @@ export async function POST(
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('[calls/appointment]', e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Appointment audit failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -36,6 +36,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const forceMine = searchParams.get('mine') === '1';
     const forcePractice = searchParams.get('practice') === '1';
+    const minimal =
+      searchParams.get('minimal') === '1' ||
+      searchParams.get('fields') === 'minimal' ||
+      searchParams.get('fields') === 'shell';
 
     const userId = await optionalUserId();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,26 +50,44 @@ export async function GET(req: Request) {
         where: { id: userId },
         select: { id: true, platformRole: true, email: true },
       });
-      if (profile) {
-        const role = effectiveRole(profile);
-        const wantsMine =
-          forceMine ||
-          (!forcePractice && (role === 'BRAND' || role === 'RECRUITER'));
-        if (wantsMine && !isSuperadmin(profile)) {
-          where = { ownerId: profile.id };
-        } else if (forcePractice || role === 'REP' || role === 'MANAGER') {
-          // Trainer / hiring catalog: platform demos + any brands the user owns
-          where = {
-            OR: [{ slug: { startsWith: 'demo-' } }, { ownerId: profile.id }],
-          };
-        }
-        // Superadmin without mine/practice: no filter (all brands)
+      if (!profile) {
+        return NextResponse.json({ brands: [] });
+      }
+      const role = effectiveRole(profile);
+      const wantsMine =
+        forceMine ||
+        (!forcePractice && (role === 'BRAND' || role === 'RECRUITER'));
+      if (wantsMine && !isSuperadmin(profile)) {
+        where = { ownerId: profile.id };
+      } else if (forcePractice || role === 'REP' || role === 'MANAGER') {
+        // Trainer / hiring catalog: platform demos + any brands the user owns
+        where = {
+          OR: [{ slug: { startsWith: 'demo-' } }, { ownerId: profile.id }],
+        };
+      }
+      // Superadmin without mine/practice: no filter (all brands)
+      // Any other role without a branch: deny-by-default
+      else if (!isSuperadmin(profile)) {
+        where = { ownerId: profile.id };
       }
     } else if (!forcePractice) {
       // Anonymous: do not dump every company's brand list
       return NextResponse.json({ brands: [] });
     } else {
       where = { slug: { startsWith: 'demo-' } };
+    }
+
+    if (minimal) {
+      const brands = await prisma.brand.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { id: true, slug: true, name: true, logoUrl: true },
+      });
+      return NextResponse.json(
+        { brands },
+        { headers: { 'Cache-Control': 'private, max-age=60' } }
+      );
     }
 
     const brands = await prisma.brand.findMany({
@@ -88,7 +110,7 @@ export async function GET(req: Request) {
       })),
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -112,12 +134,28 @@ export async function POST(req: Request) {
       );
     }
 
-    const slug =
+    const baseSlug =
       String(body.slug || name)
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
-        .slice(0, 48) || `brand-${Date.now()}`;
+        .slice(0, 40) || `brand-${Date.now()}`;
+
+    let slug = baseSlug;
+    for (let i = 0; i < 20; i++) {
+      const candidate = i === 0 ? baseSlug : `${baseSlug}-${i + 1}`.slice(0, 48);
+      const taken = await prisma.brand.findUnique({
+        where: { slug: candidate },
+        select: { id: true },
+      });
+      if (!taken) {
+        slug = candidate;
+        break;
+      }
+      if (i === 19) {
+        slug = `${baseSlug}-${Date.now().toString(36)}`.slice(0, 48);
+      }
+    }
 
     if (profile.platformRole === 'REP') {
       const { serializeUnlockedRoles, parseUnlockedRoles } = await import('@/lib/role-mode');
@@ -174,6 +212,14 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const msg = String(error?.message || error || '');
+    if (msg.includes('UNIQUE') && msg.includes('slug')) {
+      return NextResponse.json(
+        { error: 'That brand URL slug is already taken — try a different name.' },
+        { status: 409 }
+      );
+    }
+    console.error('POST /api/brands', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

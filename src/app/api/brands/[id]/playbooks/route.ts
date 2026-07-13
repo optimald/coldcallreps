@@ -8,6 +8,7 @@ import {
   getDefaultPlaybook,
 } from '@/lib/playbooks/default';
 import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
+import { summarizePlaybookContent } from '@/lib/playbooks/summary';
 
 async function loadBrand(idOrSlug: string) {
   return prisma.brand.findFirst({
@@ -31,13 +32,31 @@ export async function GET(
       where: { brandId: brand.id },
       orderBy: { updatedAt: 'desc' },
       take: 50,
+      include: {
+        _count: { select: { campaigns: true } },
+      },
     });
-    return NextResponse.json({ playbooks, brand });
+
+    return NextResponse.json({
+      playbooks: playbooks.map((p) => {
+        const summary = summarizePlaybookContent(p.contentJSON);
+        return {
+          id: p.id,
+          title: p.title,
+          brandId: p.brandId,
+          updatedAt: p.updatedAt.toISOString(),
+          createdAt: p.createdAt.toISOString(),
+          campaignCount: p._count.campaigns,
+          ...summary,
+        };
+      }),
+      brand,
+    });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -61,16 +80,46 @@ export async function POST(
       typeof body.template === 'string' && body.template.trim()
         ? body.template.trim().toLowerCase()
         : null;
+    const cloneFromId =
+      typeof body.cloneFromId === 'string' && body.cloneFromId.trim()
+        ? body.cloneFromId.trim()
+        : null;
 
     if (templateKey && !getDefaultPlaybook(templateKey)) {
       return NextResponse.json({ error: `Unknown template "${templateKey}"` }, { status: 400 });
     }
 
+    let contentSource: unknown = body.content;
+    let cloneTitle: string | null = null;
+    if (cloneFromId) {
+      const source = await prisma.playbook.findFirst({
+        where: {
+          id: cloneFromId,
+          OR: [
+            { userId: profile.id },
+            { brand: { ownerId: profile.id } },
+            { brandId: null, userId: profile.id },
+          ],
+        },
+        select: { title: true, contentJSON: true },
+      });
+      if (!source) {
+        return NextResponse.json({ error: 'Source playbook not found' }, { status: 404 });
+      }
+      try {
+        contentSource = JSON.parse(source.contentJSON || '{}');
+      } catch {
+        contentSource = {};
+      }
+      cloneTitle = source.title;
+    }
+
     const content = sanitizePlaybookContent(
-      body.content || defaultPlaybookContent(templateKey ?? 'foundation')
+      contentSource || defaultPlaybookContent(templateKey ?? 'foundation')
     );
     const resolvedTitle =
       title ||
+      (cloneTitle ? `${cloneTitle} (copy)` : null) ||
       (templateKey ? getDefaultPlaybook(templateKey)!.title : DEFAULT_PLAYBOOK_TITLE);
 
     if (!resolvedTitle) {
@@ -90,6 +139,6 @@ export async function POST(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

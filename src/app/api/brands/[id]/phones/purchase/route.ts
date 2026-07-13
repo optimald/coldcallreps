@@ -101,7 +101,7 @@ export async function POST(
     }
     console.error('[brands/phones/purchase]', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Purchase failed' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

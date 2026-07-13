@@ -33,7 +33,11 @@ export default async function BrandPipelinePage({
 
   return (
     <main className="app-page brand-pipeline-page">
-      <PageHeader compact title="Pipeline" />
+      <PageHeader
+        compact
+        title="Generate leads"
+        description="Maps generate jobs → enrich → dial-ready queue (1 credit / saved lead)."
+      />
       <Suspense fallback={<p className="muted">Loading pipeline…</p>}>
         <BrandPipelineClient
           brands={brands.length ? brands : [{ id: brand.id, name: brand.name, slug: brand.slug }]}

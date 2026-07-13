@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { brandHref, brandPathKey } from '@/lib/brand-context';
@@ -26,17 +27,14 @@ export default async function BrandCallsPage({
         title="Calls"
         description="Upcoming meetings, active dials, and recent outcomes — updates every few seconds."
         actions={
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <Link href={brandHref(brand, 'practice')} className="btn-ghost">
-              Practice history →
-            </Link>
-            <Link href={brandHref(brand, 'leads')} className="btn-ghost">
-              Leads →
-            </Link>
-          </div>
+          <Link href={brandHref(brand, 'leads')} className="btn-ghost">
+            Leads →
+          </Link>
         }
       />
-      <BrandCallsBoard brandKey={key} brandName={brand.name} />
+      <Suspense fallback={<p className="muted">Loading calls…</p>}>
+        <BrandCallsBoard brandKey={key} brandName={brand.name} />
+      </Suspense>
     </main>
   );
 }

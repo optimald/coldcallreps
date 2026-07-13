@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
 import SlideOver from '@/components/ui/SlideOver';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
@@ -85,12 +85,26 @@ const ALIASES: Record<string, string> = {
 
 function sourceLabel(source?: string | null) {
   if (!source || source === 'manual') return 'Manual';
-  if (source === 'maps') return 'Maps';
+  if (source === 'maps') return 'Generate';
   if (source === 'import') return 'Import';
   if (source === 'url') return 'URL';
   if (source === 'training') return 'Demo';
   return source;
 }
+
+/** UI source filter → API / fixture source value */
+function sourceFilterToApi(ui: string): string | null {
+  if (ui === 'generate') return 'maps';
+  if (ui === 'import' || ui === 'manual') return ui;
+  return null;
+}
+
+const SOURCE_FILTER_OPTIONS = [
+  { value: '', label: 'All sources' },
+  { value: 'generate', label: 'Generate' },
+  { value: 'import', label: 'Import' },
+  { value: 'manual', label: 'Manual' },
+];
 
 function domainOf(website?: string | null) {
   if (!website) return null;
@@ -157,6 +171,7 @@ export default function BrandLeadsClient({
   platformTrainingLeads?: TrainingLeadView[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { mode, hydrated } = useBrandDeskMode();
   // Prefer live data until desk mode is known demo — never flash DEMO_LEADS at Live users.
   const isDemo = mode === 'demo';
@@ -164,11 +179,18 @@ export default function BrandLeadsClient({
   const brandId = brands[0]?.id || '';
   const brandKey = brands[0]?.slug || brands[0]?.id || '';
 
-  const [campaignFilter, setCampaignFilter] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState(
+    () => searchParams.get('campaignId') || ''
+  );
+  const [sourceFilter, setSourceFilter] = useState(
+    () => searchParams.get('source') || ''
+  );
   const [matchFilter, setMatchFilter] = useState('');
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const [serverHasMore, setServerHasMore] = useState(false);
   const [trainingLeads, setTrainingLeads] = useState<TrainingLeadView[]>(() =>
     getDemoLeads(brandKey || 'demo-meridianops')
   );
@@ -181,7 +203,6 @@ export default function BrandLeadsClient({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [enriching, setEnriching] = useState<string | null>(null);
-  const [webevoBusy, setWebevoBusy] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [companyName, setCompanyName] = useState('');
@@ -190,6 +211,27 @@ export default function BrandLeadsClient({
   const [ownerName, setOwnerName] = useState('');
   const [assignCampaignId, setAssignCampaignId] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+
+  // Sync filters from URL (e.g. Generate job → leads)
+  useEffect(() => {
+    const camp = searchParams.get('campaignId') || '';
+    const src = searchParams.get('source') || '';
+    setCampaignFilter(camp);
+    setSourceFilter(src);
+  }, [searchParams]);
+
+  function writeLeadFilters(next: { campaignId?: string; source?: string }) {
+    if (!brandKey) return;
+    const params = new URLSearchParams();
+    const camp = next.campaignId !== undefined ? next.campaignId : campaignFilter;
+    const src = next.source !== undefined ? next.source : sourceFilter;
+    if (camp) params.set('campaignId', camp);
+    if (src) params.set('source', src);
+    const qs = params.toString();
+    router.replace(qs ? `${brandHref(brandKey, 'leads')}?${qs}` : brandHref(brandKey, 'leads'), {
+      scroll: false,
+    });
+  }
 
   const brandCampaigns = useMemo(() => {
     if (isLive) return campaigns.filter((c) => c.brandId === brandId);
@@ -201,13 +243,23 @@ export default function BrandLeadsClient({
     }));
   }, [isLive, campaigns, brandId, brandKey]);
 
+  // Brand leads must be enrolled in a campaign — default enroll target
+  useEffect(() => {
+    if (assignCampaignId && brandCampaigns.some((c) => c.id === assignCampaignId)) return;
+    const fromFilter = campaignFilter && brandCampaigns.some((c) => c.id === campaignFilter)
+      ? campaignFilter
+      : '';
+    const next = fromFilter || brandCampaigns[0]?.id || '';
+    if (next) setAssignCampaignId(next);
+  }, [brandCampaigns, campaignFilter, assignCampaignId]);
+
   const campaignTitle = useCallback(
     (id: string | null | undefined) => {
-      if (!id) return 'Unassigned';
+      if (!id) return 'Needs campaign';
       const live = brandCampaigns.find((c) => c.id === id)?.title;
       if (live) return live;
       const demo = getDemoCampaigns(brandKey).find((c) => c.id === id)?.title;
-      return demo || 'Unassigned';
+      return demo || 'Needs campaign';
     },
     [brandCampaigns, brandKey]
   );
@@ -222,14 +274,26 @@ export default function BrandLeadsClient({
       if (!brandId) return;
       setLoading(true);
       try {
-        const qs = new URLSearchParams({ brandId, limit: '200' });
+        const listLimit =
+          typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches
+            ? '50'
+            : '100';
+        const qs = new URLSearchParams({
+          brandId,
+          limit: listLimit,
+          fields: 'list',
+        });
         if (campaignFilter) qs.set('campaignId', campaignFilter);
         if (searchDebounced) qs.set('q', searchDebounced);
+        const apiSource = sourceFilterToApi(sourceFilter);
+        if (apiSource) qs.set('source', apiSource);
         const res = await fetch(`/api/prospects?${qs}`);
         const data = await res.json();
         if (signal?.cancelled) return;
         if (!res.ok) throw new Error(data.error || 'Failed to load');
         setLeads(data.prospects || []);
+        setServerTotal(typeof data.total === 'number' ? data.total : null);
+        setServerHasMore(Boolean(data.hasMore));
       } catch (e: unknown) {
         if (signal?.cancelled) return;
         setMsg(e instanceof Error ? e.message : 'Load failed');
@@ -237,8 +301,43 @@ export default function BrandLeadsClient({
         if (!signal?.cancelled) setLoading(false);
       }
     },
-    [brandId, campaignFilter, searchDebounced]
+    [brandId, campaignFilter, searchDebounced, sourceFilter]
   );
+
+  const loadMoreCampaign = useCallback(async () => {
+    if (!brandId || !serverHasMore) return;
+    setLoading(true);
+    try {
+      const listLimit =
+        typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches
+          ? '50'
+          : '100';
+      const qs = new URLSearchParams({
+        brandId,
+        limit: listLimit,
+        fields: 'list',
+        skip: String(leads.length),
+      });
+      if (campaignFilter) qs.set('campaignId', campaignFilter);
+      if (searchDebounced) qs.set('q', searchDebounced);
+      const apiSource = sourceFilterToApi(sourceFilter);
+      if (apiSource) qs.set('source', apiSource);
+      const res = await fetch(`/api/prospects?${qs}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      const next = (data.prospects || []) as Lead[];
+      setLeads((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...next.filter((p) => !seen.has(p.id))];
+      });
+      setServerTotal(typeof data.total === 'number' ? data.total : null);
+      setServerHasMore(Boolean(data.hasMore));
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Load failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [brandId, campaignFilter, searchDebounced, sourceFilter, leads.length, serverHasMore]);
 
   const deskReadyRef = useRef(false);
 
@@ -284,8 +383,13 @@ export default function BrandLeadsClient({
   const pool = isLive ? leads : trainingLeads;
 
   const filteredLeads = useMemo(() => {
+    const apiSource = sourceFilterToApi(sourceFilter);
     return pool.filter((l) => {
       if (campaignFilter && l.campaignId !== campaignFilter) return false;
+      if (apiSource) {
+        const leadSource = l.source || 'manual';
+        if (leadSource !== apiSource) return false;
+      }
       if (matchFilter) {
         const state = matchStateOf(l);
         if (matchFilter === 'prepping' && state !== 'prepping' && state !== 'failed') return false;
@@ -304,7 +408,7 @@ export default function BrandLeadsClient({
       }
       return true;
     });
-  }, [pool, matchFilter, campaignFilter, searchDebounced]);
+  }, [pool, matchFilter, campaignFilter, searchDebounced, sourceFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
@@ -312,7 +416,19 @@ export default function BrandLeadsClient({
 
   useEffect(() => {
     setPage(1);
-  }, [campaignFilter, matchFilter, searchDebounced, pageSize]);
+  }, [campaignFilter, matchFilter, searchDebounced, pageSize, sourceFilter]);
+
+  // Auto-refresh live leads (no manual Refresh button)
+  useEffect(() => {
+    if (!isLive || !brandId || !hydrated) return;
+    const onFocus = () => void loadCampaign();
+    window.addEventListener('focus', onFocus);
+    const t = setInterval(() => void loadCampaign(), 30000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(t);
+    };
+  }, [isLive, brandId, hydrated, loadCampaign]);
 
   async function addLead(e: FormEvent) {
     e.preventDefault();
@@ -322,14 +438,19 @@ export default function BrandLeadsClient({
       return;
     }
     if (isLive && !brandId) return;
+    if (!assignCampaignId) {
+      setMsg('Pick a campaign — leads must be enrolled in a campaign');
+      return;
+    }
     setMsg(null);
     const res = await fetch('/api/prospects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brandId: brandId || null,
-        campaignId: assignCampaignId || null,
+        campaignId: assignCampaignId,
         training: false,
+        source: 'manual',
         companyName: companyName.trim(),
         phone: phone.trim() || null,
         website: website.trim() || null,
@@ -373,34 +494,6 @@ export default function BrandLeadsClient({
       setMsg(e instanceof Error ? e.message : 'Enrich failed');
     } finally {
       setEnriching(null);
-    }
-  }
-
-  async function webevoOne(id: string, force = false) {
-    if (!isLive) {
-      setMsg(DEMO_MSG);
-      return;
-    }
-    setWebevoBusy(id);
-    setMsg(null);
-    try {
-      const res = await fetch(`/api/prospects/${id}/webevo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'WebEvo scan failed');
-      setMsg(
-        `WebEvo (UILensAI): ${data.overallScore ?? '—'} · ${data.rating || 'scanned'}${
-          data.durationMs ? ` · ${(data.durationMs / 1000).toFixed(0)}s` : ''
-        }`
-      );
-      await loadCampaign();
-    } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : 'WebEvo scan failed');
-    } finally {
-      setWebevoBusy(null);
     }
   }
 
@@ -526,7 +619,11 @@ export default function BrandLeadsClient({
       setMsg(DEMO_MSG);
       return;
     }
-    const nextId = campaignId || null;
+    if (!campaignId) {
+      setMsg('Pick a campaign — brand leads must stay enrolled');
+      return;
+    }
+    const nextId = campaignId;
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, campaignId: nextId } : l)));
     if (detail?.id === id) setDetail({ ...detail, campaignId: nextId });
     await fetch('/api/prospects', {
@@ -558,6 +655,10 @@ export default function BrandLeadsClient({
       return;
     }
     if (isLive && !brandId) return;
+    if (!assignCampaignId) {
+      setMsg('Pick a campaign before importing — leads must be enrolled');
+      return;
+    }
     const text = await file.text();
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) {
@@ -580,7 +681,7 @@ export default function BrandLeadsClient({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         brandId,
-        campaignId: assignCampaignId || null,
+        campaignId: assignCampaignId,
         training: false,
         rows,
       }),
@@ -662,13 +763,33 @@ export default function BrandLeadsClient({
           <select
             className="field"
             value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCampaignFilter(v);
+              writeLeadFilters({ campaignId: v });
+            }}
             aria-label="Filter by campaign"
           >
             <option value="">All campaigns</option>
             {brandCampaigns.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field"
+            value={sourceFilter}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSourceFilter(v);
+              writeLeadFilters({ source: v });
+            }}
+            aria-label="Filter by source"
+          >
+            {SOURCE_FILTER_OPTIONS.map((o) => (
+              <option key={o.value || 'all'} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -707,28 +828,41 @@ export default function BrandLeadsClient({
             className="btn btn-ghost btn-sm"
             onClick={() => setAddOpen(true)}
           >
-            Add
+            New lead
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => fileRef.current?.click()}
-          >
-            Import
-          </button>
+          <label className="brand-leads__enroll-select field-label">
+            <span className="sr-only">Enroll new/import leads in</span>
+            <select
+              className="field field-sm"
+              value={assignCampaignId}
+              onChange={(e) => setAssignCampaignId(e.target.value)}
+              aria-label="Enroll new leads in campaign"
+              title="Campaign for New lead / Import"
+            >
+              {!assignCampaignId ? (
+                <option value="" disabled>
+                  Campaign…
+                </option>
+              ) : null}
+              {brandCampaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => {
-              if (isDemo) {
-                setTrainingLeads(getDemoLeads(brandKey));
+              if (!assignCampaignId) {
+                setMsg('Pick a campaign before importing — leads must be enrolled');
                 return;
               }
-              void loadCampaign();
+              fileRef.current?.click();
             }}
-            disabled={loading}
           >
-            Refresh
+            Import
           </button>
           {brandKey ? (
             <Link href={`/brands/${brandKey}/campaigns`} className="btn btn-ghost btn-sm">
@@ -811,7 +945,7 @@ export default function BrandLeadsClient({
             <p className="muted">
               {isLive
                 ? pool.length === 0
-                  ? 'No leads yet. Find leads on Pipeline, or add one manually.'
+                  ? 'No leads yet. Generate leads, import a CSV, or add one manually.'
                   : 'No leads match the current filters.'
                 : 'No demo leads.'}
             </p>
@@ -819,11 +953,11 @@ export default function BrandLeadsClient({
               <div className="brand-leads__actions" style={{ marginLeft: 0 }}>
                 {brandKey ? (
                   <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn btn-primary">
-                    Find leads
+                    Generate leads
                   </Link>
                 ) : null}
                 <button type="button" className="btn btn-ghost" onClick={() => setAddOpen(true)}>
-                  Add lead
+                  New lead
                 </button>
               </div>
             ) : (
@@ -841,7 +975,46 @@ export default function BrandLeadsClient({
             )}
           </div>
         ) : (
-          <div className="brand-leads__table-wrap">
+          <>
+            <ul className="brand-leads__cards" aria-label="Leads">
+              {paged.map((l) => {
+                const state = matchStateOf(l);
+                const intel = parseIntel(l.hooksJSON);
+                const score = intel?.score ?? null;
+                const loc = locationOf(l);
+                return (
+                  <li key={l.id}>
+                    <button
+                      type="button"
+                      className={`brand-leads__card${selected.has(l.id) ? ' is-selected' : ''}`}
+                      onClick={() => openDetail(l)}
+                    >
+                      <div className="brand-leads__card-top">
+                        <span className="brand-leads__avatar" aria-hidden>
+                          {l.companyName.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="brand-leads__card-meta">
+                          <span className="brand-leads__name">{l.companyName}</span>
+                          <span className="brand-leads__sub muted">
+                            {[loc, l.phone].filter(Boolean).join(' · ') || domainOf(l.website) || '—'}
+                          </span>
+                        </div>
+                        <span
+                          className={`brand-leads__score brand-leads__score--${scoreTone(score)}`}
+                        >
+                          {score != null ? Math.round(score) : '—'}
+                        </span>
+                      </div>
+                      <div className="brand-leads__card-foot">
+                        <span className={matchChipClass(state)}>{matchLabel(state)}</span>
+                        <span className="muted small">{campaignTitle(l.campaignId)}</span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="brand-leads__table-wrap">
             <table className="brand-leads__table brand-leads__table--intel">
               <thead>
                 <tr className="brand-leads__row brand-leads__row--head">
@@ -861,7 +1034,7 @@ export default function BrandLeadsClient({
                   <th className="brand-leads__col--company">Name</th>
                   <th className="brand-leads__col--score">Trojan</th>
                   <th className="brand-leads__col--health">Health</th>
-                  <th className="brand-leads__col--webevo">WebEvo</th>
+                  <th className="brand-leads__col--webevo">Site</th>
                   <th className="brand-leads__col--location">Location</th>
                   <th className="brand-leads__col--year">© Year</th>
                   <th className="brand-leads__col--reviews">Reviews</th>
@@ -1024,8 +1197,13 @@ export default function BrandLeadsClient({
                             value={live.campaignId || ''}
                             onChange={(e) => void assignLead(l.id, e.target.value)}
                             aria-label="Assign campaign"
+                            required
                           >
-                            <option value="">Unassigned</option>
+                            {!live.campaignId ? (
+                              <option value="" disabled>
+                                Select campaign…
+                              </option>
+                            ) : null}
                             {brandCampaigns.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.title}
@@ -1042,9 +1220,10 @@ export default function BrandLeadsClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
 
-        {totalPages > 1 ? (
+        {totalPages > 1 || (isLive && serverHasMore) ? (
           <div className="brand-leads__pager">
             <button
               type="button"
@@ -1055,15 +1234,22 @@ export default function BrandLeadsClient({
               ← Prev
             </button>
             <span className="muted small">
-              Page {pageSafe} of {totalPages} · {filteredLeads.length} shown
+              Page {pageSafe} of {totalPages} · {filteredLeads.length} loaded
+              {serverTotal != null ? ` of ${serverTotal}` : ''}
             </span>
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              disabled={pageSafe >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={pageSafe >= totalPages && !serverHasMore}
+              onClick={() => {
+                if (pageSafe < totalPages) {
+                  setPage((p) => Math.min(totalPages, p + 1));
+                  return;
+                }
+                if (isLive && serverHasMore) void loadMoreCampaign();
+              }}
             >
-              Next →
+              {pageSafe >= totalPages && serverHasMore ? 'Load more' : 'Next →'}
             </button>
           </div>
         ) : null}
@@ -1201,8 +1387,13 @@ export default function BrandLeadsClient({
                         value={detail.campaignId || ''}
                         onChange={(e) => void assignLead(detail.id, e.target.value)}
                         aria-label="Assign campaign"
+                        required
                       >
-                        <option value="">Unassigned</option>
+                        {!detail.campaignId ? (
+                          <option value="" disabled>
+                            Select campaign…
+                          </option>
+                        ) : null}
                         {brandCampaigns.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.title}
@@ -1283,17 +1474,6 @@ export default function BrandLeadsClient({
                   >
                     Condition + sync CRM
                   </button>
-                  {detail.website ? (
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      disabled={webevoBusy === detail.id}
-                      onClick={() => void webevoOne(detail.id, true)}
-                      title="Opt-in UILensAI pro-scan (not part of phone pipeline)"
-                    >
-                      {webevoBusy === detail.id ? 'WebEvo scanning…' : 'WebEvo scan (UILensAI)'}
-                    </button>
-                  ) : null}
                 </div>
               </details>
             ) : null}
@@ -1304,14 +1484,14 @@ export default function BrandLeadsClient({
       <Modal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        title={isLive ? 'Add lead' : 'Add demo lead'}
+        title="New lead"
         wide
       >
         <form className="stack gap-sm" onSubmit={addLead}>
           <p className="muted small">
             {isLive
-              ? 'Adds to this brand’s match pipeline. Optionally assign a campaign.'
-              : 'Practice-only lead for trainer desks.'}
+              ? 'Manual add — free (no lead credits). Must enroll in a campaign.'
+              : 'Demo lead for practice desks.'}
           </p>
           <label className="field-label">
             Company
@@ -1344,8 +1524,13 @@ export default function BrandLeadsClient({
                 className="field"
                 value={assignCampaignId}
                 onChange={(e) => setAssignCampaignId(e.target.value)}
+                required
               >
-                <option value="">Unassigned</option>
+                {!assignCampaignId ? (
+                  <option value="" disabled>
+                    Select campaign…
+                  </option>
+                ) : null}
                 {brandCampaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
@@ -1359,7 +1544,7 @@ export default function BrandLeadsClient({
               Cancel
             </button>
             <button type="submit" className="btn btn-primary">
-              {isLive ? 'Add lead' : 'Add demo lead'}
+              Save lead
             </button>
           </div>
         </form>

@@ -75,7 +75,7 @@ export async function GET(req: Request) {
     const result = await runWeeklyDigest();
     return NextResponse.json({ ok: true, ...result });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

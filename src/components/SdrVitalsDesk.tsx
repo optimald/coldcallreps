@@ -40,7 +40,7 @@ export function SdrVitalsStrip({ vitals }: { vitals: SdrVitals }) {
       tone: 'good',
     },
     {
-      label: 'In escrow',
+      label: 'Pending payouts',
       value: formatSdrMoney(vitals.earningsPendingCents),
       tone: vitals.earningsPendingCents > 0 ? 'warn' : 'muted',
     },

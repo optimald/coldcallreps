@@ -17,6 +17,7 @@ export async function GET(req: Request) {
       orderBy: { totalPoints: 'desc' },
       take: limit * 2,
       select: {
+        id: true,
         displayName: true,
         hiringHeadline: true,
         hiringBio: true,
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
           : 0;
         const signalScore = Math.round(p.totalPoints * 0.4 + avgClean * 8 + clean.length * 15);
         return {
+          id: p.id,
           displayName: p.displayName,
           hiringHeadline: p.hiringHeadline,
           hiringBio: p.hiringBio,
@@ -67,6 +69,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ profiles: mapped });
   } catch (error: any) {
     console.error('Hiring board error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

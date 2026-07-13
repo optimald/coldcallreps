@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     if (error.message === 'NO_ACADEMY') {
       return NextResponse.json({ error: 'Create an academy first' }, { status: 404 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -86,7 +86,7 @@ export async function PATCH(req: Request) {
     if (error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Manager role required' }, { status: 403 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -110,6 +110,6 @@ export async function DELETE(req: Request) {
     if (error.message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Manager role required' }, { status: 403 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

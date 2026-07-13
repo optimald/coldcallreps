@@ -92,9 +92,9 @@ export function renderNotificationEmail(input: TemplateRenderInput): RenderedEma
           `${String(payload.sdrName || 'An SDR')} applied to “${campaign}”.`,
           payload.customMessage
             ? quoteBlock(String(payload.customMessage))
-            : 'Review their resume and featured calls, then accept or reject from Applications.',
+            : 'Review their resume and featured calls, then accept or reject from Recruit.',
         ],
-        ctaUrl: payload.ctaUrl || `/brands/${input.brand?.slug || ''}/sdrs/applications`,
+        ctaUrl: payload.ctaUrl || (input.brand?.slug ? `/recruit?brand=${encodeURIComponent(input.brand.slug)}` : '/recruit'),
         ctaLabel: 'Review applications',
       });
 
@@ -399,6 +399,20 @@ export function renderNotificationEmail(input: TemplateRenderInput): RenderedEma
         ],
         ctaUrl: payload.ctaUrl || '/billing',
         ctaLabel: 'Connect payouts',
+      });
+
+    case 'talent.interested':
+      return build({
+        subject: `${brand} shortlisted you`,
+        headline: 'A brand wants to work with you',
+        preheader: `${brand} showed interest`,
+        parts: [
+          `${brand} shortlisted your profile from Recruit.`,
+          'They can see you in their pipeline — open Brand deals to review their open campaigns and apply.',
+          payload.customMessage || '',
+        ].filter(Boolean),
+        ctaUrl: payload.ctaUrl || '/gigs',
+        ctaLabel: 'View brand deals',
       });
 
     default:

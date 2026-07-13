@@ -56,7 +56,7 @@ export const THEMES: ThemeDefinition[] = [
     id: 'ember-ledger',
     name: 'Studio',
     mode: 'light',
-    blurb: 'Gallery stone + graphite',
+    blurb: 'Warm stone + graphite ink',
   },
 ];
 

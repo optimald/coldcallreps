@@ -26,14 +26,17 @@ export async function POST(req: Request) {
       );
     }
     const tier = (VALID.includes(body.tier) ? body.tier : 'STARTER') as PaidPlanKey;
+    const interval = body.interval === 'year' ? 'year' : 'month';
     const plan = PLAN[tier];
-    const priceId = priceIdForTier(tier);
+    const priceId = priceIdForTier(tier, interval);
 
     if (!priceId) {
       const priceHint =
         tier === 'TEAM'
           ? `Create a $${PLAN.TEAM.price}/user/mo seat price in Stripe and set STRIPE_TEAM_PRICE_ID`
-          : `Create $${plan.price}/mo product in Stripe and set STRIPE_${tier}_PRICE_ID`;
+          : interval === 'year'
+            ? `Create yearly product in Stripe and set STRIPE_${tier}_ANNUAL_PRICE_ID`
+            : `Create $${plan.price}/mo product in Stripe and set STRIPE_${tier}_PRICE_ID`;
       return NextResponse.json(
         {
           error: 'Stripe price IDs not configured',
@@ -85,10 +88,11 @@ export async function POST(req: Request) {
       allow_promotion_codes: !couponId,
       ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
       success_url: `${appUrl}/dashboard?checkout=success&tier=${tier}`,
-      cancel_url: `${appUrl}/billing?checkout=cancel`,
+      cancel_url: `${appUrl}/subscribe/sdr?checkout=cancel`,
       metadata: {
         userId: profile.id,
         tier,
+        interval,
         ...(tier === 'TEAM' ? { seats: String(seats) } : {}),
       },
     });
@@ -99,6 +103,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('Checkout error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -105,7 +105,7 @@ export default function SessionResumePick({
       >
         {onResume ? 'On resume' : 'Use on resume'}
       </button>
-      <Link href="/hiring" className="soft-link">
+      <Link href="/resume" className="soft-link">
         Manage →
       </Link>
       {msg ? <span className="session-resume-pick__msg muted">{msg}</span> : null}

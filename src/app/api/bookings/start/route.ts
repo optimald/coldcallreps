@@ -65,6 +65,20 @@ export async function POST(req: Request) {
       prospectName = prospect?.ownerName || prospect?.companyName || null;
     }
 
+    const callLogId = body.callLogId ? String(body.callLogId) : null;
+    if (callLogId) {
+      const ownedLog = await prisma.callLog.findFirst({
+        where: { id: callLogId, userId: profile.id, campaignId },
+        select: { id: true },
+      });
+      if (!ownedLog) {
+        return NextResponse.json(
+          { error: 'callLogId must belong to you on this campaign' },
+          { status: 403 }
+        );
+      }
+    }
+
     const token = randomBytes(18).toString('base64url');
     const origin = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_ORIGIN || '')
       .replace(/\/$/, '')
@@ -82,7 +96,7 @@ export async function POST(req: Request) {
         campaignId,
         applicationId: app.id,
         repUserId: profile.id,
-        callLogId: body.callLogId ? String(body.callLogId) : null,
+        callLogId,
         prospectId,
         prospectName,
         attributionToken: token,
@@ -99,10 +113,10 @@ export async function POST(req: Request) {
       },
     });
 
-    if (body.callLogId) {
+    if (callLogId) {
       await prisma.callLog
-        .update({
-          where: { id: String(body.callLogId) },
+        .updateMany({
+          where: { id: callLogId, userId: profile.id },
           data: {
             status: 'APPOINTMENT_SET',
             outcome: 'appointment_set',
@@ -126,9 +140,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('[bookings/start]', e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Could not start booking' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

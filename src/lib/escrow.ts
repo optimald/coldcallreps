@@ -88,7 +88,7 @@ export async function lockEscrowForCampaign(opts: {
   });
 }
 
-/** Release one outcome from campaign escrow (after verified appointment). */
+/** Release one outcome from campaign escrow (after verified appointment). Idempotent per claimId. */
 export async function releaseEscrowOutcome(opts: {
   brandId: string;
   campaignId: string;
@@ -97,6 +97,16 @@ export async function releaseEscrowOutcome(opts: {
 }) {
   const amount = Math.max(0, Math.round(opts.amountCents));
   return prisma.$transaction(async (tx) => {
+    if (opts.claimId) {
+      const prior = await tx.walletLedger.findFirst({
+        where: { claimId: opts.claimId, type: 'ESCROW_RELEASE' },
+        select: { id: true },
+      });
+      if (prior) {
+        return { released: 0, alreadyReleased: true as const };
+      }
+    }
+
     const campaign = await tx.campaign.findUnique({ where: { id: opts.campaignId } });
     if (!campaign) throw new Error('Campaign not found');
     if (campaign.escrowLockedCents < amount) {
@@ -120,6 +130,6 @@ export async function releaseEscrowOutcome(opts: {
         },
       });
     }
-    return { released: amount };
+    return { released: amount, alreadyReleased: false as const };
   });
 }

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateTwilioRequest, toE164 } from '@/lib/twilio-auth';
-import { isAllowedCallerId } from '@/lib/brand-phone';
+import { prisma } from '@/lib/prisma';
+import { parseVoiceClientUserId } from '@/lib/brand-phone';
 
 /**
  * TwiML Voice webhook for the browser dialer (TwiML App Voice URL).
- * Outbound: Device.connect({ params: { To, CallerId } }) → <Dial><Number>
- * CallerId must be platform default or an active brand pool DID.
+ * Outbound must include CallLogId from /api/calls/outbound — dials are
+ * authorized against that log (To, CallerId, client identity).
  *
  * Must be public (Twilio server-to-server). No Clerk auth.
  */
@@ -18,47 +19,61 @@ export async function POST(request: NextRequest) {
   }
 
   const toNumber = params.To;
-  const fromNumber = params.From || params.Caller;
-  const callerIdOverride = params.CallerId;
-  let callerId =
-    callerIdOverride ||
-    (fromNumber?.startsWith('+') ? fromNumber : null) ||
-    process.env.TWILIO_FROM_NUMBER ||
-    '';
-
-  if (callerId) {
-    try {
-      const normalized = toE164(callerId);
-      const allowed = await isAllowedCallerId(normalized);
-      if (!allowed) {
-        const platform = process.env.TWILIO_FROM_NUMBER?.trim();
-        callerId = platform || '';
-      } else {
-        callerId = normalized;
-      }
-    } catch {
-      callerId = process.env.TWILIO_FROM_NUMBER || '';
-    }
-  }
+  const callLogId = (params.CallLogId || params.callLogId || '').trim();
+  const fromClient = params.From || params.Caller || '';
 
   let xml: string;
 
   if (toNumber && !toNumber.startsWith('client:')) {
-    const safeTo = toNumber.replace(/[<>&'"]/g, '');
-    const safeCaller = callerId.replace(/[<>&'"]/g, '');
-    if (!safeCaller) {
+    if (!callLogId) {
       xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Outbound caller ID is not configured.</Say>
+  <Say>Call authorization missing. Start the dial from Cold Call Reps.</Say>
   <Hangup/>
 </Response>`;
     } else {
-      xml = `<?xml version="1.0" encoding="UTF-8"?>
+      const log = await prisma.callLog.findUnique({
+        where: { id: callLogId },
+        select: {
+          id: true,
+          userId: true,
+          toNumber: true,
+          fromNumber: true,
+          status: true,
+          direction: true,
+        },
+      });
+
+      const clientUserId = parseVoiceClientUserId(fromClient);
+      const dest = toE164(toNumber);
+      const logTo = log?.toNumber ? toE164(log.toNumber) : null;
+      const callerId = log?.fromNumber ? toE164(log.fromNumber) : '';
+
+      const allowed =
+        log &&
+        log.direction === 'outbound' &&
+        ['initiated', 'in-progress', 'ringing'].includes(log.status) &&
+        clientUserId === log.userId &&
+        logTo &&
+        dest === logTo &&
+        Boolean(callerId);
+
+      if (!allowed || !callerId) {
+        xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>This outbound call is not authorized.</Say>
+  <Hangup/>
+</Response>`;
+      } else {
+        const safeTo = dest.replace(/[<>&'"]/g, '');
+        const safeCaller = callerId.replace(/[<>&'"]/g, '');
+        xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial callerId="${safeCaller}" answerOnBridge="true" timeout="30">
     <Number>${safeTo}</Number>
   </Dial>
 </Response>`;
+      }
     }
   } else {
     xml = `<?xml version="1.0" encoding="UTF-8"?>

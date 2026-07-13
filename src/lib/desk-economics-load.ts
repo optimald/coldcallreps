@@ -3,6 +3,7 @@ import 'server-only';
 import { loadCampaignSpendStats } from '@/lib/campaign-spend';
 import {
   buildBrandEconomics,
+  weekdayLabelFromDayKey,
   type BrandEconomics,
   type DeskDayPoint,
 } from '@/lib/desk-economics';
@@ -28,7 +29,7 @@ function emptySeries(since: Date, days = PERIOD_DAYS): DeskDayPoint[] {
     const key = dayKey(date);
     out.push({
       key,
-      label: date.toLocaleDateString(undefined, { weekday: 'short' }),
+      label: weekdayLabelFromDayKey(key),
       leads: 0,
       goals: 0,
       dials: 0,

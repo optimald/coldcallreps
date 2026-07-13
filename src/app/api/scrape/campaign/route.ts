@@ -8,7 +8,7 @@ import { dispatchPipelineTask, scoutCampaignTask } from '@/trigger/tasks';
  * POST /api/scrape/campaign
  * Founder "Scout targets" / Launch Campaign entry — runs P1→P2→P3 then STOP.
  *
- * Body: { brandId, campaignId?, query, location, maxResults?, noWebsiteOnly?, async? }
+ * Body: { brandId, campaignId, query, location, maxResults?, noWebsiteOnly?, async? }
  */
 export async function POST(req: Request) {
   try {
@@ -28,6 +28,12 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    if (!campaignId) {
+      return NextResponse.json(
+        { error: 'campaignId required — enroll generated leads in a campaign' },
+        { status: 400 }
+      );
+    }
 
     const brand = await prisma.brand.findUnique({ where: { id: brandId } });
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
@@ -36,21 +42,19 @@ export async function POST(req: Request) {
     }
     const ownerUserId = brand.ownerId || profile.id;
 
-    if (campaignId) {
-      const campaign = await prisma.campaign.findFirst({
-        where: { id: campaignId, brandId },
-      });
-      if (!campaign) {
-        return NextResponse.json({ error: 'Campaign not found on brand' }, { status: 404 });
-      }
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: {
-          targetVertical: query.slice(0, 160),
-          targetLocation: location.slice(0, 160),
-        },
-      });
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, brandId },
+    });
+    if (!campaign) {
+      return NextResponse.json({ error: 'Campaign not found on brand' }, { status: 404 });
     }
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        targetVertical: query.slice(0, 160),
+        targetLocation: location.slice(0, 160),
+      },
+    });
 
     const payload = {
       brandId,
@@ -93,9 +97,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('[scrape/campaign]', e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Scout failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -29,14 +29,18 @@ export async function POST(req: Request) {
       if (!(await canManageBrandLeads(profile, brandId))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      if (campaignId) {
-        const campaign = await prisma.campaign.findFirst({
-          where: { id: campaignId, brandId },
-          select: { id: true },
-        });
-        if (!campaign) {
-          return NextResponse.json({ error: 'Campaign not found for brand' }, { status: 400 });
-        }
+      if (!campaignId) {
+        return NextResponse.json(
+          { error: 'campaignId required — enroll saved leads in a campaign' },
+          { status: 400 }
+        );
+      }
+      const campaign = await prisma.campaign.findFirst({
+        where: { id: campaignId, brandId },
+        select: { id: true },
+      });
+      if (!campaign) {
+        return NextResponse.json({ error: 'Campaign not found for brand' }, { status: 400 });
       }
     }
 
@@ -120,7 +124,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('Prospects search error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -160,6 +164,6 @@ export async function GET(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

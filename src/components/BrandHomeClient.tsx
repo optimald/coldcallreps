@@ -393,8 +393,8 @@ export default function BrandHomeClient({
           title="Verified goals"
           description="Bookings and appointment claims — the outcomes that matter"
           actions={
-            <Link href={brandHref(brand, 'calls')} className="soft-link">
-              Calls board →
+            <Link href={brandHref(brand, 'goals')} className="soft-link">
+              All verified goals →
             </Link>
           }
         >

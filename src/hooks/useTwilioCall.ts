@@ -295,7 +295,10 @@ export function useTwilioCall(options: Options = {}) {
           brandName: data.brandName || null,
         }));
 
-        const params: Record<string, string> = { To: destination };
+        const params: Record<string, string> = {
+          To: destination,
+          CallLogId: String(data.callLogId),
+        };
         if (serverFrom) {
           params.CallerId = serverFrom;
         } else if (process.env.NEXT_PUBLIC_TWILIO_FROM_NUMBER) {

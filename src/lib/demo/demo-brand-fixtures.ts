@@ -8,7 +8,12 @@ import {
   resolveDemoBrandKey,
 } from '@/lib/demo/canonical-brands';
 import { buildDemoLeadsForBrand } from '@/lib/demo/demo-leads-by-brand';
-import { buildBrandEconomics, type BrandEconomics } from '@/lib/desk-economics';
+import {
+  buildBrandEconomics,
+  utcDayKey,
+  weekdayLabelFromDayKey,
+  type BrandEconomics,
+} from '@/lib/desk-economics';
 
 function hoursFromNow(h: number): string {
   return new Date(Date.now() + h * 3600_000).toISOString();
@@ -31,6 +36,7 @@ export type DemoCampaign = {
   escrowLabel?: string | null;
   dateRangeLabel?: string | null;
   budgetLabel?: string | null;
+  remainingOverallCents?: number | null;
   activateOn?: boolean;
   budgetMode?: string;
   budgetCents?: number | null;
@@ -62,6 +68,7 @@ export type DemoTeamMember = {
   userId: string;
   name: string;
   slug: string | null;
+  avatarUrl: string | null;
   campaigns: { id: string; title: string; status: string }[];
   dials: number;
   lastCallAt: string | null;
@@ -74,6 +81,7 @@ export type DemoPayout = {
   campaignId: string;
   campaignTitle: string;
   sdrName: string;
+  sdrId: string;
   createdAt: string;
 };
 
@@ -84,6 +92,10 @@ export type DemoKpis = {
   callsToday: number;
   escrowBalanceCents: number;
   escrowLabel: string;
+  /** Lead credits used this period */
+  leadCreditsUsed?: number;
+  /** Lead credits available this period (allotment) */
+  leadCreditsAvailable?: number;
 };
 
 export type DemoUpcomingCall = {
@@ -170,6 +182,10 @@ function app(
   return { id, status, campaignId, campaignTitle, displayName, profileSlug: null, createdAt: daysAgo(ago) };
 }
 
+function demoAvatar(name: string): string {
+  return `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}&backgroundColor=e8e4dc`;
+}
+
 function member(
   userId: string,
   name: string,
@@ -177,7 +193,15 @@ function member(
   dials: number,
   lastAgo: number
 ): DemoTeamMember {
-  return { userId, name, slug: null, campaigns, dials, lastCallAt: daysAgo(lastAgo) };
+  return {
+    userId,
+    name,
+    slug: null,
+    avatarUrl: demoAvatar(name),
+    campaigns,
+    dials,
+    lastCallAt: daysAgo(lastAgo),
+  };
 }
 
 function pay(
@@ -187,9 +211,19 @@ function pay(
   campaignId: string,
   campaignTitle: string,
   sdrName: string,
+  sdrId: string,
   ago: number
 ): DemoPayout {
-  return { id, status, grossCents, campaignId, campaignTitle, sdrName, createdAt: daysAgo(ago) };
+  return {
+    id,
+    status,
+    grossCents,
+    campaignId,
+    campaignTitle,
+    sdrName,
+    sdrId,
+    createdAt: daysAgo(ago),
+  };
 }
 
 function job(
@@ -236,10 +270,11 @@ const MERIDIAN: BrandFixture = {
       bookingLink: 'https://cal.com/meridianops/ql',
       targetVertical: 'B2B SaaS / RevOps',
       targetLocation: 'United States',
-      escrowLabel: '$1,200 escrow',
+      escrowLabel: '$1,200',
       dateRangeLabel: 'Jul 1 – Ongoing',
-      budgetLabel: '$4k overall · $3.05k left',
+      budgetLabel: '$4k',
       budgetCents: 400000,
+      remainingOverallCents: 305000,
       startsAt: daysAgo(14),
       progress: { targeting: 48, conditioning: 22, dialingReady: 32, dialingActive: 14, booked: 6, dials: 128, maxAwards: 80 },
     }),
@@ -255,10 +290,11 @@ const MERIDIAN: BrandFixture = {
       bookingLink: 'https://cal.com/meridianops/ent',
       targetVertical: 'Enterprise SaaS buyers',
       targetLocation: 'United States',
-      escrowLabel: '$2,500 escrow',
+      escrowLabel: '$2,500',
       dateRangeLabel: 'Jun 20 – Ongoing',
-      budgetLabel: '$5k overall · $4.1k left',
+      budgetLabel: '$5k',
       budgetCents: 500000,
+      remainingOverallCents: 410000,
       startsAt: daysAgo(22),
       progress: { targeting: 18, conditioning: 9, dialingReady: 11, dialingActive: 4, booked: 2, dials: 41, maxAwards: 20 },
     }),
@@ -270,22 +306,22 @@ const MERIDIAN: BrandFixture = {
   ],
   team: [
     member('demo-user-mer-dev', 'Dev Patel', [{ id: 'demo-camp-meridian-ql', title: 'RevOps qualified lead wave', status: 'ACTIVE' }], 52, 0),
-    member('demo-user-mer-jordan', 'Jordan Lee', [
+    member('demo-user-jordan', 'Jordan Lee', [
       { id: 'demo-camp-meridian-ql', title: 'RevOps qualified lead wave', status: 'ACTIVE' },
       { id: 'demo-camp-meridian-ent', title: 'Enterprise booked meeting', status: 'ACTIVE' },
     ], 38, 0),
-    member('demo-user-mer-riley', 'Riley Quinn', [{ id: 'demo-camp-meridian-ent', title: 'Enterprise booked meeting', status: 'ACTIVE' }], 21, 1),
+    member('demo-user-riley', 'Riley Quinn', [{ id: 'demo-camp-meridian-ent', title: 'Enterprise booked meeting', status: 'ACTIVE' }], 21, 1),
   ],
   payouts: [
-    pay('demo-pay-mer-1', 'PAID', 3000, 'demo-camp-meridian-ql', 'RevOps qualified lead wave', 'Dev Patel', 4),
-    pay('demo-pay-mer-2', 'APPROVED', 25000, 'demo-camp-meridian-ent', 'Enterprise booked meeting', 'Jordan Lee', 2),
-    pay('demo-pay-mer-3', 'PENDING', 3000, 'demo-camp-meridian-ql', 'RevOps qualified lead wave', 'Riley Quinn', 0),
+    pay('demo-pay-mer-1', 'PAID', 3000, 'demo-camp-meridian-ql', 'RevOps qualified lead wave', 'Dev Patel', 'demo-user-mer-dev', 4),
+    pay('demo-pay-mer-2', 'APPROVED', 25000, 'demo-camp-meridian-ent', 'Enterprise booked meeting', 'Jordan Lee', 'demo-user-jordan', 2),
+    pay('demo-pay-mer-3', 'PENDING', 3000, 'demo-camp-meridian-ql', 'RevOps qualified lead wave', 'Riley Quinn', 'demo-user-riley', 0),
   ],
   pipelineJobs: [
     job('demo-job-mer-1', 'demo-brand-meridianops', 'demo-camp-meridian-ql', 'RevOps qualified lead wave', 'B2B SaaS sales ops teams', 'United States', 'completed', 36, 28, 3),
     job('demo-job-mer-2', 'demo-brand-meridianops', 'demo-camp-meridian-ent', 'Enterprise booked meeting', 'enterprise CRO / VP Sales', 'San Francisco Bay Area', 'running', 9, 3, 0),
   ],
-  kpis: { openCampaigns: 2, pendingApplications: 2, leads: 45, callsToday: 18, escrowBalanceCents: 370000, escrowLabel: '$3,700.00' },
+  kpis: { openCampaigns: 2, pendingApplications: 2, leads: 45, callsToday: 18, escrowBalanceCents: 370000, escrowLabel: '$3,700.00', leadCreditsUsed: 45, leadCreditsAvailable: 100 },
 };
 
 const HARBOR: BrandFixture = {
@@ -302,10 +338,11 @@ const HARBOR: BrandFixture = {
       bookingLink: 'https://cal.com/harborline/life',
       targetVertical: 'independent life insurance agencies',
       targetLocation: 'Austin, TX',
-      escrowLabel: '$3,500 escrow',
+      escrowLabel: '$3,500',
       dateRangeLabel: 'Jul 1 – Ongoing',
-      budgetLabel: '$2.4k overall · $1.78k left',
+      budgetLabel: '$2.4k',
       budgetCents: 240000,
+      remainingOverallCents: 178000,
       startsAt: daysAgo(12),
       progress: { targeting: 24, conditioning: 12, dialingReady: 18, dialingActive: 9, booked: 4, dials: 86, maxAwards: 40 },
     }),
@@ -323,8 +360,9 @@ const HARBOR: BrandFixture = {
       targetLocation: 'Florida',
       escrowLabel: '$0',
       dateRangeLabel: 'May 1 – Ongoing',
-      budgetLabel: '$1.5k overall · $1.5k left',
+      budgetLabel: '$1.5k',
       budgetCents: 150000,
+      remainingOverallCents: 150000,
       startsAt: daysAgo(40),
       progress: { targeting: 10, conditioning: 4, dialingReady: 3, dialingActive: 0, booked: 0, dials: 14, maxAwards: 25 },
     }),
@@ -336,20 +374,20 @@ const HARBOR: BrandFixture = {
   ],
   team: [
     member('demo-user-har-sam', 'Sam Rivera', [{ id: 'demo-camp-harbor-life', title: 'Term / life agency wave', status: 'ACTIVE' }], 47, 0),
-    member('demo-user-har-jordan', 'Jordan Lee', [{ id: 'demo-camp-harbor-life', title: 'Term / life agency wave', status: 'ACTIVE' }], 31, 1),
-    member('demo-user-har-riley', 'Riley Quinn', [{ id: 'demo-camp-harbor-life', title: 'Term / life agency wave', status: 'ACTIVE' }], 18, 2),
+    member('demo-user-jordan', 'Jordan Lee', [{ id: 'demo-camp-harbor-life', title: 'Term / life agency wave', status: 'ACTIVE' }], 31, 1),
+    member('demo-user-riley', 'Riley Quinn', [{ id: 'demo-camp-harbor-life', title: 'Term / life agency wave', status: 'ACTIVE' }], 18, 2),
   ],
   payouts: [
-    pay('demo-pay-har-1', 'PAID', 17500, 'demo-camp-harbor-life', 'Term / life agency wave', 'Sam Rivera', 3),
-    pay('demo-pay-har-2', 'APPROVED', 17500, 'demo-camp-harbor-life', 'Term / life agency wave', 'Jordan Lee', 1),
-    pay('demo-pay-har-3', 'PENDING', 12500, 'demo-camp-harbor-ma', 'Medicare Advantage enrollments', 'Riley Quinn', 0),
+    pay('demo-pay-har-1', 'PAID', 17500, 'demo-camp-harbor-life', 'Term / life agency wave', 'Sam Rivera', 'demo-user-har-sam', 3),
+    pay('demo-pay-har-2', 'APPROVED', 17500, 'demo-camp-harbor-life', 'Term / life agency wave', 'Jordan Lee', 'demo-user-jordan', 1),
+    pay('demo-pay-har-3', 'PENDING', 12500, 'demo-camp-harbor-ma', 'Medicare Advantage enrollments', 'Riley Quinn', 'demo-user-riley', 0),
   ],
   pipelineJobs: [
     job('demo-job-har-1', 'demo-brand-harborline', 'demo-camp-harbor-life', 'Term / life agency wave', 'independent life insurance agencies', 'Austin, TX', 'completed', 24, 18, 2),
     job('demo-job-har-2', 'demo-brand-harborline', 'demo-camp-harbor-ma', 'Medicare Advantage enrollments', 'Medicare Advantage agencies', 'Florida', 'completed', 16, 11, 1),
     job('demo-job-har-3', 'demo-brand-harborline', null, null, 'final expense agencies', 'Texas', 'failed', 0, 0, 5, 'Maps API rate limited — retry later'),
   ],
-  kpis: { openCampaigns: 1, pendingApplications: 2, leads: 45, callsToday: 14, escrowBalanceCents: 245000, escrowLabel: '$2,450.00' },
+  kpis: { openCampaigns: 1, pendingApplications: 2, leads: 45, callsToday: 14, escrowBalanceCents: 245000, escrowLabel: '$2,450.00', leadCreditsUsed: 28, leadCreditsAvailable: 100 },
 };
 
 const SUMMIT: BrandFixture = {
@@ -366,10 +404,11 @@ const SUMMIT: BrandFixture = {
       bookingLink: 'https://cal.com/summitshield/roof',
       targetVertical: 'residential roofing',
       targetLocation: 'Denver, CO',
-      escrowLabel: '$1,700 escrow',
+      escrowLabel: '$1,700',
       dateRangeLabel: 'Jul 1 – Ongoing',
-      budgetLabel: '$1.8k overall · $1.35k left',
+      budgetLabel: '$1.8k',
       budgetCents: 180000,
+      remainingOverallCents: 135000,
       startsAt: daysAgo(10),
       progress: { targeting: 54, conditioning: 28, dialingReady: 42, dialingActive: 16, booked: 5, dials: 112, maxAwards: 60 },
     }),
@@ -385,10 +424,11 @@ const SUMMIT: BrandFixture = {
       bookingLink: 'https://cal.com/summitshield/hvac',
       targetVertical: 'residential HVAC',
       targetLocation: 'Phoenix, AZ',
-      escrowLabel: '$1,200 escrow',
+      escrowLabel: '$1,200',
       dateRangeLabel: 'Jun 15 – Ongoing',
-      budgetLabel: '$1.2k overall · $0.9k left',
+      budgetLabel: '$1.2k',
       budgetCents: 120000,
+      remainingOverallCents: 90000,
       startsAt: daysAgo(28),
       progress: { targeting: 30, conditioning: 14, dialingReady: 18, dialingActive: 7, booked: 3, dials: 64, maxAwards: 40 },
     }),
@@ -406,15 +446,15 @@ const SUMMIT: BrandFixture = {
     ], 36, 0),
   ],
   payouts: [
-    pay('demo-pay-sum-1', 'PAID', 8500, 'demo-camp-summit-roof', 'Roof inspection set', 'Elena Ruiz', 3),
-    pay('demo-pay-sum-2', 'APPROVED', 7500, 'demo-camp-summit-hvac', 'HVAC appointment wave', 'Marcus Chen', 1),
-    pay('demo-pay-sum-3', 'PENDING', 8500, 'demo-camp-summit-roof', 'Roof inspection set', 'Elena Ruiz', 0),
+    pay('demo-pay-sum-1', 'PAID', 8500, 'demo-camp-summit-roof', 'Roof inspection set', 'Elena Ruiz', 'demo-user-sum-elena', 3),
+    pay('demo-pay-sum-2', 'APPROVED', 7500, 'demo-camp-summit-hvac', 'HVAC appointment wave', 'Marcus Chen', 'demo-user-sum-marcus', 1),
+    pay('demo-pay-sum-3', 'PENDING', 8500, 'demo-camp-summit-roof', 'Roof inspection set', 'Elena Ruiz', 'demo-user-sum-elena', 0),
   ],
   pipelineJobs: [
     job('demo-job-sum-1', 'demo-brand-summitshield', 'demo-camp-summit-roof', 'Roof inspection set', 'residential homes hail damage', 'Denver, CO', 'completed', 42, 34, 2),
     job('demo-job-sum-2', 'demo-brand-summitshield', 'demo-camp-summit-hvac', 'HVAC appointment wave', 'homes aging HVAC systems', 'Phoenix, AZ', 'running', 12, 5, 0),
   ],
-  kpis: { openCampaigns: 2, pendingApplications: 1, leads: 45, callsToday: 22, escrowBalanceCents: 180000, escrowLabel: '$1,800.00' },
+  kpis: { openCampaigns: 2, pendingApplications: 1, leads: 45, callsToday: 22, escrowBalanceCents: 180000, escrowLabel: '$1,800.00', leadCreditsUsed: 12, leadCreditsAvailable: 100 },
 };
 
 const FIXTURES: Record<string, BrandFixture> = {
@@ -463,12 +503,10 @@ export function getFixtureEconomics(brandSlug: string): BrandEconomics {
   const slug = resolveDemoBrandKey(brandSlug);
   const spec = ECON[slug] ?? ECON['demo-meridianops'];
   const series = [6, 5, 4, 3, 2, 1, 0].map((back, i) => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - back);
+    const key = utcDayKey(back);
     return {
-      key: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString(undefined, { weekday: 'short' }),
+      key,
+      label: weekdayLabelFromDayKey(key),
       leads: spec.leads[i],
       goals: spec.goals[i],
       dials: spec.dials[i],
@@ -518,7 +556,7 @@ const CALLS: Record<string, CallsCtx> = {
     contacts: ['Priya Shah', 'Marcus Chen', 'Elena Ruiz'],
     sdrs: [
       { id: 'demo-user-mer-dev', name: 'Dev Patel' },
-      { id: 'demo-user-mer-jordan', name: 'Jordan Lee' },
+      { id: 'demo-user-jordan', name: 'Jordan Lee' },
     ],
     phones: ['+1 (415) 555-0142', '+1 (512) 555-0198', '+1 (206) 555-0133'],
   },
@@ -529,7 +567,7 @@ const CALLS: Record<string, CallsCtx> = {
     contacts: ['James Okonkwo', 'Rachel Kim', 'Amy Delgado'],
     sdrs: [
       { id: 'demo-user-har-sam', name: 'Sam Rivera' },
-      { id: 'demo-user-har-jordan', name: 'Jordan Lee' },
+      { id: 'demo-user-jordan', name: 'Jordan Lee' },
     ],
     phones: ['+1 (512) 555-0164', '+1 (214) 555-0177', '+1 (813) 555-0188'],
   },

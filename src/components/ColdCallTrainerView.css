@@ -336,9 +336,9 @@
   min-width: 120px;
   padding: 0.45rem 0.6rem;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elevated);
+  color: var(--ink);
   font-size: 0.78rem;
   text-align: center;
   cursor: pointer;
@@ -346,15 +346,22 @@
 }
 
 .cct-voice-btn:hover {
-  border-color: var(--line-strong);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong));
   color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
 }
 
 .cct-voice-btn.is-active {
-  background: rgba(var(--accent-2-rgb), 0.16);
-  border-color: var(--accent-2);
-  color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+  border-color: var(--accent);
+  color: var(--ink);
   font-weight: 600;
+}
+
+html[data-color-scheme='light'] .cct-voice-btn {
+  background: #fff;
+  border-color: color-mix(in srgb, var(--ink) 18%, transparent);
+  color: var(--ink);
 }
 
 .cct-setup__actions {

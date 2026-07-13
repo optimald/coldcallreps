@@ -9,7 +9,7 @@ import CreateBrandModal from '@/components/CreateBrandModal';
 import NavIconGlyph from '@/components/NavIcon';
 import ThemePicker from '@/components/ThemePicker';
 import { ShellProvider } from '@/components/ShellProvider';
-import { NAV_SECTIONS_BY_ROLE, brandNavSections, type AppRole, type NavSection } from '@/lib/roles';
+import { NAV_SECTIONS_BY_ROLE, brandNavSections, repNavSections, type AppRole, type BrandNavCounts, type NavSection } from '@/lib/roles';
 import { PLAN, type PlanKey } from '@/lib/product';
 import { repPublicPath } from '@/lib/public-urls';
 import type { RoleModeState, SwitchableMode } from '@/lib/role-mode';
@@ -24,11 +24,20 @@ import {
   type BrandDeskMode,
   type BrandRef,
 } from '@/lib/brand-context';
-import { CANONICAL_DEMO_BRANDS, getDemoKpis, getDemoTeam } from '@/lib/demo/brand-demo-data';
+import {
+  CANONICAL_DEMO_BRANDS,
+  getDemoBrandNavCounts,
+  getDemoKpis,
+  getDemoTeam,
+} from '@/lib/demo/brand-demo-data';
 import type { ShellBootstrap } from '@/lib/shell-bootstrap';
 
 const FALLBACK = NAV_SECTIONS_BY_ROLE.REP;
 const SIDEBAR_COLLAPSED_KEY = 'ccr-sidebar-collapsed';
+
+function demoNavForBrand(key: string | null | undefined) {
+  return getDemoBrandNavCounts(key || 'demo-meridianops');
+}
 
 type MeMetrics = {
   minutesRemaining: number | null;
@@ -45,6 +54,8 @@ type BrandTopMetrics = {
   walletLabel: string | null;
   openCampaigns: number | null;
   teamCount: number | null;
+  /** used/available e.g. "45/100" */
+  leadCreditsLabel: string | null;
 };
 
 function pathBrandKey(pathname: string): string | null {
@@ -177,25 +188,65 @@ export default function AppShell({
     walletLabel: null,
     openCampaigns: null,
     teamCount: null,
+    leadCreditsLabel: null,
   });
   const [deskMode, setDeskModeState] = useState<BrandDeskMode>(
     () => initial?.deskMode || 'live'
   );
-  const setDeskMode = useCallback((mode: BrandDeskMode) => {
-    writeBrandDeskMode(mode);
-    setDeskModeState(mode);
-    const key = selectedBrand ? brandPathKey(selectedBrand) : pathKey;
-    if (role === 'BRAND' || role === 'RECRUITER') {
-      setSections(
-        brandNavSections(
-          key,
-          mode === 'demo'
-            ? { leads: 137, generateLeads: 4, liveCalls: 0, campaigns: 2 }
-            : undefined
-        )
-      );
-    }
-  }, [selectedBrand, pathKey, role]);
+  const setDeskMode = useCallback(
+    (mode: BrandDeskMode) => {
+      writeBrandDeskMode(mode);
+      setDeskModeState(mode);
+      if (role !== 'BRAND' && role !== 'RECRUITER') return;
+
+      if (mode === 'demo') {
+        const demo = CANONICAL_DEMO_BRANDS[0];
+        if (demo) {
+          const nextKey = brandPathKey(demo);
+          const next: BrandRef = {
+            id: demo.id,
+            slug: demo.slug,
+            name: demo.name,
+            logoUrl: demo.logoUrl,
+          };
+          setSelectedBrand(next);
+          writeSelectedBrandKey(nextKey);
+          syncBrandCookie(nextKey);
+          setSections(
+            brandNavSections(nextKey, demoNavForBrand(nextKey))
+          );
+          const m = pathname.match(/^\/brands\/[^/]+(\/.*)?$/);
+          if (m) {
+            const rest = m[1] && m[1] !== '/' ? m[1].replace(/^\//, '') : '';
+            router.push(rest ? `/brands/${nextKey}/${rest}` : `/brands/${nextKey}`);
+          } else {
+            router.push(`/brands/${nextKey}`);
+          }
+        }
+        return;
+      }
+
+      // Live: prefer current owned selection, else first owned brand.
+      const fromPath = pathBrandKey(pathname);
+      const ownedHit =
+        (fromPath && ownedBrands.find((b) => brandPathKey(b) === fromPath)) ||
+        (selectedBrand &&
+          ownedBrands.find((b) => brandPathKey(b) === brandPathKey(selectedBrand))) ||
+        ownedBrands[0] ||
+        null;
+      const key = ownedHit ? brandPathKey(ownedHit) : pathKey;
+      if (ownedHit && key) {
+        setSelectedBrand(ownedHit);
+        writeSelectedBrandKey(key);
+        syncBrandCookie(key);
+      }
+      setSections(brandNavSections(key));
+      if (ownedHit && key && fromPath && !ownedBrands.some((b) => brandPathKey(b) === fromPath)) {
+        router.push(`/brands/${key}`);
+      }
+    },
+    [selectedBrand, pathKey, role, pathname, ownedBrands, router]
+  );
   const deskHydrated = true;
   const isBrandDesk = role === 'BRAND' || role === 'RECRUITER';
   const switcherBrands = useMemo(() => {
@@ -211,8 +262,21 @@ export default function AppShell({
   useEffect(() => {
     if (!isBrandDesk) return;
     if (deskMode === 'demo') {
-      const key = selectedBrand ? brandPathKey(selectedBrand) : '';
-      const inDemo = switcherBrands.some((b) => brandPathKey(b) === key);
+      const fromPath = pathBrandKey(pathname);
+      const demoHit = switcherBrands.find((b) => brandPathKey(b) === fromPath);
+      // Stay in Demo while browsing demo URLs — never auto-flip to Live just because
+      // an owned brand briefly matched selection during a router race.
+      if (demoHit) {
+        const key = brandPathKey(demoHit);
+        if (!selectedBrand || brandPathKey(selectedBrand) !== key) {
+          setSelectedBrand(demoHit);
+          writeSelectedBrandKey(key);
+          syncBrandCookie(key);
+        }
+        return;
+      }
+      const selectedKey = selectedBrand ? brandPathKey(selectedBrand) : '';
+      const inDemo = switcherBrands.some((b) => brandPathKey(b) === selectedKey);
       if (!inDemo && switcherBrands[0]) {
         setSelectedBrand(switcherBrands[0]);
         writeSelectedBrandKey(brandPathKey(switcherBrands[0]));
@@ -225,7 +289,7 @@ export default function AppShell({
       setSelectedBrand(ownedBrands[0]);
       writeSelectedBrandKey(brandPathKey(ownedBrands[0]));
     }
-  }, [deskMode, isBrandDesk, selectedBrand, switcherBrands, ownedBrands]);
+  }, [deskMode, isBrandDesk, selectedBrand, switcherBrands, ownedBrands, pathname]);
 
   useEffect(() => {
     try {
@@ -249,13 +313,15 @@ export default function AppShell({
   // One-time soft refresh for rank / minutes; never resets nav to SDR.
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/me')
+    // Skip heavy /api/me when SSR already seeded shell metrics.
+    const meUrl = initial?.metrics ? '/api/me?fields=metrics' : '/api/me';
+    fetch(meUrl)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled || !d) return;
-        const r = (d.platformRole || 'REP') as AppRole;
-        setRole(r);
-        setRoleMode(d.roleMode || null);
+        // Never invent REP when the soft refresh omits platformRole.
+        if (d.platformRole) setRole(d.platformRole as AppRole);
+        if (d.roleMode) setRoleMode(d.roleMode);
         setMetrics((prev) => ({
           minutesRemaining:
             typeof d.minutesRemaining === 'number' ? d.minutesRemaining : prev.minutesRemaining,
@@ -270,12 +336,14 @@ export default function AppShell({
           profileSlug: d.profileSlug || prev.profileSlug,
         }));
 
+        const r = (d.platformRole || initial?.role || role) as AppRole;
         if (r === 'BRAND' || r === 'RECRUITER') {
-          if (initial?.brands?.length) {
-            // SSR already seeded brands; only open create if empty.
+          // SSR already seeded brand list — skip the heavy refetch on mobile.
+          if (Array.isArray(initial?.brands)) {
             if (initial.brands.length === 0) setCreateBrandOpen(true);
+            return;
           }
-          fetch('/api/brands?mine=1')
+          fetch('/api/brands?mine=1&minimal=1')
             .then((res) => (res.ok ? res.json() : null))
             .then((bd) => {
               if (cancelled) return;
@@ -288,6 +356,10 @@ export default function AppShell({
                 })
               );
               setOwnedBrands(list);
+              // Don't overwrite demo selection with owned brands on soft refresh.
+              if (deskMode === 'demo' || (typeof window !== 'undefined' && document.cookie.includes('ccr-brand-desk-mode=demo'))) {
+                return;
+              }
               const fromPath = pathBrandKey(pathname);
               const resolved = resolveSelectedBrand(list, fromPath || readSelectedBrandKey());
               setSelectedBrand(resolved);
@@ -295,8 +367,11 @@ export default function AppShell({
                 const key = brandPathKey(resolved);
                 writeSelectedBrandKey(key);
                 syncBrandCookie(key);
+                // KPIs effect will attach nav counts — keep placeholders without wiping later.
+                setSections(brandNavSections(key, { brands: list.length }));
+              } else {
+                setSections(brandNavSections(null, { brands: list.length }));
               }
-              setSections(brandNavSections(resolved ? brandPathKey(resolved) : null));
               if (list.length === 0) setCreateBrandOpen(true);
             })
             .catch(() => {
@@ -305,7 +380,19 @@ export default function AppShell({
                 setCreateBrandOpen(true);
               }
             });
-        } else {
+        } else if (r === 'REP') {
+          fetch('/api/me/nav-counts')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((nd) => {
+              if (cancelled || !nd?.counts) return;
+              setSections(repNavSections(nd.counts));
+            })
+            .catch(() => {});
+          if (!initial?.sections) {
+            setSections(NAV_SECTIONS_BY_ROLE[r] || FALLBACK);
+          }
+        } else if (!initial?.sections) {
+          // Only seed SDR nav when SSR did not already provide it.
           setSections(NAV_SECTIONS_BY_ROLE[r] || FALLBACK);
         }
       })
@@ -321,19 +408,36 @@ export default function AppShell({
   useEffect(() => {
     if (!isBrandDesk) return;
     const fromPath = pathBrandKey(pathname);
-    if (!fromPath || ownedBrands.length === 0) return;
+    if (!fromPath) return;
+
+    if (deskMode === 'demo') {
+      const demoHit = switcherBrands.find((b) => brandPathKey(b) === fromPath);
+      if (!demoHit) return;
+      const key = brandPathKey(demoHit);
+      if (!selectedBrand || brandPathKey(selectedBrand) !== key) {
+        setSelectedBrand(demoHit);
+        writeSelectedBrandKey(key);
+        syncBrandCookie(key);
+      }
+      setSections(
+        brandNavSections(key, demoNavForBrand(key))
+      );
+      return;
+    }
+
+    if (ownedBrands.length === 0) return;
     const resolved = resolveSelectedBrand(ownedBrands, fromPath);
     if (!resolved) return;
     const key = brandPathKey(resolved);
     if (selectedBrand && brandPathKey(selectedBrand) === key) {
-      setSections(brandNavSections(key));
+      // Counts refresh via KPIs effect — don't wipe badges here.
       return;
     }
     setSelectedBrand(resolved);
     writeSelectedBrandKey(key);
     syncBrandCookie(key);
     setSections(brandNavSections(key));
-  }, [pathname, isBrandDesk, ownedBrands, selectedBrand]);
+  }, [pathname, isBrandDesk, ownedBrands, selectedBrand, deskMode, switcherBrands]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -344,13 +448,18 @@ export default function AppShell({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMenuOpen(false);
     };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
 
   useEffect(() => {
     if (!isBrandDesk) {
-      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null, leadCreditsLabel: null });
       return;
     }
     if (!deskHydrated) return;
@@ -362,18 +471,20 @@ export default function AppShell({
         walletLabel: kpis.escrowLabel.replace(/\.00$/, ''),
         openCampaigns: kpis.openCampaigns,
         teamCount: getDemoTeam(key).length,
+        leadCreditsLabel: `${kpis.leadCreditsUsed ?? 0}/${kpis.leadCreditsAvailable ?? 100}`,
       });
+      setSections(brandNavSections(key, demoNavForBrand(key)));
       return;
     }
 
     const key = selectedBrand ? brandPathKey(selectedBrand) : null;
     if (!key) {
-      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+      setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null, leadCreditsLabel: null });
       return;
     }
 
     let cancelled = false;
-    fetch(`/api/brands/${encodeURIComponent(key)}/overview`)
+    fetch(`/api/brands/${encodeURIComponent(key)}/kpis`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled || !d?.kpis) return;
@@ -382,17 +493,48 @@ export default function AppShell({
           openCampaigns:
             typeof d.kpis.openCampaigns === 'number' ? d.kpis.openCampaigns : null,
           teamCount: typeof d.kpis.activeSdrs === 'number' ? d.kpis.activeSdrs : null,
+          leadCreditsLabel:
+            typeof d.kpis.leadCreditsLabel === 'string'
+              ? d.kpis.leadCreditsLabel
+              : d.kpis.leadCreditsUsed != null && d.kpis.leadCreditsAvailable != null
+                ? `${d.kpis.leadCreditsUsed}/${d.kpis.leadCreditsAvailable}`
+                : null,
         });
+        if (d.nav) {
+          const nav = d.nav as BrandNavCounts;
+          setSections(
+            brandNavSections(key, {
+              ...nav,
+              brands: ownedBrands.length || nav.brands,
+            })
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) {
-          setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null });
+          setBrandMetrics({ walletLabel: null, openCampaigns: null, teamCount: null, leadCreditsLabel: null });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [isBrandDesk, deskHydrated, deskMode, selectedBrand]);
+  }, [isBrandDesk, deskHydrated, deskMode, selectedBrand, ownedBrands.length]);
+
+  // SDR sidebar pills (Brand deals / Cold Call / Earnings)
+  useEffect(() => {
+    if (isBrandDesk || role !== 'REP') return;
+    let cancelled = false;
+    fetch('/api/me/nav-counts')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.counts) return;
+        setSections(repNavSections(d.counts));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isBrandDesk, role]);
 
   const breadcrumbs = useMemo(() => {
     type Crumb = { label: string; href?: string };
@@ -405,20 +547,24 @@ export default function AppShell({
       const brandName =
         selectedBrand && brandPathKey(selectedBrand) === key
           ? selectedBrand.name
-          : ownedBrands.find((b) => brandPathKey(b) === key)?.name || key;
+          : deskMode === 'demo'
+            ? CANONICAL_DEMO_BRANDS.find((b) => b.slug === key || b.id === key)?.name ||
+              key
+            : ownedBrands.find((b) => brandPathKey(b) === key)?.name || key;
 
       if (rest) {
         crumbs.push({ label: brandName, href: `/brands/${key}` });
         const segmentLabels: Record<string, string> = {
           campaigns: 'Campaigns',
+          playbooks: 'Playbooks',
           leads: 'Leads',
+          goals: 'Verified goals',
           calls: 'Calls',
-          pipeline: 'Pipeline',
+          pipeline: 'Generate leads',
           practice: 'Practice',
           settings: 'Settings',
-          'sdrs/applications': 'Applications',
+          'sdrs/applications': 'Recruit',
           'sdrs/team': 'Team',
-          'sdrs/stats': 'Stats',
           'sdrs/payouts': 'Payouts',
         };
         const known =
@@ -430,6 +576,9 @@ export default function AppShell({
         } else if (rest.startsWith('campaigns/')) {
           crumbs.push({ label: 'Campaigns', href: `/brands/${key}/campaigns` });
           crumbs.push({ label: 'Campaign' });
+        } else if (rest.startsWith('playbooks/')) {
+          crumbs.push({ label: 'Playbooks', href: `/brands/${key}/playbooks` });
+          crumbs.push({ label: 'Playbook' });
         } else if (rest.startsWith('leads/')) {
           crumbs.push({ label: 'Leads', href: `/brands/${key}/leads` });
           crumbs.push({ label: 'Lead' });
@@ -438,7 +587,7 @@ export default function AppShell({
         }
       } else {
         crumbs.push({ label: brandName });
-        crumbs.push({ label: 'Dashboard' });
+        crumbs.push({ label: 'Overview' });
       }
       return crumbs;
     }
@@ -456,7 +605,7 @@ export default function AppShell({
     if (pathname.startsWith('/sessions')) return [{ label: 'Past calls' }];
     if (pathname.startsWith('/onboarding')) return [{ label: 'Onboarding' }];
     return [{ label: 'App' }];
-  }, [pathname, sections, isBrandDesk, selectedBrand, ownedBrands]);
+  }, [pathname, sections, isBrandDesk, selectedBrand, ownedBrands, deskMode]);
 
   const minutesLeft = metrics.minutesRemaining;
   const linkTitle = (label: string) => (sidebarCollapsed ? label : undefined);
@@ -478,8 +627,12 @@ export default function AppShell({
     setMenuOpen(false);
     try {
       const modeStatus = roleMode?.modes?.[target];
-      if (modeStatus && !modeStatus.onboarded) {
-        // Full navigation so AppShell remounts with the post-onboarding role.
+      // Brand owners may lack brandOnboardedAt (legacy). Let the API decide —
+      // it heals ownership. Only short-circuit when we know onboarding is required
+      // and there is no owned brand that would unlock Brand mode.
+      const brandOwnerBypass =
+        target === 'BRAND' && ownedBrands.length > 0;
+      if (modeStatus && !modeStatus.onboarded && !brandOwnerBypass) {
         window.location.href = modeStatus.onboardingPath;
         return;
       }
@@ -557,8 +710,8 @@ export default function AppShell({
                             brandNavSections(
                               nextKey,
                               deskMode === 'demo'
-                                ? { leads: 45, generateLeads: 2, liveCalls: 0, campaigns: 2 }
-                                : undefined
+                                ? demoNavForBrand(nextKey)
+                                : { brands: switcherBrands.length }
                             )
                           );
                           const m = pathname.match(/^\/brands\/[^/]+(\/.*)?$/);
@@ -797,6 +950,16 @@ export default function AppShell({
                       <span className="app-metric__value">{brandMetrics.walletLabel}</span>
                     </Link>
                   )}
+                  {brandMetrics.leadCreditsLabel != null && (
+                    <Link
+                      href="/billing?tab=credits"
+                      className="app-metric"
+                      title="Lead credits used / available this period"
+                    >
+                      <span className="app-metric__label">Lead credits</span>
+                      <span className="app-metric__value">{brandMetrics.leadCreditsLabel}</span>
+                    </Link>
+                  )}
                   {brandMetrics.openCampaigns != null && (
                     <Link
                       href={
@@ -818,14 +981,14 @@ export default function AppShell({
                           ? brandHref(selectedBrand, 'sdrs', 'team')
                           : '/brands'
                       }
-                      className="app-metric"
+                      className="app-metric app-metric--secondary"
                       title="Active SDRs on this brand"
                     >
                       <span className="app-metric__label">Team</span>
                       <span className="app-metric__value">{brandMetrics.teamCount}</span>
                     </Link>
                   )}
-                  <Link href="/billing" className="app-metric-upgrade">
+                  <Link href="/subscribe" className="app-metric-upgrade app-metric--secondary">
                     Upgrade →
                   </Link>
                 </>
@@ -849,21 +1012,21 @@ export default function AppShell({
                   {minutesLeft != null && (
                     <>
                       <Link
-                        href="/billing"
+                        href="/subscribe/sdr"
                         className="app-metric app-metric--accent"
                         title="Minutes remaining"
                       >
                         <span className="app-metric__label">Min</span>
                         <span className="app-metric__value">{minutesLeft}</span>
                       </Link>
-                      <Link href="/billing" className="app-metric-upgrade">
+                      <Link href="/subscribe" className="app-metric-upgrade">
                         Upgrade →
                       </Link>
                     </>
                   )}
                 </>
               )}
-              <Link href="/billing" className="app-metric app-metric--plan" title="Current plan">
+              <Link href="/subscribe" className="app-metric app-metric--plan" title="Current plan">
                 <span className="app-metric__label">Plan</span>
                 <span className="app-metric__value">{planLabel(metrics.plan)}</span>
               </Link>
@@ -898,8 +1061,18 @@ export default function AppShell({
           setCreateBrandOpen(false);
         }}
         redirectTo={undefined}
-        onCreated={(key) => {
+        onCreated={(key, brand) => {
           if (!key) return;
+          writeBrandDeskMode('live');
+          setDeskModeState('live');
+          if (brand) {
+            setOwnedBrands((prev) =>
+              prev.some((b) => b.id === brand.id || brandPathKey(b) === key)
+                ? prev
+                : [brand, ...prev]
+            );
+            setSelectedBrand(brand);
+          }
           writeSelectedBrandKey(key);
           syncBrandCookie(key);
           setSections(brandNavSections(key));

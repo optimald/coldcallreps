@@ -335,7 +335,7 @@ export function BudgetDonut({
   );
 }
 
-/** Horizontal comparison bars across brands. */
+/** Horizontal comparison bars across brands (HTML layout — labels never SVG-clipped). */
 export function BrandCompareBars({
   rows,
   valueLabel,
@@ -354,69 +354,29 @@ export function BrandCompareBars({
   }
 
   const maxVal = Math.max(maxHint || 0, 1, ...rows.map((r) => r.value));
-  const rowH = 28;
-  const padL = 88;
-  const padR = 52;
-  const padT = 8;
-  const padB = 8;
-  const w = 560;
-  const h = padT + padB + rows.length * rowH;
-  const barMax = w - padL - padR;
 
   return (
-    <div className="desk-chart desk-chart--compare">
-      <svg
-        className="desk-chart__svg"
-        viewBox={`0 0 ${w} ${h}`}
-        role="img"
-        aria-label={ariaLabel}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {rows.map((row, i) => {
-          const y = padT + i * rowH + 4;
-          const barW = Math.max(row.value > 0 ? 4 : 0, (row.value / maxVal) * barMax);
-          const fill =
-            row.tone === 'bad'
-              ? 'var(--danger, #e25555)'
-              : row.tone === 'warn'
-                ? 'var(--warn, #d4a017)'
-                : row.tone === 'good'
-                  ? 'var(--teal, #6fd4c8)'
-                  : 'var(--accent)';
+    <div className="desk-compare" role="img" aria-label={ariaLabel}>
+      <ul className="desk-compare__list">
+        {rows.map((row) => {
+          const pct = Math.max(row.value > 0 ? 4 : 0, (row.value / maxVal) * 100);
+          const tone = row.tone || 'accent';
           return (
-            <g key={row.id}>
-              <text
-                x={padL - 8}
-                y={y + 12}
-                textAnchor="end"
-                className="desk-chart__tick desk-chart__tick--brand"
-              >
-                {row.label.length > 12 ? `${row.label.slice(0, 11)}…` : row.label}
-              </text>
-              <rect
-                x={padL}
-                y={y}
-                width={barMax}
-                height={16}
-                rx={3}
-                fill="color-mix(in srgb, var(--border) 55%, transparent)"
-              />
-              <rect x={padL} y={y} width={barW} height={16} rx={3} fill={fill}>
-                <title>
-                  {row.label}: {formatValue(row.value)} {valueLabel}
-                </title>
-              </rect>
-              <text
-                x={padL + barMax + 8}
-                y={y + 12}
-                className="desk-chart__tick"
-              >
-                {formatValue(row.value)}
-              </text>
-            </g>
+            <li key={row.id} className="desk-compare__row">
+              <span className="desk-compare__label" title={row.label}>
+                {row.label}
+              </span>
+              <div className="desk-compare__track" aria-hidden>
+                <div
+                  className={`desk-compare__fill desk-compare__fill--${tone}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className="desk-compare__value">{formatValue(row.value)}</span>
+            </li>
           );
         })}
-      </svg>
+      </ul>
       <div className="desk-chart__legend">
         <span className="desk-chart__legend-item">{valueLabel}</span>
       </div>

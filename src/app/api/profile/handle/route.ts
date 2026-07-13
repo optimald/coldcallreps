@@ -23,6 +23,6 @@ export async function GET(req: Request) {
     const result = await checkRepHandleAvailable(q, userId);
     return NextResponse.json(result);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

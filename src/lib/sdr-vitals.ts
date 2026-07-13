@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { UserProfile } from '@prisma/client';
+import { weekdayLabelFromDayKey } from '@/lib/desk-economics';
 import { prisma } from '@/lib/prisma';
 import type {
   SdrEarningsDay,
@@ -33,7 +34,7 @@ function emptyEarningsSeries(since: Date, days: number): SdrEarningsDay[] {
     d.setUTCDate(d.getUTCDate() + i);
     out.push({
       key: dayKey(d),
-      label: d.toLocaleDateString(undefined, { weekday: 'short' }),
+      label: weekdayLabelFromDayKey(dayKey(d)),
       earnedCents: 0,
       cumulativeCents: 0,
     });
@@ -237,7 +238,11 @@ export async function loadSdrVitals(
     const wobble = ((i * 7) % 5) - 2;
     rankTrack.push({
       key: dayKey(d),
-      label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      label: d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      }),
       rank: Math.max(1, currentRank + wobble),
     });
   }

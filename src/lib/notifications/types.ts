@@ -33,6 +33,8 @@ export const NOTIFICATION_EVENTS = [
   'welcome.brand',
   'connect.required',
   'connect.ready',
+  // Talent / recruit
+  'talent.interested',
 ] as const;
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number];

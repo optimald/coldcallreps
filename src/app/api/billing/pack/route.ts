@@ -64,8 +64,8 @@ export async function POST(req: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: !couponId,
       ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
-      success_url: `${appUrl}/billing?pack=success&minutes=${pack.minutes}`,
-      cancel_url: `${appUrl}/billing?pack=cancel`,
+      success_url: `${appUrl}/subscribe/sdr?pack=success&minutes=${pack.minutes}`,
+      cancel_url: `${appUrl}/subscribe/sdr?pack=cancel`,
       metadata: {
         userId: profile.id,
         kind: 'minute_pack',
@@ -80,6 +80,6 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

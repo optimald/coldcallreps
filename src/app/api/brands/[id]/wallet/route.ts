@@ -121,7 +121,7 @@ export async function GET(
     if (message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -145,18 +145,34 @@ export async function POST(
       return NextResponse.json({ error: 'Max fund is $5,000 per checkout' }, { status: 400 });
     }
 
+    const campaignId =
+      typeof body.campaignId === 'string' && body.campaignId.trim()
+        ? body.campaignId.trim()
+        : '';
+    if (campaignId) {
+      const camp = await prisma.campaign.findFirst({
+        where: { id: campaignId, brandId: brand.id },
+        select: { id: true, title: true },
+      });
+      if (!camp) {
+        return NextResponse.json({ error: 'Campaign not found on this brand' }, { status: 404 });
+      }
+    }
+
     await getOrCreateBrandWallet(brand.id);
     const stripe = getStripe();
     const base = appBaseUrl();
     const returnTo = String(body.returnTo || 'brand');
-    const successPath =
-      returnTo === 'billing'
-        ? `/billing?wallet=funded&brand=${encodeURIComponent(brand.slug || brand.id)}`
-        : `/brands/${brand.slug || brand.id}?wallet=funded`;
-    const cancelPath =
-      returnTo === 'billing'
-        ? `/billing?wallet=cancel&brand=${encodeURIComponent(brand.slug || brand.id)}`
-        : `/brands/${brand.slug || brand.id}?wallet=cancel`;
+    const brandPath = brand.slug || brand.id;
+    let successPath = `/brands/${brandPath}?wallet=funded`;
+    let cancelPath = `/brands/${brandPath}?wallet=cancel`;
+    if (returnTo === 'billing') {
+      successPath = `/billing?wallet=funded&brand=${encodeURIComponent(brandPath)}`;
+      cancelPath = `/billing?wallet=cancel&brand=${encodeURIComponent(brandPath)}`;
+    } else if (returnTo === 'campaign' && campaignId) {
+      successPath = `/brands/${brandPath}/campaigns/${campaignId}?wallet=funded`;
+      cancelPath = `/brands/${brandPath}/campaigns/${campaignId}?wallet=cancel`;
+    }
 
     const customerId = await ensureStripeCustomer(profile);
 
@@ -172,8 +188,12 @@ export async function POST(
             currency: 'usd',
             unit_amount: amountCents,
             product_data: {
-              name: `Campaign escrow — ${brand.name}`,
-              description: 'Prepaid wallet to fund OPEN campaigns and verified appointment payouts',
+              name: campaignId
+                ? `Campaign fund — ${brand.name}`
+                : `Campaign escrow — ${brand.name}`,
+              description: campaignId
+                ? 'Funds this campaign escrow for verified SDR payouts'
+                : 'Prepaid wallet to fund OPEN campaigns and verified appointment payouts',
             },
           },
         },
@@ -185,6 +205,7 @@ export async function POST(
         brandId: brand.id,
         amountCents: String(amountCents),
         userId: profile.id,
+        ...(campaignId ? { campaignId } : {}),
       },
       invoice_creation: { enabled: true },
     });
@@ -196,6 +217,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('[wallet fund]', error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -680,7 +680,7 @@ export default function ColdCallTrainerView() {
           <Link href="/cold_calls" className="btn-ghost">
             Cold Call
           </Link>
-          <Link href="/billing" className="btn-ghost">
+          <Link href="/subscribe/sdr" className="btn-ghost">
             Minutes
           </Link>
         </div>
@@ -692,7 +692,7 @@ export default function ColdCallTrainerView() {
           {error.toLowerCase().includes('minute') && (
             <>
               {' '}
-              <Link href="/billing">Upgrade →</Link>
+              <Link href="/subscribe/sdr">Upgrade →</Link>
             </>
           )}
           <button type="button" className="cct-error__dismiss" onClick={() => setError(null)} aria-label="Dismiss">
@@ -864,7 +864,7 @@ export default function ColdCallTrainerView() {
                   Talking points
                 </button>
                 {minutesRemaining != null && minutesRemaining <= 0 ? (
-                  <Link href="/billing" className="btn cct-start-btn">
+                  <Link href="/subscribe/sdr" className="btn cct-start-btn">
                     Upgrade minutes
                   </Link>
                 ) : (

@@ -264,7 +264,6 @@ export default function LeadDetailClient({
   const [meta, setMeta] = useState<Meta>({ hooks: [], intel: null, pipeline: emptyPipeline() });
   const [saving, setSaving] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
-  const [webevoBusy, setWebevoBusy] = useState(false);
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [auditsLoading, setAuditsLoading] = useState(false);
   const [calls, setCalls] = useState<CallRow[]>([]);
@@ -439,27 +438,6 @@ export default function LeadDetailClient({
       setError(e instanceof Error ? e.message : 'Enrich failed');
     } finally {
       setEnrichBusy(false);
-    }
-  }
-
-  async function runWebevo() {
-    if (!canEdit) return;
-    setWebevoBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/prospects/${prospectId}/webevo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'WebEvo scan failed');
-      await loadLead();
-      setTab('intel');
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'WebEvo scan failed');
-    } finally {
-      setWebevoBusy(false);
     }
   }
 
@@ -738,22 +716,11 @@ export default function LeadDetailClient({
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
-                        disabled={enrichBusy || webevoBusy}
+                        disabled={enrichBusy}
                         onClick={() => void runEnrich()}
                       >
                         {enrichBusy ? 'Enriching…' : 'Re-enrich'}
                       </button>
-                      {values.website ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          disabled={enrichBusy || webevoBusy}
-                          onClick={() => void runWebevo()}
-                          title="Opt-in UILensAI pro-scan"
-                        >
-                          {webevoBusy ? 'WebEvo…' : 'WebEvo scan'}
-                        </button>
-                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -769,7 +736,7 @@ export default function LeadDetailClient({
                     tone={healthTone(intel?.health)}
                   />
                   <ScoreChip
-                    label="WebEvo"
+                    label="Site"
                     value={
                       intel?.webEvoScore != null
                         ? `${webGrade.grade} ${Math.round(intel.webEvoScore)}`
@@ -784,20 +751,14 @@ export default function LeadDetailClient({
                             ? 'mid'
                             : 'bad'
                     }
-                    hint={
-                      intel?.webEvoSource === 'uilensai'
-                        ? 'UILensAI'
-                        : intel?.webEvoSource === 'heuristic'
-                          ? 'Heuristic'
-                          : undefined
-                    }
+                    hint={intel?.webEvoScore != null ? 'Heuristic' : undefined}
                   />
                 </div>
               </section>
 
               {hasModules ? (
                 <section className="lead-detail__card lead-detail__card--wide">
-                  <h3 className="lead-detail__card-title">WebEvo modules</h3>
+                  <h3 className="lead-detail__card-title">Site modules</h3>
                   <div className="lead-detail__module-grid">
                     {WEBEVO_MODULES.map(({ key, label }) => {
                       const val = modules?.[key];
@@ -852,20 +813,7 @@ export default function LeadDetailClient({
                   <div className="lead-detail__empty">
                     <p className="muted" style={{ margin: 0 }}>
                       No screenshots yet.
-                      {canEdit && values.website
-                        ? ' Run a WebEvo scan to capture desktop, tablet, and mobile views.'
-                        : ''}
                     </p>
-                    {canEdit && values.website ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        disabled={webevoBusy || enrichBusy}
-                        onClick={() => void runWebevo()}
-                      >
-                        {webevoBusy ? 'WebEvo…' : 'Run WebEvo scan'}
-                      </button>
-                    ) : null}
                   </div>
                 )}
               </section>
@@ -1340,7 +1288,7 @@ export default function LeadDetailClient({
                   webGrade.tone === 'warn' ? 'bad' : webGrade.tone
                 }`}
               >
-                <span>WebEvo</span>
+                <span>Site</span>
                 <strong>
                   {intel?.webEvoScore != null
                     ? `${webGrade.grade} ${Math.round(intel.webEvoScore)}`

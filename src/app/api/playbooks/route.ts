@@ -35,6 +35,16 @@ export async function GET(req: Request) {
     const scope = url.searchParams.get('scope'); // personal | brand | all
 
     if (brandId) {
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { id: true, ownerId: true, slug: true },
+      });
+      if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const { assertTrainerBrandAccess } = await import('@/lib/trainer-brand-access');
+      const access = await assertTrainerBrandAccess(profile, brandId);
+      if (!access.ok) {
+        return NextResponse.json({ error: access.error }, { status: access.status });
+      }
       const playbooks = await prisma.playbook.findMany({
         where: { brandId },
         orderBy: { updatedAt: 'desc' },
@@ -58,8 +68,9 @@ export async function GET(req: Request) {
     }
 
     if (scope === 'brand') {
+      // Only demo brand playbooks for the open practice catalog
       const playbooks = await prisma.playbook.findMany({
-        where: { brandId: { not: null } },
+        where: { brand: { slug: { startsWith: 'demo-' } } },
         orderBy: { updatedAt: 'desc' },
         take: 50,
         include: { brand: { select: { id: true, name: true, slug: true } } },
@@ -67,10 +78,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ playbooks });
     }
 
-    // Default: personal/org + brand practice playbooks (for trainer selection)
+    // Default: personal/org + demo brand practice playbooks
     const playbooks = await prisma.playbook.findMany({
       where: {
-        OR: [...personalOrOrg.OR, { brandId: { not: null } }],
+        OR: [...personalOrOrg.OR, { brand: { slug: { startsWith: 'demo-' } } }],
       },
       orderBy: { updatedAt: 'desc' },
       take: 80,
@@ -81,7 +92,7 @@ export async function GET(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -170,6 +181,6 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

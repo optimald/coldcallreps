@@ -1,58 +1,28 @@
 /**
  * Hot-potato campaign queue: checkout locks, attempt ladder, time-shifted follow-ups.
+ * Server-only — client UI must import from `@/lib/lead-queue-shared`.
  */
+import 'server-only';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { CALLBACK_LOCK_HOURS, setCallbackLock } from '@/lib/brand-phone';
+import {
+  CHECKOUT_MINUTES,
+  DIAL_QUEUE_SIZE,
+  MAX_DIAL_ATTEMPTS,
+  computeNextCallAt,
+  isCoolingDisposition,
+  isTerminalDisposition,
+} from '@/lib/lead-queue-shared';
 
-export const CHECKOUT_MINUTES = 10;
-export const MAX_DIAL_ATTEMPTS = 5;
-export const DIAL_QUEUE_SIZE = 6;
-
-const COOLING_DISPOSITIONS = new Set([
-  'no_answer',
-  'gatekeeper_blocked',
-  'voicemail',
-  'callback',
-]);
-
-const TERMINAL_DISPOSITIONS = new Set([
-  'not_interested',
-  'appointment_set',
-  'interested', // legacy
-]);
-
-export function isCoolingDisposition(outcome: string | null | undefined): boolean {
-  return Boolean(outcome && COOLING_DISPOSITIONS.has(outcome));
-}
-
-export function isTerminalDisposition(outcome: string | null | undefined): boolean {
-  return Boolean(outcome && TERMINAL_DISPOSITIONS.has(outcome));
-}
-
-/**
- * Velocity ladder — shift to a different daypart on later attempts.
- * attemptCount is the count AFTER this dial (1..MAX).
- */
-export function computeNextCallAt(attemptCount: number, from = new Date()): Date {
-  const base = new Date(from);
-  const ladders: { addDays: number; hour: number; minute: number }[] = [
-    { addDays: 0, hour: 15, minute: 30 }, // later same day / next if past
-    { addDays: 2, hour: 10, minute: 0 },
-    { addDays: 2, hour: 16, minute: 0 },
-    { addDays: 3, hour: 11, minute: 30 },
-    { addDays: 4, hour: 14, minute: 0 },
-  ];
-  const step = ladders[Math.min(Math.max(attemptCount, 1), ladders.length) - 1];
-  const next = new Date(base);
-  next.setDate(next.getDate() + step.addDays);
-  next.setHours(step.hour, step.minute, 0, 0);
-  if (next.getTime() <= from.getTime() + 30 * 60 * 1000) {
-    next.setDate(next.getDate() + 1);
-    next.setHours(step.hour, step.minute, 0, 0);
-  }
-  return next;
-}
+export {
+  CHECKOUT_MINUTES,
+  DIAL_QUEUE_SIZE,
+  MAX_DIAL_ATTEMPTS,
+  computeNextCallAt,
+  isCoolingDisposition,
+  isTerminalDisposition,
+};
 
 /** Prisma where: leads this SDR may see in their 6-slot queue. */
 export function eligibleQueueWhere(opts: {
@@ -62,19 +32,10 @@ export function eligibleQueueWhere(opts: {
   now?: Date;
 }): Prisma.ProspectWhereInput {
   const now = opts.now ?? new Date();
-  const campaignOrBrand: Prisma.ProspectWhereInput =
-    opts.brandIds?.length
-      ? {
-          OR: [
-            { campaignId: { in: opts.campaignIds } },
-            { brandId: { in: opts.brandIds }, campaignId: null },
-          ],
-        }
-      : { campaignId: { in: opts.campaignIds } };
-
+  // Campaign-assigned leads only — unassigned brand CRM is brand-manager scoped.
   return {
     AND: [
-      campaignOrBrand,
+      { campaignId: { in: opts.campaignIds } },
       { outreachReady: true },
       { phone: { not: null } },
       { NOT: { phone: '' } },
@@ -171,7 +132,7 @@ export async function listQueueLeads(opts: {
     });
 }
 
-/** Soft-reserve a lead for CHECKOUT_MINUTES. */
+/** Soft-reserve a lead for CHECKOUT_MINUTES (conditional write — no race steal). */
 export async function checkoutLead(prospectId: string, userId: string) {
   const now = new Date();
   const until = new Date(now.getTime() + CHECKOUT_MINUTES * 60 * 1000);
@@ -230,14 +191,49 @@ export async function checkoutLead(prospectId: string, userId: string) {
     };
   }
 
-  const updated = await prisma.prospect.update({
-    where: { id: prospectId },
+  // Atomic claim: only succeed if locks still allow this user.
+  const claimed = await prisma.prospect.updateMany({
+    where: {
+      id: prospectId,
+      outreachReady: true,
+      phone: { not: null },
+      NOT: { phone: '' },
+      attemptCount: { lt: MAX_DIAL_ATTEMPTS },
+      status: { not: 'done' },
+      AND: [
+        { OR: [{ nextCallAt: null }, { nextCallAt: { lte: now } }] },
+        {
+          OR: [
+            { checkedOutUntil: null },
+            { checkedOutUntil: { lte: now } },
+            { checkedOutByUserId: userId },
+          ],
+        },
+        {
+          OR: [
+            { callbackLockedUntil: null },
+            { callbackLockedUntil: { lte: now } },
+            { callbackLockedByUserId: userId },
+          ],
+        },
+      ],
+    },
     data: {
       checkedOutByUserId: userId,
       checkedOutUntil: until,
       status: 'dialing',
-    } satisfies Prisma.ProspectUncheckedUpdateInput,
+    },
   });
+  if (claimed.count === 0) {
+    return {
+      ok: false as const,
+      error: 'Lead is checked out by another rep',
+      status: 409,
+    };
+  }
+
+  const updated = await prisma.prospect.findUnique({ where: { id: prospectId } });
+  if (!updated) return { ok: false as const, error: 'Lead not found', status: 404 };
   return { ok: true as const, prospect: updated, checkedOutUntil: until };
 }
 

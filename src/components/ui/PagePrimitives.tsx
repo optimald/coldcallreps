@@ -51,11 +51,11 @@ export function Panel({
 }) {
   return (
     <section className={`panel${compact ? ' panel--compact' : ''} ${className}`.trim()}>
-      {(title || actions) && (
+      {(title || description || actions) && (
         <div className="panel__head">
           <div>
             {title ? <h2 className="panel__title">{title}</h2> : null}
-            {description ? <p className="panel__desc">{description}</p> : null}
+            {description ? <div className="panel__desc">{description}</div> : null}
           </div>
           {actions ? <div className="panel__actions">{actions}</div> : null}
         </div>

@@ -37,23 +37,26 @@ export async function GET(
       if (profile) canEdit = canManageBrand(profile, brand.ownerId);
     }
 
-    const full = Boolean(userId);
-    if (!full) {
-      return NextResponse.json({
-        brand: {
-          ...brand,
-          canEdit: false,
-          packs: brand.packs.map(({ scriptsJSON: _s, objectionsJSON: _o, icpJSON: _i, ...rest }) => ({
-            ...rest,
-            hasContent: true,
-          })),
-        },
-      });
-    }
+    const full = canEdit;
+    const stripPack = (p: (typeof brand.packs)[number]) => {
+      const { scriptsJSON: _s, objectionsJSON: _o, icpJSON: _i, ...rest } = p;
+      return { ...rest, hasContent: true };
+    };
+    const stripPlaybook = (pb: (typeof brand.playbooks)[number]) => {
+      const { contentJSON: _c, ...rest } = pb;
+      return { ...rest, hasContent: true };
+    };
 
-    return NextResponse.json({ brand: { ...brand, canEdit } });
+    return NextResponse.json({
+      brand: {
+        ...brand,
+        canEdit,
+        packs: full ? brand.packs : brand.packs.map(stripPack),
+        playbooks: full ? brand.playbooks : brand.playbooks.map(stripPlaybook),
+      },
+    });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -151,6 +154,6 @@ export async function PATCH(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

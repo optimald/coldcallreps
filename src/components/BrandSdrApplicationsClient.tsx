@@ -115,10 +115,13 @@ export default function BrandSdrApplicationsClient({
   brandKey,
   brandName,
   initial,
+  campaignId,
 }: {
   brandKey: string;
   brandName: string;
   initial: ApplicationRow[];
+  /** Optional campaign filter (account Recruit view). */
+  campaignId?: string;
 }) {
   const { mode, hydrated } = useBrandDeskMode();
   const isDemo = hydrated && mode === 'demo';
@@ -152,34 +155,36 @@ export default function BrandSdrApplicationsClient({
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       if (data.defaults) setDefaults(data.defaults);
       setRows(
-        (data.applications || []).map(
-          (a: {
-            id: string;
-            status: string;
-            campaignId: string;
-            campaignTitle: string;
-            createdAt: string;
-            message?: string | null;
-            applicant: ApplicationRow['applicant'];
-          }) => ({
-            id: a.id,
-            status: a.status,
-            campaignId: a.campaignId,
-            campaignTitle: a.campaignTitle,
-            displayName: a.applicant?.displayName || 'Rep',
-            profileSlug: a.applicant?.profileSlug || null,
-            createdAt: a.createdAt,
-            message: a.message,
-            applicant: a.applicant,
-          })
-        )
+        (data.applications || [])
+          .map(
+            (a: {
+              id: string;
+              status: string;
+              campaignId: string;
+              campaignTitle: string;
+              createdAt: string;
+              message?: string | null;
+              applicant: ApplicationRow['applicant'];
+            }) => ({
+              id: a.id,
+              status: a.status,
+              campaignId: a.campaignId,
+              campaignTitle: a.campaignTitle,
+              displayName: a.applicant?.displayName || 'Rep',
+              profileSlug: a.applicant?.profileSlug || null,
+              createdAt: a.createdAt,
+              message: a.message,
+              applicant: a.applicant,
+            })
+          )
+          .filter((a: ApplicationRow) => !campaignId || a.campaignId === campaignId)
       );
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [brandKey, isDemo]);
+  }, [brandKey, isDemo, campaignId]);
 
   useEffect(() => {
     if (!hydrated) return;

@@ -195,6 +195,14 @@ export default function NavIconGlyph({ name }: { name: NavIcon }) {
           <path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
         </svg>
       );
+    case 'goals':
+      return (
+        <svg {...common}>
+          <path d="M8 4h8v3a4 4 0 01-4 4 4 4 0 01-4-4V4z" />
+          <path d="M8 5H5a2 2 0 002 4M16 5h3a2 2 0 01-2 4" />
+          <path d="M12 11v4M9 21h6M12 15a3 3 0 003 3H9a3 3 0 003-3z" />
+        </svg>
+      );
     default:
       return (
         <svg {...common}>

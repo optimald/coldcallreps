@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireUser } from '@/lib/auth';
 import { hasBlockingIntegrity } from '@/lib/integrity-gate';
 
 export async function GET(
@@ -7,6 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const viewer = await requireUser();
     const { slug } = await params;
     const rep = await prisma.repProfile.findUnique({
       where: { slug },
@@ -15,6 +17,7 @@ export async function GET(
           select: {
             id: true,
             displayName: true,
+            avatarUrl: true,
             totalPoints: true,
             currentStreak: true,
             longestStreak: true,
@@ -105,12 +108,26 @@ export async function GET(
     let featuredCalls: {
       id: string;
       title: string | null;
-      href: string;
       mediaSrc: string | null;
       durationSec: number | null;
       overallScore: number | null;
       focusArea: string | null;
+      strengths: string[];
     }[] = [];
+
+    // Prefer curated featured clips; fall back to /h/{id} URLs in clipUrls.
+    if (!featuredIds.length) {
+      try {
+        const urls: string[] = JSON.parse(rep.clipUrlsJSON || '[]');
+        for (const url of urls) {
+          const m = String(url).match(/\/h\/([a-z0-9]+)/i);
+          if (m?.[1] && !featuredIds.includes(m[1])) featuredIds.push(m[1]);
+          if (featuredIds.length >= 3) break;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
 
     if (featuredIds.length) {
       const clips = await prisma.clip.findMany({
@@ -126,7 +143,11 @@ export async function GET(
           r2Key: true,
           durationSec: true,
           session: {
-            select: { overallScore: true, focusArea: true },
+            select: {
+              overallScore: true,
+              focusArea: true,
+              scorecardJSON: true,
+            },
           },
         },
       });
@@ -134,38 +155,111 @@ export async function GET(
       featuredCalls = featuredIds
         .map((id) => byId.get(id))
         .filter((c): c is NonNullable<typeof c> => Boolean(c))
-        .map((c) => ({
-          id: c.id,
-          title: c.title,
-          href: `/h/${c.id}`,
-          mediaSrc: c.r2Key ? `/api/clips/media?clipId=${c.id}` : null,
-          durationSec: c.durationSec,
-          overallScore: c.session?.overallScore ?? null,
-          focusArea: c.session?.focusArea ?? null,
-        }));
+        .map((c) => {
+          let strengths: string[] = [];
+          try {
+            const card = JSON.parse(c.session?.scorecardJSON || '{}');
+            const raw = card?.feedback?.strengths;
+            if (Array.isArray(raw)) {
+              strengths = raw.map(String).filter(Boolean).slice(0, 3);
+            }
+          } catch {
+            strengths = [];
+          }
+          if (strengths.length === 0) {
+            const score = c.session?.overallScore;
+            strengths = [
+              score != null ? `Scored ${score}/100 on this practice call` : 'Completed a scored practice call',
+              c.session?.focusArea
+                ? `Strong work in ${c.session.focusArea.replace(/_/g, ' ')}`
+                : 'Kept the conversation moving',
+              'Worth a listen before you hire',
+            ].slice(0, 3);
+          }
+          return {
+            id: c.id,
+            title: c.title,
+            mediaSrc: c.r2Key ? `/api/clips/media?clipId=${c.id}` : null,
+            durationSec: c.durationSec,
+            overallScore: c.session?.overallScore ?? null,
+            focusArea: c.session?.focusArea ?? null,
+            strengths,
+          };
+        });
     }
+
+    const viewerRole = (await import('@/lib/roles')).effectiveRole(viewer);
+    const canSwipe =
+      viewerRole === 'BRAND' || viewerRole === 'RECRUITER' || viewerRole === 'SUPERADMIN';
+    let myInterest: 'interested' | 'passed' | null = null;
+    if (canSwipe) {
+      const mine = await prisma.talentInterest.findUnique({
+        where: {
+          fromUserId_toUserId: { fromUserId: viewer.id, toUserId: rep.userId },
+        },
+        select: { status: true },
+      });
+      myInterest =
+        mine?.status === 'interested' || mine?.status === 'passed'
+          ? (mine.status as 'interested' | 'passed')
+          : null;
+    }
+    const interestCount = await prisma.talentInterest.count({
+      where: { toUserId: rep.userId, status: 'interested' },
+    });
+
+    let avatarUrl = rep.user.avatarUrl || null;
+    if (!avatarUrl) {
+      try {
+        const { clerkClient } = await import('@clerk/nextjs/server');
+        const clerk = await clerkClient();
+        const clerkUser = await clerk.users.getUser(rep.userId);
+        avatarUrl = clerkUser.imageUrl || null;
+      } catch {
+        /* keep null — initials fallback */
+      }
+    }
+
+    const scoreSeries = [...cleanSessions]
+      .slice(0, 14)
+      .reverse()
+      .map((s) => ({
+        id: s.id,
+        score: s.overallScore,
+        focus: s.focusArea,
+        at: s.createdAt.toISOString(),
+      }));
 
     return NextResponse.json({
       slug: rep.slug,
-      bio: rep.bio || rep.user.hiringBio,
+      bio: rep.bio || null,
+      experience: rep.user.hiringBio || null,
       skills: JSON.parse(rep.skillsJSON || '[]'),
-      clipUrls: JSON.parse(rep.clipUrlsJSON || '[]'),
       featuredCalls,
       verified: rep.verified,
       displayName: rep.user.displayName,
+      avatarUrl,
       headline: rep.user.hiringHeadline,
       openToWork: Boolean(rep.user.hiringBoardOptIn),
       plan: rep.user.plan,
       role: rep.user.platformRole,
+      userId: rep.userId,
       totalPoints: rep.user.totalPoints,
       currentStreak: rep.user.currentStreak,
       longestStreak: rep.user.longestStreak,
       badges,
+      viewer: {
+        canSwipe,
+        myInterest,
+        interestCount,
+        isSelf: viewer.id === rep.userId,
+      },
       stats: {
         cleanSessions: cleanSessions.length,
         avgCleanScore: avgClean,
         bestScore,
         topFocus: topFocus.map(([focus, count]) => ({ focus, count })),
+        scoreSeries,
       },
       achievements,
       recentSessions: cleanSessions.slice(0, 8).map((s) => ({
@@ -187,7 +281,11 @@ export async function GET(
         brandSlug: c.brand.slug,
       })),
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    if (message === 'UNAUTHORIZED') {
+      return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
+    }
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

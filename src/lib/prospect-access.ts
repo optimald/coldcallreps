@@ -53,15 +53,14 @@ export async function resolveProspectAccess(
     return { prospect, canEdit: true, via: 'training' };
   }
 
-  // Accepted SDRs can open brand campaign leads (view).
-  if (prospect.brandId || prospect.campaignId) {
+  // Accepted SDRs can open leads assigned to campaigns they're on (view only).
+  // Unassigned brand-pool leads are brand-manager only — not dialable by SDR IDOR.
+  if (prospect.campaignId) {
     const app = await prisma.campaignApplication.findFirst({
       where: {
         userId: profile.id,
+        campaignId: prospect.campaignId,
         status: { in: ['ACCEPTED', 'ACTIVE'] },
-        ...(prospect.campaignId
-          ? { campaignId: prospect.campaignId }
-          : { campaign: { brandId: prospect.brandId! } }),
       },
       select: { id: true },
     });

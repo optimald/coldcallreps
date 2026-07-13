@@ -13,6 +13,7 @@ export default function CreateCampaignModal({
   brandName,
   packs: packsProp,
   playbooks: playbooksProp,
+  initialPlaybookId,
   onCreated,
 }: {
   open: boolean;
@@ -21,6 +22,7 @@ export default function CreateCampaignModal({
   brandName?: string;
   packs?: PackOpt[];
   playbooks?: PlaybookOpt[];
+  initialPlaybookId?: string;
   onCreated?: (campaignId: string) => void;
 }) {
   const [title, setTitle] = useState('');
@@ -53,6 +55,15 @@ export default function CreateCampaignModal({
   }, [packsProp, playbooksProp]);
 
   useEffect(() => {
+    if (!open) return;
+    if (initialPlaybookId && playbooks.some((p) => p.id === initialPlaybookId)) {
+      setPlaybookId(initialPlaybookId);
+      return;
+    }
+    if (!playbookId && playbooks[0]?.id) setPlaybookId(playbooks[0].id);
+  }, [open, playbooks, playbookId, initialPlaybookId]);
+
+  useEffect(() => {
     if (!open || !brandId) return;
     if (packsProp && playbooksProp) return;
     let cancelled = false;
@@ -79,6 +90,10 @@ export default function CreateCampaignModal({
   async function create() {
     if (!brandId || !title.trim() || !description.trim()) {
       setMsg('Title and description are required.');
+      return;
+    }
+    if (!playbookId) {
+      setMsg('Pick a playbook — every campaign needs a talk track for practice and live coach.');
       return;
     }
     const wantsMeeting = goalType === 'BOOKED_MEETING' || goalType === 'BOTH';
@@ -384,13 +399,14 @@ export default function CreateCampaignModal({
             </select>
           </label>
           <label className="field-label" style={{ flex: '1 1 160px' }}>
-            Playbook
+            Playbook (required)
             <select
               className="field"
               value={playbookId}
               onChange={(e) => setPlaybookId(e.target.value)}
+              required
             >
-              <option value="">None (optional)</option>
+              <option value="">Select a playbook…</option>
               {playbooks.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title}
@@ -407,7 +423,7 @@ export default function CreateCampaignModal({
           <button
             type="button"
             className="btn"
-            disabled={busy || !title.trim() || !description.trim()}
+            disabled={busy || !title.trim() || !description.trim() || !playbookId}
             onClick={() => void create()}
           >
             {busy ? 'Creating…' : 'Create campaign'}

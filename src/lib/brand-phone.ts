@@ -1,3 +1,4 @@
+import 'server-only';
 import twilio from 'twilio';
 import { prisma } from '@/lib/prisma';
 import { toE164 } from '@/lib/twilio-auth';

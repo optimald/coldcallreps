@@ -6,7 +6,6 @@ import {
   EmptyState,
   PageHeader,
   Panel,
-  SoftLink,
   Stat,
   StatGrid,
 } from '@/components/ui/PagePrimitives';
@@ -156,7 +155,7 @@ export default function EarningsPage() {
       <PageHeader
         eyebrow="Earn"
         title="Earnings"
-        description="Brand deal payouts from campaigns. Connect Stripe once, then track pending and paid results here. Practice-minute plans stay on Billing."
+        description="Brand deal payouts from campaigns. Connect payouts once, then track pending and paid results here."
         actions={
           <Link href="/gigs" className="btn-ghost">
             Browse brand deals →
@@ -231,7 +230,6 @@ export default function EarningsPage() {
                     ? 'Update payout details'
                     : 'Connect Stripe for payouts'}
               </button>
-              <SoftLink href="/billing">Minute plans on Billing</SoftLink>
             </div>
           </Panel>
 

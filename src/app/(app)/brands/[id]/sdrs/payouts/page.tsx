@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { requireDeskBrand } from '@/lib/desk-brand';
@@ -27,7 +28,7 @@ export default async function BrandSdrPayoutsPage({
       include: {
         campaign: { select: { id: true, title: true } },
         application: {
-          include: { user: { select: { displayName: true } } },
+          include: { user: { select: { id: true, displayName: true } } },
         },
       },
     }),
@@ -41,12 +42,14 @@ export default async function BrandSdrPayoutsPage({
     campaignId: p.campaign.id,
     campaignTitle: p.campaign.title,
     sdrName: p.application?.user?.displayName || 'Rep',
+    sdrId: p.application?.user?.id || p.application?.userId || null,
     createdAt: p.createdAt.toISOString(),
   }));
 
   return (
     <main className="app-page">
       <PageHeader
+        compact
         title="Payouts"
         description="Fund escrow for verified appointments, then pay SDRs from campaign detail. Brands do not use Stripe Connect — SDRs do."
         actions={
@@ -55,12 +58,14 @@ export default async function BrandSdrPayoutsPage({
           </Link>
         }
       />
-      <BrandSdrPayoutsClient
-        brandKey={brandPathKey(brand)}
-        brandId={brand.id}
-        initial={rows}
-        escrowLabel={`$${(wallet.balanceCents / 100).toFixed(2)}`}
-      />
+      <Suspense fallback={<p className="muted">Loading payouts…</p>}>
+        <BrandSdrPayoutsClient
+          brandKey={brandPathKey(brand)}
+          brandId={brand.id}
+          initial={rows}
+          escrowLabel={`$${(wallet.balanceCents / 100).toFixed(2)}`}
+        />
+      </Suspense>
     </main>
   );
 }

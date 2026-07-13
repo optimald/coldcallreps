@@ -34,7 +34,6 @@ export default async function OutboundPage() {
   }
 
   const campaigns = await dialableBrandCampaigns(profile.id);
-  const brandIds = [...new Set(campaigns.map((c) => c.brandId))];
   const campaignIds = campaigns.map((c) => c.id);
 
   const [apps, brandLeads] = await Promise.all([
@@ -58,7 +57,6 @@ export default async function OutboundPage() {
     campaignIds.length
       ? listQueueLeads({
           campaignIds,
-          brandIds,
           userId: profile.id,
           take: DIAL_QUEUE_SIZE,
         })

@@ -1,6 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
-import { RESERVED_HANDLES, slugify } from '@/lib/handles';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -15,12 +14,10 @@ const isPublicRoute = createRouteMatcher([
   '/r/(.*)',
   '/t/(.*)',
   '/h/(.*)',
-  '/api/team/(.*)',
   '/api/highlights/(.*)',
   '/api/billing/webhook(.*)',
   '/api/digests/weekly/send(.*)',
   '/api/hiring/board(.*)',
-  '/api/profile/(.*)',
   '/api/profile/handle(.*)',
   '/api/clips/media(.*)',
   '/api/brands(.*)',
@@ -42,20 +39,9 @@ const isPublicRoute = createRouteMatcher([
   '/api/bookings/(.*)',
 ]);
 
-/** Single-segment vanity handles like /jane — not reserved app routes. */
-function isVanityPublicPath(pathname: string): boolean {
-  const segments = pathname.split('/').filter(Boolean);
-  if (segments.length !== 1) return false;
-  const raw = segments[0];
-  // Static-looking paths (favicon.ico, robots.txt, etc.) are not vanity handles.
-  if (/\.[a-z0-9]{1,8}$/i.test(raw)) return false;
-  const slug = slugify(raw);
-  if (!slug || RESERVED_HANDLES.has(slug)) return false;
-  return true;
-}
-
 export default clerkMiddleware(async (auth, req) => {
-  if (!(isPublicRoute(req) || isVanityPublicPath(req.nextUrl.pathname))) {
+  // Vanity handles (/jane), profile + team APIs require sign-in.
+  if (!isPublicRoute(req)) {
     await auth.protect();
   }
 

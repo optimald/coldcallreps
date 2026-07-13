@@ -355,7 +355,7 @@ export default function IntegrationsPage() {
               <Link href="/earnings" className="btn-ghost">
                 Open Earnings
               </Link>
-              <SoftLink href="/billing">Minute plans →</SoftLink>
+              <SoftLink href="/subscribe/sdr">Minute plans →</SoftLink>
             </div>
           </article>
         </div>

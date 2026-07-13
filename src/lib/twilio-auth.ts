@@ -1,9 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { validateRequest } from 'twilio';
 
-/** Validate Twilio webhook signature. Skipped in development when TWILIO_SKIP_SIGNATURE=1. */
+/** Validate Twilio webhook signature. Never skip in production. */
 export function validateTwilioRequest(request: NextRequest, params: Record<string, string>): boolean {
-  if (process.env.TWILIO_SKIP_SIGNATURE === '1' || process.env.NODE_ENV === 'development') {
+  const skipAllowed =
+    process.env.NODE_ENV !== 'production' && process.env.TWILIO_SKIP_SIGNATURE === '1';
+  if (skipAllowed) {
     return true;
   }
 

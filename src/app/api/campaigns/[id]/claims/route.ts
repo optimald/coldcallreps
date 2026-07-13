@@ -3,13 +3,10 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import { auditAppointmentClaim } from '@/lib/appointment-audit';
-import { releaseEscrowOutcome } from '@/lib/escrow';
-import { calcPayoutSplit } from '@/lib/campaigns';
-import { getStripe } from '@/lib/stripe';
 
 /**
  * POST /api/campaigns/[id]/claims
- * SDR claims a booked meeting → AI audit → escrow release + Connect transfer when possible.
+ * SDR claims a booked meeting → AI audit → brand must confirm payout.
  * Body: { notes, transcriptSnippet?, prospectName?, meetingAt?, callLogId?, calendarEventId? }
  */
 export async function POST(
@@ -51,12 +48,26 @@ export async function POST(
       prospectName,
     });
 
+    const callLogId = body.callLogId ? String(body.callLogId) : null;
+    if (callLogId) {
+      const ownedLog = await prisma.callLog.findFirst({
+        where: { id: callLogId, userId: profile.id, campaignId },
+        select: { id: true },
+      });
+      if (!ownedLog) {
+        return NextResponse.json(
+          { error: 'callLogId must belong to you on this campaign' },
+          { status: 403 }
+        );
+      }
+    }
+
     const claim = await prisma.appointmentClaim.create({
       data: {
         campaignId,
         applicationId: app.id,
         repUserId: profile.id,
-        callLogId: body.callLogId ? String(body.callLogId) : null,
+        callLogId,
         calendarEventId: body.calendarEventId ? String(body.calendarEventId) : null,
         prospectName,
         meetingAt: body.meetingAt ? new Date(body.meetingAt) : null,
@@ -71,10 +82,14 @@ export async function POST(
     });
 
     if (!audit.passed) {
-      if (body.callLogId) {
+      if (callLogId) {
         await prisma.callLog
-          .update({
-            where: { id: String(body.callLogId) },
+          .updateMany({
+            where: {
+              id: callLogId,
+              userId: profile.id,
+              campaignId,
+            },
             data: {
               isAudited: true,
               needsManualReview: true,
@@ -126,10 +141,14 @@ export async function POST(
       );
     }
 
-    if (body.callLogId) {
+    if (callLogId) {
       await prisma.callLog
-        .update({
-          where: { id: String(body.callLogId) },
+        .updateMany({
+          where: {
+            id: callLogId,
+            userId: profile.id,
+            campaignId,
+          },
           data: {
             status: 'APPOINTMENT_SET',
             outcome: 'appointment_set',
@@ -142,120 +161,8 @@ export async function POST(
         .catch(() => null);
     }
 
-    // Escrow release + payout record (respect spend caps — live calls already finished)
-    const split = calcPayoutSplit(campaign.payoutCents, campaign.platformFeeBps);
-    const { isCampaignDialEligible } = await import('@/lib/campaigns');
-    const { loadOneCampaignSpend } = await import('@/lib/campaign-spend');
-    const spend = await loadOneCampaignSpend(campaignId);
-    const budgetGate = isCampaignDialEligible({
-      status: 'OPEN', // award gate ignores pause for already-verified claims? Plan: gate new awards when daily remaining hits 0
-      startsAt: campaign.startsAt,
-      endsAt: null, // allow awards after end for in-flight results
-      budgetCents: campaign.budgetCents,
-      budgetMode: campaign.budgetMode,
-      dailyBudgetCents: campaign.dailyBudgetCents,
-      spentCents: spend.spentCents,
-      spentTodayCents: spend.spentTodayCents,
-      nextAwardCents: split.grossCents,
-    });
-    if (!budgetGate.ok) {
-      return NextResponse.json(
-        {
-          claim,
-          audit,
-          error: budgetGate.reason || 'Budget exhausted',
-          code: 'BUDGET_EXCEEDED',
-        },
-        { status: 400 }
-      );
-    }
-
-    try {
-      await releaseEscrowOutcome({
-        brandId: campaign.brandId,
-        campaignId,
-        amountCents: campaign.payoutCents,
-        claimId: claim.id,
-      });
-    } catch (e: unknown) {
-      return NextResponse.json(
-        {
-          claim,
-          audit,
-          error: e instanceof Error ? e.message : 'Escrow release failed',
-          code: 'ESCROW_RELEASE_FAILED',
-        },
-        { status: 400 }
-      );
-    }
-
-    const brandOwnerId = campaign.brand.ownerId || profile.id;
-    let payout = await prisma.campaignPayout.findUnique({
-      where: { applicationId: app.id },
-    });
-
-    if (!payout) {
-      payout = await prisma.campaignPayout.create({
-        data: {
-          campaignId,
-          applicationId: app.id,
-          brandUserId: brandOwnerId,
-          repUserId: profile.id,
-          grossCents: split.grossCents,
-          platformFeeCents: split.platformFeeCents,
-          netCents: split.netCents,
-          platformFeeBps: split.platformFeeBps,
-          status: 'PENDING',
-        },
-      });
-    }
-
-    // Attempt Connect transfer if SDR is ready
-    const rep = await prisma.userProfile.findUnique({
-      where: { id: profile.id },
-      select: {
-        stripeConnectAccountId: true,
-        stripeConnectPayoutsEnabled: true,
-      },
-    });
-
-    if (rep?.stripeConnectAccountId && rep.stripeConnectPayoutsEnabled) {
-      try {
-        const stripe = getStripe();
-        const transfer = await stripe.transfers.create({
-          amount: split.netCents,
-          currency: 'usd',
-          destination: rep.stripeConnectAccountId,
-          transfer_group: `claim_${claim.id}`,
-          metadata: {
-            campaignId,
-            claimId: claim.id,
-            applicationId: app.id,
-          },
-        });
-        payout = await prisma.campaignPayout.update({
-          where: { id: payout.id },
-          data: {
-            status: 'PAID',
-            stripeTransferId: transfer.id,
-            paidAt: new Date(),
-          },
-        });
-        await prisma.appointmentClaim.update({
-          where: { id: claim.id },
-          data: { status: 'PAID', paidAt: new Date() },
-        });
-        await prisma.campaignApplication.update({
-          where: { id: app.id },
-          data: { status: 'COMPLETED' },
-        });
-      } catch (e) {
-        console.warn('[claims] Connect transfer failed — payout stays PENDING', e);
-      }
-    }
-
+    // AI pass attributes the claim — brand must confirm before escrow/payout.
     const { notifyAsync } = await import('@/lib/notifications');
-    const { formatPayout } = await import('@/lib/campaigns');
     const brandCtx = {
       id: campaign.brand.id,
       name: campaign.brand.name,
@@ -263,51 +170,45 @@ export async function POST(
     };
     if (campaign.brand.ownerId) {
       notifyAsync({
-        event: 'appointment.verified',
+        event: 'appointment.booked',
         recipient: { userId: campaign.brand.ownerId },
         brand: brandCtx,
         payload: {
           campaignTitle: campaign.title,
           campaignId,
           prospectName: prospectName || undefined,
-          amountLabel: formatPayout(split.grossCents),
           ctaUrl: `/brands/${campaign.brand.slug}/sdrs/payouts`,
           forAudience: 'brand',
         },
-        idempotencyKey: `appointment.verified:brand:${claim.id}`,
+        idempotencyKey: `appointment.claim:brand:${claim.id}`,
       });
     }
     notifyAsync({
-      event: payout.status === 'PAID' ? 'payout.paid' : 'appointment.verified',
+      event: 'appointment.booked',
       recipient: { userId: profile.id },
       brand: brandCtx,
       payload: {
         campaignTitle: campaign.title,
         campaignId,
-        amountLabel: formatPayout(
-          payout.status === 'PAID' ? split.netCents : split.grossCents
-        ),
-        ctaUrl: '/billing',
+        ctaUrl: '/gigs',
         forAudience: 'sdr',
       },
-      idempotencyKey: `appointment.verified:sdr:${claim.id}:${payout.status}`,
+      idempotencyKey: `appointment.claim:sdr:${claim.id}`,
     });
 
     return NextResponse.json({
-      claim: { ...claim, status: payout.status === 'PAID' ? 'PAID' : claim.status },
+      claim,
       audit,
-      payout,
+      code: 'PAYOUT_PENDING_BRAND_CONFIRM',
       notice:
-        payout.status === 'PAID'
-          ? 'Appointment verified. Escrow released and paid to your Connect account.'
-          : 'Appointment verified and escrow released. Connect Stripe under Earnings to receive the transfer.',
+        'Appointment claim passed AI audit. Brand must confirm before escrow release and payout.',
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('[claims]', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -340,6 +241,6 @@ export async function GET(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

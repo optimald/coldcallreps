@@ -1,10 +1,13 @@
 import 'server-only';
 
 import type { UserProfile } from '@prisma/client';
+import { weekdayLabelFromDayKey } from '@/lib/desk-economics';
 import { loadDeskEconomicsForBrand } from '@/lib/desk-economics-load';
 import { getOrCreateBrandWallet } from '@/lib/escrow';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
+import { loadBrandNavCounts } from '@/lib/nav-counts';
+import { getLeadCreditSnapshot } from '@/lib/lead-credits';
 
 function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -161,9 +164,7 @@ export async function loadBrandOverview(
   }
   const days = [...byDay.entries()].map(([key, count]) => ({
     key,
-    label: new Date(`${key}T12:00:00`).toLocaleDateString(undefined, {
-      weekday: 'short',
-    }),
+    label: weekdayLabelFromDayKey(key),
     count,
   }));
 
@@ -264,3 +265,73 @@ export async function loadBrandOverview(
 export type BrandOverviewPayload = NonNullable<
   Awaited<ReturnType<typeof loadBrandOverview>>
 >;
+
+/** Lightweight KPI strip for shell / desk chrome — skips economics + activity. */
+export async function loadBrandKpis(
+  profile: UserProfile,
+  idOrSlug: string
+) {
+  const brand = await prisma.brand.findFirst({
+    where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+    select: { id: true, slug: true, name: true, ownerId: true },
+  });
+  if (!brand) return null;
+  if (!canManageBrand(profile, brand.ownerId)) throw new Error('FORBIDDEN');
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [
+    openCampaigns,
+    pendingApplications,
+    activeSdrs,
+    leads,
+    callsToday,
+    bookings,
+    wallet,
+    nav,
+    credits,
+  ] = await Promise.all([
+    prisma.campaign.count({ where: { brandId: brand.id, status: 'OPEN' } }),
+    prisma.campaignApplication.count({
+      where: { campaign: { brandId: brand.id }, status: 'APPLIED' },
+    }),
+    prisma.campaignApplication.count({
+      where: {
+        campaign: { brandId: brand.id },
+        status: { in: ['ACCEPTED', 'ACTIVE'] },
+      },
+    }),
+    prisma.prospect.count({
+      where: { brandId: brand.id, NOT: { source: 'training' } },
+    }),
+    prisma.callLog.count({
+      where: { brandId: brand.id, createdAt: { gte: startOfDay } },
+    }),
+    prisma.calendarBooking.count({ where: { brandId: brand.id } }),
+    getOrCreateBrandWallet(brand.id),
+    loadBrandNavCounts(brand.id),
+    getLeadCreditSnapshot(brand.id),
+  ]);
+
+  return {
+    brand: { id: brand.id, slug: brand.slug, name: brand.name },
+    kpis: {
+      openCampaigns,
+      pendingApplications,
+      activeSdrs,
+      leads,
+      callsToday,
+      bookings,
+      escrowBalanceCents: wallet.balanceCents,
+      escrowLabel: `$${(wallet.balanceCents / 100).toFixed(0)}`,
+      leadCreditsUsed: credits.usedThisPeriod,
+      leadCreditsAvailable: credits.periodLimit,
+      leadCreditsLabel: `${credits.usedThisPeriod}/${credits.periodLimit}`,
+      leadCreditsRemaining: credits.totalRemaining,
+    },
+    nav,
+  };
+}
+
+export type BrandKpisPayload = NonNullable<Awaited<ReturnType<typeof loadBrandKpis>>>;

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Modal from '@/components/ui/Modal';
+import { writeBrandDeskMode, type BrandRef } from '@/lib/brand-context';
 import { fileToLogoDataUrl } from '@/lib/brand-logo-upload';
 
 export default function CreateBrandModal({
@@ -12,8 +13,8 @@ export default function CreateBrandModal({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Called with brand slug or id after create. */
-  onCreated?: (key: string) => void;
+  /** Called with brand slug/id and ref after create. */
+  onCreated?: (key: string, brand?: BrandRef) => void;
   /** Where to send the browser after create. Defaults to brand settings. */
   redirectTo?: string;
 }) {
@@ -133,11 +134,24 @@ export default function CreateBrandModal({
         setMsg(data.error || 'Could not create brand');
         return;
       }
-      const key = data.brand?.slug || data.brand?.id;
+      const brand = data.brand as
+        | { id?: string; slug?: string; name?: string; logoUrl?: string | null }
+        | undefined;
+      const key = brand?.slug || brand?.id;
       reset();
       onClose();
       if (key) {
-        onCreated?.(key);
+        // New brands are Live — Demo mode only lists sample brands.
+        writeBrandDeskMode('live');
+        const ref: BrandRef | undefined = brand?.id
+          ? {
+              id: brand.id,
+              slug: brand.slug || brand.id,
+              name: brand.name || key,
+              logoUrl: brand.logoUrl ?? null,
+            }
+          : undefined;
+        onCreated?.(key, ref);
         window.location.href = redirectTo || `/brands/${key}`;
       } else {
         onCreated?.('');

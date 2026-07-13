@@ -23,7 +23,7 @@ export default function BrandDeskKpis({ brandKey }: { brandKey: string }) {
   useEffect(() => {
     if (mode === 'demo') return;
     let cancelled = false;
-    fetch(`/api/brands/${encodeURIComponent(brandKey)}/overview`)
+    fetch(`/api/brands/${encodeURIComponent(brandKey)}/kpis`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!cancelled && d?.kpis) setLiveKpis(d.kpis);

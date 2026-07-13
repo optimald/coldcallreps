@@ -92,6 +92,6 @@ export async function GET(
       members: members.sort((a, b) => b.totalPoints - a.totalPoints),
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -46,6 +46,12 @@ export async function POST(req: Request) {
       if (!(await canManageBrandLeads(profile, brandId))) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+      if (!isTraining && !campaignId) {
+        return NextResponse.json(
+          { error: 'campaignId required — enroll imported leads in a campaign' },
+          { status: 400 }
+        );
+      }
       if (campaignId) {
         const campaign = await prisma.campaign.findFirst({
           where: { id: campaignId, brandId },
@@ -114,6 +120,6 @@ export async function POST(req: Request) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

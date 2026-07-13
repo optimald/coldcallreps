@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { brandHref } from '@/lib/brand-context';
 import { formatPayout } from '@/lib/campaigns';
 import { DEMO_MSG, getDemoKpis, getDemoPayouts } from '@/lib/demo/brand-demo-data';
 import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 import { EmptyState, Panel } from '@/components/ui/PagePrimitives';
+import { DeskToolbar, DeskToolbarSelect } from '@/components/ui/DeskChrome';
 
 type PayoutRow = {
   id: string;
@@ -15,6 +17,7 @@ type PayoutRow = {
   campaignId: string;
   campaignTitle: string;
   sdrName: string;
+  sdrId?: string | null;
   createdAt: string;
 };
 
@@ -31,16 +34,51 @@ export default function BrandSdrPayoutsClient({
 }) {
   const { mode } = useBrandDeskMode();
   const isDemo = mode === 'demo';
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [repFilter, setRepFilter] = useState(() => searchParams.get('rep') || '');
 
   useEffect(() => {
-    setRows(isDemo ? getDemoPayouts(brandKey) : initial);
-  }, [isDemo, initial, brandKey]);
+    setRows(initial);
+  }, [initial, brandKey]);
+
+  useEffect(() => {
+    setRepFilter(searchParams.get('rep') || '');
+  }, [searchParams]);
 
   const displayEscrow = isDemo ? getDemoKpis(brandKey).escrowLabel : escrowLabel;
-  const displayRows = isDemo ? getDemoPayouts(brandKey) : rows;
+  const allRows = rows.length > 0 || !isDemo ? rows : getDemoPayouts(brandKey);
+
+  const reps = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of allRows) {
+      if (p.sdrId) map.set(p.sdrId, p.sdrName);
+    }
+    if (repFilter && !map.has(repFilter)) {
+      map.set(repFilter, 'Selected SDR');
+    }
+    return [...map.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allRows, repFilter]);
+
+  const displayRows = useMemo(() => {
+    if (!repFilter) return allRows;
+    return allRows.filter((p) => p.sdrId === repFilter);
+  }, [allRows, repFilter]);
+
+  function setRepFilterAndUrl(next: string) {
+    setRepFilter(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) params.set('rep', next);
+    else params.delete('rep');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
 
   async function fundEscrow() {
     if (isDemo) {
@@ -72,6 +110,7 @@ export default function BrandSdrPayoutsClient({
   return (
     <div className="stack" style={{ gap: '1.25rem' }}>
       <Panel
+        compact
         title="Escrow wallet"
         description={`Prepaid balance for verified appointments. Current: ${displayEscrow}.`}
       >
@@ -86,11 +125,35 @@ export default function BrandSdrPayoutsClient({
         {msg ? <p className={isDemo ? 'muted' : 'msg-err'}>{msg}</p> : null}
       </Panel>
 
-      <Panel title="Recent payouts" description={`${displayRows.length} records`}>
+      <Panel
+        compact
+        title="Recent payouts"
+        description={`${displayRows.length}${displayRows.length !== allRows.length ? ` of ${allRows.length}` : ''} records`}
+      >
+        {allRows.length > 0 ? (
+          <DeskToolbar>
+            <DeskToolbarSelect
+              value={repFilter}
+              onChange={setRepFilterAndUrl}
+              label="SDR"
+            >
+              <option value="">All SDRs</option>
+              {reps.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </DeskToolbarSelect>
+          </DeskToolbar>
+        ) : null}
         {displayRows.length === 0 ? (
           <EmptyState
-            title="No payouts yet"
-            description="When you approve and pay an SDR on a campaign, it will appear here."
+            title={repFilter ? 'No payouts for this SDR' : 'No payouts yet'}
+            description={
+              repFilter
+                ? 'Try another rep, or clear the filter.'
+                : 'When you approve and pay an SDR on a campaign, it will appear here.'
+            }
           />
         ) : (
           <ul className="brand-list">

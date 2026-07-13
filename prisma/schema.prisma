@@ -99,6 +99,8 @@ model UserProfile {
   callbackLocks       Prospect[]           @relation("CallbackLock")
   leadCheckouts       Prospect[]           @relation("LeadCheckout")
   notificationLogs    NotificationLog[]
+  talentInterestsSent TalentInterest[] @relation("TalentInterestFrom")
+  talentInterestsRecv TalentInterest[] @relation("TalentInterestTo")
 
   @@index([orgId])
   @@index([totalPoints])
@@ -114,7 +116,7 @@ model Prospect {
   /** Brand-owned lead list (founders load/enrich; accepted SDRs dial these). */
   brandId        String?
   brand          Brand?      @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  /** Optional campaign assignment — SDRs on ACTIVE apps dial these. */
+  /** Brand campaign enrollment — required for brand desk leads (null only for training / personal CRM). */
   campaignId     String?
   campaign       Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   companyName    String
@@ -325,6 +327,25 @@ model RepProfile {
   updatedAt            DateTime    @updatedAt
 
   @@index([slug])
+}
+
+/** Brand/recruiter swipe interest on an SDR public resume. */
+model TalentInterest {
+  id         String      @id @default(cuid())
+  fromUserId String
+  fromUser   UserProfile @relation("TalentInterestFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId   String
+  toUser     UserProfile @relation("TalentInterestTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  brandId    String?
+  /** interested = swipe right, passed = swipe left */
+  status     String      @default("interested")
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status, createdAt])
+  @@index([fromUserId, status, createdAt])
+  @@index([brandId])
 }
 
 model RecruiterSeat {

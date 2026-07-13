@@ -72,8 +72,8 @@ export async function POST(req: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: !couponId,
       ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
-      success_url: `${appUrl}/billing?lead_pack=success&credits=${pack.credits}&brand=${encodeURIComponent(brand.slug || brandId)}`,
-      cancel_url: `${appUrl}/billing?lead_pack=cancel&brand=${encodeURIComponent(brand.slug || brandId)}`,
+      success_url: `${appUrl}/subscribe/brand?lead_pack=success&credits=${pack.credits}&brand=${encodeURIComponent(brand.slug || brandId)}`,
+      cancel_url: `${appUrl}/subscribe/brand?lead_pack=cancel&brand=${encodeURIComponent(brand.slug || brandId)}`,
       metadata: {
         userId: profile.id,
         brandId,
@@ -89,6 +89,6 @@ export async function POST(req: Request) {
     if (message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

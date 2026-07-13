@@ -99,7 +99,74 @@ export default function AdminBrandsPage() {
         {filtered.length === 0 ? (
           <EmptyState title="No brands" description="Create a brand desk to populate this matrix." />
         ) : (
-          <div className="admin-table-wrap">
+          <>
+            <ul className="admin-brand-cards" aria-label="Brand accounts">
+              {filtered.map((b) => (
+                <li
+                  key={b.id}
+                  className={`admin-brand-card${b.risk >= 50 ? ' is-risk' : ''}`}
+                >
+                  <div className="admin-brand-card__top">
+                    <div>
+                      <Link href={brandHref(b)} className="admin-table__brand">
+                        {b.name}
+                      </Link>
+                      <div className="muted small">{b.ownerEmail || 'no owner'}</div>
+                    </div>
+                    <span
+                      className={
+                        b.risk >= 50
+                          ? 'admin-risk admin-risk--high'
+                          : b.risk >= 25
+                            ? 'admin-risk admin-risk--mid'
+                            : 'admin-risk'
+                      }
+                    >
+                      {b.risk}
+                    </span>
+                  </div>
+                  <div className="admin-brand-card__stats">
+                    <span>
+                      Plan <strong>{b.leadPlan}</strong>
+                    </span>
+                    <span>
+                      Credits <strong>{b.creditsRemaining}</strong>
+                    </span>
+                    <span>
+                      Wallet <strong>{b.walletLabel}</strong>
+                    </span>
+                    <span>
+                      Open <strong>{b.openCampaigns}</strong>
+                    </span>
+                    <span>
+                      SDRs <strong>{b.activeSdrs}</strong>
+                    </span>
+                    <span>
+                      Ready <strong>{b.dialReady}</strong>
+                    </span>
+                  </div>
+                  <div className="admin-override-row">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busyId === b.id}
+                      onClick={() => override(b.id, { grantCredits: 100 })}
+                    >
+                      +100 credits
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busyId === b.id}
+                      onClick={() => override(b.id, { walletAdjustCents: 10000 })}
+                    >
+                      +$100 wallet
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -178,6 +245,7 @@ export default function AdminBrandsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Panel>
 

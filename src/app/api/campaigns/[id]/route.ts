@@ -10,6 +10,7 @@ import {
   parseOptionalDate,
   serializeCampaign,
 } from '@/lib/campaigns';
+import { shouldAutoDeactivate, statusWhenActivating } from '@/lib/campaign-schedule';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { lockEscrowForCampaign } from '@/lib/escrow';
 import { notifyAsync, notifyCampaignSdrs } from '@/lib/notifications';
@@ -21,6 +22,20 @@ const campaignInclude = {
   _count: { select: { applications: true } },
 } as const;
 
+async function applyEndDateAutoPause<T extends {
+  id: string;
+  status: string;
+  startsAt: Date | null;
+  endsAt: Date | null;
+}>(campaign: T): Promise<T> {
+  if (!shouldAutoDeactivate(campaign.status, campaign)) return campaign;
+  const updated = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: { status: 'PAUSED' },
+  });
+  return { ...campaign, status: updated.status };
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -28,7 +43,7 @@ export async function GET(
   try {
     const profile = await requireUser();
     const { id } = await params;
-    const campaign = await prisma.campaign.findUnique({
+    let campaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
         brand: { select: { id: true, name: true, slug: true, logoUrl: true, ownerId: true } },
@@ -43,6 +58,8 @@ export async function GET(
       },
     });
     if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    campaign = await applyEndDateAutoPause(campaign);
 
     const manage = canManageBrand(profile, campaign.brand.ownerId);
     const hasApplication = campaign.applications.length > 0;
@@ -71,7 +88,7 @@ export async function GET(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -98,6 +115,50 @@ export async function PATCH(
     const body = await req.json();
     const data: Record<string, unknown> = {};
 
+    const configKeys = [
+      'title',
+      'description',
+      'icpText',
+      'goalType',
+      'payoutCents',
+      'platformFeeBps',
+      'minScore',
+      'requireCertification',
+      'budgetCents',
+      'budgetMode',
+      'dailyBudgetCents',
+      'startsAt',
+      'endsAt',
+      'bookingLink',
+      'meetingDurationMinutes',
+      'qualifiedPayoutCents',
+      'targetVertical',
+      'targetLocation',
+      'maxAwards',
+      'playbookId',
+      'packId',
+    ] as const;
+    const isConfigEdit = configKeys.some((k) => body[k] !== undefined);
+    const deactivating =
+      body.activateOn === false ||
+      body.status === 'PAUSED' ||
+      body.status === 'DRAFT' ||
+      body.status === 'CLOSED';
+    if (
+      isConfigEdit &&
+      existing.status === 'OPEN' &&
+      !deactivating &&
+      body.activateOn !== true
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Deactivate the campaign before editing schedule, targeting, or budget.',
+          code: 'CAMPAIGN_ACTIVE_LOCKED',
+        },
+        { status: 400 }
+      );
+    }
+
     if (body.title != null) data.title = String(body.title).trim().slice(0, 160);
     if (body.description != null) data.description = String(body.description).trim().slice(0, 8000);
     if (body.icpText !== undefined) {
@@ -114,7 +175,7 @@ export async function PATCH(
       data.status = body.status;
     }
 
-    // Activate toggle: ON = OPEN, OFF = PAUSED. CLOSED stays terminal (no toggle).
+    // Activate: ON follows schedule (OPEN unless end already passed). OFF = PAUSED.
     if (typeof body.activateOn === 'boolean') {
       if (existing.status === 'CLOSED') {
         return NextResponse.json(
@@ -123,8 +184,32 @@ export async function PATCH(
         );
       }
       if (body.activateOn) {
-        data.status = 'OPEN';
-      } else if (existing.status === 'OPEN' || existing.status === 'DRAFT' || existing.status === 'PAUSED') {
+        const nextStarts =
+          body.startsAt !== undefined
+            ? parseOptionalDate(body.startsAt) ?? null
+            : existing.startsAt;
+        const nextEnds =
+          body.endsAt !== undefined
+            ? parseOptionalDate(body.endsAt) ?? null
+            : existing.endsAt;
+        data.status = statusWhenActivating({
+          startsAt: nextStarts === undefined ? existing.startsAt : nextStarts,
+          endsAt: nextEnds === undefined ? existing.endsAt : nextEnds,
+        });
+        if (data.status === 'PAUSED') {
+          return NextResponse.json(
+            {
+              error: 'End date has already passed — update the schedule before activating.',
+              code: 'SCHEDULE_ENDED',
+            },
+            { status: 400 }
+          );
+        }
+      } else if (
+        existing.status === 'OPEN' ||
+        existing.status === 'DRAFT' ||
+        existing.status === 'PAUSED'
+      ) {
         data.status = 'PAUSED';
       }
     }
@@ -132,6 +217,42 @@ export async function PATCH(
     const opening =
       data.status === 'OPEN' && existing.status !== 'OPEN';
     if (opening) {
+      const nextPlaybookId =
+        (data.playbookId as string | null | undefined) ?? existing.playbookId;
+      if (!nextPlaybookId) {
+        return NextResponse.json(
+          {
+            error: 'Attach a playbook before activating this campaign.',
+            code: 'PLAYBOOK_REQUIRED',
+          },
+          { status: 400 }
+        );
+      }
+
+      const meeting =
+        (data.payoutCents as number | undefined) ?? existing.payoutCents ?? 0;
+      const qualified =
+        (data.qualifiedPayoutCents as number | null | undefined) ??
+        (existing as { qualifiedPayoutCents?: number | null }).qualifiedPayoutCents ??
+        0;
+      const minPayout = Math.max(meeting, qualified || 0, 0);
+      if (minPayout > 0) {
+        const { getOrCreateBrandWallet } = await import('@/lib/escrow');
+        const wallet = await getOrCreateBrandWallet(existing.brandId);
+        const available = wallet.balanceCents + (existing.escrowLockedCents || 0);
+        if (available < minPayout) {
+          return NextResponse.json(
+            {
+              error: `Wallet needs at least $${(minPayout / 100).toFixed(0)} (one highest goal payout) before activating.`,
+              code: 'ACTIVATE_BALANCE_INSUFFICIENT',
+              requiredCents: minPayout,
+              availableCents: available,
+            },
+            { status: 400 }
+          );
+        }
+      }
+
       const poolCount = await prisma.brandPhoneNumber.count({
         where: { brandId: existing.brandId, isActive: true },
       });
@@ -457,6 +578,6 @@ export async function PATCH(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import { getLeadCreditSnapshot } from '@/lib/lead-credits';
 import { BRAND_LEAD_PLAN, LEAD_PACKS } from '@/lib/product';
-
-function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return null;
-  return new Stripe(key, { apiVersion: '2025-02-24.acacia' });
-}
+import {
+  listCustomerBilling,
+  setPrimaryPaymentMethod,
+  setBackupPaymentMethod,
+} from '@/lib/billing-stripe';
+import { getStripe } from '@/lib/stripe';
 
 /**
  * GET /api/brands/[id]/billing
@@ -35,8 +34,6 @@ export async function GET(
             title: true,
             status: true,
             budgetCents: true,
-            dailyBudgetCents: true,
-            budgetMode: true,
             escrowLockedCents: true,
             payoutCents: true,
           },
@@ -62,29 +59,27 @@ export async function GET(
       ? await prisma.walletLedger.findMany({
           where: { walletId: brand.wallet.id },
           orderBy: { createdAt: 'desc' },
-          take: 40,
+          take: 80,
         })
       : [];
 
-    let paymentMethods: Array<{
-      id: string;
-      brand: string | null;
-      last4: string | null;
-      expMonth: number | null;
-      expYear: number | null;
-      isDefault: boolean;
-      isBackup: boolean;
-    }> = [];
-    let invoices: Array<{
-      id: string;
-      number: string | null;
-      status: string | null;
-      amountPaid: number;
-      currency: string;
-      created: number;
-      hostedInvoiceUrl: string | null;
-      description: string | null;
-    }> = [];
+    const campaignIds = [
+      ...new Set(walletLedger.map((l) => l.campaignId).filter(Boolean) as string[]),
+    ];
+    const campaignTitles =
+      campaignIds.length > 0
+        ? Object.fromEntries(
+            (
+              await prisma.campaign.findMany({
+                where: { id: { in: campaignIds } },
+                select: { id: true, title: true },
+              })
+            ).map((c) => [c.id, c.title])
+          )
+        : ({} as Record<string, string>);
+
+    let paymentMethods: Awaited<ReturnType<typeof listCustomerBilling>>['paymentMethods'] = [];
+    let invoices: Awaited<ReturnType<typeof listCustomerBilling>>['invoices'] = [];
     let subscription: {
       id: string;
       status: string;
@@ -93,68 +88,31 @@ export async function GET(
       planKey: string;
     } | null = null;
 
-    const stripe = getStripe();
     const customerId = profile.stripeCustomerId;
 
-    if (stripe && customerId) {
-      const customer = await stripe.customers.retrieve(customerId);
-      const defaultPm =
-        !customer.deleted && customer.invoice_settings?.default_payment_method
-          ? typeof customer.invoice_settings.default_payment_method === 'string'
-            ? customer.invoice_settings.default_payment_method
-            : customer.invoice_settings.default_payment_method.id
-          : null;
+    if (customerId) {
+      try {
+        const stripe = getStripe();
+        const listed = await listCustomerBilling(stripe, customerId);
+        paymentMethods = listed.paymentMethods;
+        invoices = listed.invoices;
 
-      const pms = await stripe.paymentMethods.list({
-        customer: customerId,
-        type: 'card',
-        limit: 10,
-      });
-
-      paymentMethods = pms.data.map((pm, idx) => ({
-        id: pm.id,
-        brand: pm.card?.brand || null,
-        last4: pm.card?.last4 || null,
-        expMonth: pm.card?.exp_month || null,
-        expYear: pm.card?.exp_year || null,
-        isDefault: defaultPm ? pm.id === defaultPm : idx === 0,
-        isBackup: defaultPm ? pm.id !== defaultPm : idx === 1,
-      }));
-
-      // Ensure at most one backup flag when no default set
-      if (!defaultPm && paymentMethods.length > 1) {
-        paymentMethods = paymentMethods.map((pm, idx) => ({
-          ...pm,
-          isDefault: idx === 0,
-          isBackup: idx === 1,
-        }));
-      }
-
-      const inv = await stripe.invoices.list({ customer: customerId, limit: 20 });
-      invoices = inv.data.map((i) => ({
-        id: i.id,
-        number: i.number,
-        status: i.status ?? null,
-        amountPaid: i.amount_paid,
-        currency: i.currency,
-        created: i.created,
-        hostedInvoiceUrl: i.hosted_invoice_url ?? null,
-        description: i.lines?.data?.[0]?.description || i.description || null,
-      }));
-
-      if (brand.stripeLeadSubscriptionId) {
-        try {
-          const sub = await stripe.subscriptions.retrieve(brand.stripeLeadSubscriptionId);
-          subscription = {
-            id: sub.id,
-            status: sub.status,
-            cancelAtPeriodEnd: sub.cancel_at_period_end,
-            currentPeriodEnd: sub.current_period_end ?? null,
-            planKey: brand.leadPlan,
-          };
-        } catch {
-          subscription = null;
+        if (brand.stripeLeadSubscriptionId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(brand.stripeLeadSubscriptionId);
+            subscription = {
+              id: sub.id,
+              status: sub.status,
+              cancelAtPeriodEnd: sub.cancel_at_period_end,
+              currentPeriodEnd: sub.current_period_end ?? null,
+              planKey: brand.leadPlan,
+            };
+          } catch {
+            subscription = null;
+          }
         }
+      } catch (e) {
+        console.error('brand billing stripe', e);
       }
     }
 
@@ -190,7 +148,10 @@ export async function GET(
         ? {
             balanceCents: brand.wallet.balanceCents,
             balanceLabel: `$${(brand.wallet.balanceCents / 100).toFixed(2)}`,
-            ledger: walletLedger,
+            ledger: walletLedger.map((row) => ({
+              ...row,
+              campaignTitle: row.campaignId ? campaignTitles[row.campaignId] || null : null,
+            })),
           }
         : { balanceCents: 0, balanceLabel: '$0.00', ledger: [] },
       campaigns: brand.campaigns.map((c) => ({
@@ -198,8 +159,6 @@ export async function GET(
         title: c.title,
         status: c.status,
         budgetCents: c.budgetCents,
-        dailyBudgetCents: c.dailyBudgetCents,
-        budgetMode: c.budgetMode,
         escrowLockedCents: c.escrowLockedCents,
         payoutCents: c.payoutCents,
         budgetLabel:
@@ -214,11 +173,11 @@ export async function GET(
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('brand billing', error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-/** PATCH — set default payment method (primary). Backup = next card. */
+/** PATCH — set primary and/or backup payment method. */
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -227,7 +186,14 @@ export async function PATCH(
     const profile = await requireUser();
     const { id: raw } = await ctx.params;
     const body = await req.json();
-    const paymentMethodId = String(body.defaultPaymentMethodId || '').trim();
+    const hasPrimary = Object.prototype.hasOwnProperty.call(body, 'defaultPaymentMethodId');
+    const hasBackup = Object.prototype.hasOwnProperty.call(body, 'backupPaymentMethodId');
+    const paymentMethodId = hasPrimary ? String(body.defaultPaymentMethodId || '').trim() : '';
+    const backupId = hasBackup
+      ? body.backupPaymentMethodId
+        ? String(body.backupPaymentMethodId).trim()
+        : null
+      : undefined;
 
     const brand = await prisma.brand.findFirst({
       where: { OR: [{ id: raw }, { slug: raw }] },
@@ -237,20 +203,29 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const stripe = getStripe();
-    if (!stripe || !profile.stripeCustomerId) {
+    if (!profile.stripeCustomerId) {
       return NextResponse.json(
         { error: 'No Stripe customer — fund wallet or subscribe first' },
         { status: 400 }
       );
     }
-    if (!paymentMethodId) {
-      return NextResponse.json({ error: 'defaultPaymentMethodId required' }, { status: 400 });
+    if (!hasPrimary && !hasBackup) {
+      return NextResponse.json(
+        { error: 'defaultPaymentMethodId or backupPaymentMethodId required' },
+        { status: 400 }
+      );
     }
 
-    await stripe.customers.update(profile.stripeCustomerId, {
-      invoice_settings: { default_payment_method: paymentMethodId },
-    });
+    const stripe = getStripe();
+    if (hasPrimary) {
+      if (!paymentMethodId) {
+        return NextResponse.json({ error: 'defaultPaymentMethodId required' }, { status: 400 });
+      }
+      await setPrimaryPaymentMethod(stripe, profile.stripeCustomerId, paymentMethodId);
+    }
+    if (hasBackup) {
+      await setBackupPaymentMethod(stripe, profile.stripeCustomerId, backupId || null);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {
@@ -258,6 +233,6 @@ export async function PATCH(
     if (message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

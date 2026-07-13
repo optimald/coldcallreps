@@ -8,14 +8,14 @@ export default function SessionsIndexPage() {
       <PageHeader
         eyebrow="Practice"
         title="Past calls"
-        description="Every scored practice session — lead, scenario, duration, and score. Open a row for transcript, coach log, and playback."
+        description="Training vs brand dials — see minutes charged, when they renew, disposition, and goal value. Open a row for transcript, coach log, or lead detail."
         actions={
           <Link href="/practice" className="btn">
             New practice call
           </Link>
         }
       />
-      <PracticeCallsList />
+      <PracticeCallsList description="Filter by time and call type. Training uses practice minutes; brand dials do not." />
     </main>
   );
 }

@@ -17,7 +17,7 @@ export async function GET() {
     if (message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -137,7 +137,7 @@ export async function PATCH(req: Request) {
     if (message === 'FORBIDDEN') {
       return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

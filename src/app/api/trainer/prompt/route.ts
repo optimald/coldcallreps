@@ -36,12 +36,31 @@ export async function POST(req: Request) {
       orgId: bodyOrgId,
     } = body;
 
-    let userId = bodyUserId || null;
-    let orgId = bodyOrgId || null;
-    if (!userId && session.userId) {
+    let userId: string | null = null;
+    let orgId: string | null = null;
+
+    // Internal workers may pass userId; browser clients never impersonate.
+    if (internal && bodyUserId) {
+      userId = String(bodyUserId);
+      orgId = bodyOrgId ? String(bodyOrgId) : null;
+    } else if (session.userId) {
       userId = session.userId;
       const profile = await prisma.userProfile.findUnique({ where: { id: session.userId } });
       orgId = profile?.orgId || null;
+    }
+
+    if (brandId && userId) {
+      const profile = await prisma.userProfile.findUnique({
+        where: { id: userId },
+        select: { id: true, platformRole: true, email: true },
+      });
+      if (profile) {
+        const { assertTrainerBrandAccess } = await import('@/lib/trainer-brand-access');
+        const access = await assertTrainerBrandAccess(profile, String(brandId));
+        if (!access.ok) {
+          return NextResponse.json({ error: access.error }, { status: access.status });
+        }
+      }
     }
 
     const result = await buildTrainerScenarioPrompt({
@@ -58,6 +77,6 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('Trainer prompt error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -147,7 +147,9 @@ export async function POST(
             applicationId: application.id,
             sdrName: profile.displayName || 'An SDR',
             customMessage: message || undefined,
-            ctaUrl: `/brands/${campaign.brand.slug}/sdrs/applications`,
+            ctaUrl: campaign.brand.slug
+              ? `/recruit?brand=${encodeURIComponent(campaign.brand.slug)}`
+              : '/recruit',
           },
           idempotencyKey: `campaign.application.submitted:${application.id}:${application.updatedAt.toISOString()}`,
         });
@@ -164,6 +166,6 @@ export async function POST(
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -115,8 +115,8 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
               Compare all plans
             </Link>
             {role.key === 'brands' ? (
-              <Link href="/billing" className="lp-btn-secondary">
-                Brand billing
+              <Link href="/subscribe/brand" className="lp-btn-secondary">
+                Brand plans
               </Link>
             ) : null}
           </div>

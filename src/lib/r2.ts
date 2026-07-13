@@ -54,8 +54,8 @@ export function publicUrlForKey(key: string): string {
   }
   const base = process.env.R2_PUBLIC_URL?.replace(/\/$/, '');
   if (base) return `${base}/${key}`;
-  // App-proxied playback
-  return `/api/clips/media?key=${encodeURIComponent(key)}`;
+  // App-proxied playback requires clipId — callers should persist clip first
+  return '';
 }
 
 /**

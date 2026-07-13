@@ -247,7 +247,7 @@ export function buildBrandEconomics(input: BrandEconomicsInput): BrandEconomics 
     : `/brands/${key}/campaigns`;
   const leadsHref = `/brands/${key}/leads`;
   const pipelineHref = `/brands/${key}/pipeline`;
-  const appsHref = `/brands/${key}/sdrs/applications`;
+  const appsHref = `/recruit?brand=${encodeURIComponent(key)}`;
   const teamHref = `/brands/${key}/sdrs/team`;
   const fundHref = `/brands/${key}/settings`;
 
@@ -499,6 +499,26 @@ export function buildBrandEconomics(input: BrandEconomicsInput): BrandEconomics 
     series: input.series || [],
     vitals,
   };
+}
+
+/**
+ * Chart day labels must match SSR ↔ client. Always use en-US + UTC so Node
+ * and the browser never disagree on weekday (locale / timezone hydration bugs).
+ */
+export function weekdayLabelFromDayKey(key: string): string {
+  return new Date(`${key}T12:00:00.000Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+/** UTC calendar YYYY-MM-DD for `daysBack` days before `from` (0 = today UTC). */
+export function utcDayKey(daysBack: number, from = new Date()): string {
+  const d = new Date(
+    Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate())
+  );
+  d.setUTCDate(d.getUTCDate() - daysBack);
+  return d.toISOString().slice(0, 10);
 }
 
 export function riskScore(economics: BrandEconomics): number {

@@ -7,7 +7,7 @@
  * Field map (Trojan SalesLeadsView → CCR):
  *   digitalGravityScore → intel.score ("Trojan")
  *   siteHealthScore     → intel.health
- *   webevoOverallScore  → intel.webEvoScore (uilensai when scanned; else heuristic proxy)
+ *   siteScore           → intel.webEvoScore (heuristic HTML proxy only; Phase 4 WebEvo removed)
  *   copyrightYear       → intel.copyrightYear ("© Year")
  *   cmsUsed             → intel.cms
  *   LeadSignals pills   → intel.signals[]
@@ -18,7 +18,6 @@
  *   REAL: CMS detect, © year, HTTPS, viewport/mobile, booking, pixels/GA/ads/schema/OG,
  *         review rating/count (from Maps on Prospect), talking-point hooks
  *   HEURISTIC: health, score (Trojan), webEvoScore — lightweight HTML signals only
- *   REAL WebEvo: POST /api/prospects/[id]/webevo → @optimald/uilensai (opt-in, not in P1–P3)
  *   UNAVAILABLE in 1-step: DNS/SEO full health, lastGoogleReviewDate
  */
 
@@ -27,13 +26,13 @@ export type ProspectIntel = {
   score?: number | null;
   /** siteHealthScore proxy — Health column. */
   health?: number | null;
-  /** webevoOverallScore — letter grade column. */
+  /** Site quality score — heuristic HTML proxy (Phase 4 WebEvo removed). */
   webEvoScore?: number | null;
-  /** 'uilensai' when from @optimald/uilensai; else heuristic HTML proxy. */
+  /** Always 'heuristic' after Phase 4 purge; legacy 'uilensai' may remain in stored JSON. */
   webEvoSource?: 'uilensai' | 'heuristic' | null;
-  /** Excellent | Good | Fair | Poor from UILensAI. */
+  /** Excellent | Good | Fair | Poor (legacy UILensAI; heuristic may omit). */
   webEvoRating?: string | null;
-  /** Module scores from UILensAI (0–100). */
+  /** Module scores (legacy UILensAI storage; optional). */
   webEvoModules?: {
     ui?: number | null;
     performance?: number | null;
@@ -46,7 +45,7 @@ export type ProspectIntel = {
     accessibility?: number | null;
     siteHealth?: number | null;
   } | null;
-  /** CF / UILensAI screenshots by viewport. */
+  /** Screenshots by viewport (legacy captures may remain). */
   screenshots?: { viewport: string; url: string }[] | null;
   /** Trojan copyrightYear (footer ©), not founding year. */
   copyrightYear?: number | null;

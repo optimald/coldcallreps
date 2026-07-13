@@ -37,6 +37,14 @@ function statusLabel(status: string) {
 export default function GigsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [mine, setMine] = useState<MyApp[]>([]);
+  const [brandInterest, setBrandInterest] = useState<
+    {
+      id: string;
+      brand: { id: string; name: string; slug: string; logoUrl?: string | null } | null;
+      fromName: string | null;
+      updatedAt: string;
+    }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<{
     text: string;
@@ -48,14 +56,17 @@ export default function GigsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [openRes, mineRes] = await Promise.all([
+      const [openRes, mineRes, interestRes] = await Promise.all([
         fetch('/api/campaigns'),
         fetch('/api/campaigns?mine=1'),
+        fetch('/api/talent/interest?mine=1'),
       ]);
       const openData = await openRes.json().catch(() => ({}));
       const mineData = await mineRes.json().catch(() => ({}));
+      const interestData = await interestRes.json().catch(() => ({}));
       if (openRes.ok) setCampaigns(openData.campaigns || []);
       if (mineRes.ok) setMine(mineData.applications || []);
+      if (interestRes.ok) setBrandInterest(interestData.interests || []);
     } finally {
       setLoading(false);
     }
@@ -128,6 +139,62 @@ export default function GigsPage() {
         <p className="muted">Loading brand deals…</p>
       ) : (
         <div className="gigs-desk">
+          {brandInterest.length > 0 ? (
+            <Panel
+              compact
+              className="gigs-desk__interest"
+              title="Brands interested in you"
+              description="Shortlisted from Recruit — review their open campaigns below and apply."
+            >
+              <ul className="brand-list">
+                {brandInterest.map((row) => {
+                  const name = displayBrandName(row.brand?.name || row.fromName);
+                  const openForBrand = campaigns.filter(
+                    (c) =>
+                      c.brand?.slug === row.brand?.slug ||
+                      c.brand?.name === row.brand?.name
+                  );
+                  return (
+                    <li key={row.id}>
+                      <span className="gigs-interest__row">
+                        <BrandLogo
+                          name={name || 'Brand'}
+                          slug={row.brand?.slug}
+                          logoUrl={row.brand?.logoUrl}
+                          size="sm"
+                        />
+                        <span>
+                          <strong>{name || 'Brand'}</strong>
+                          <span className="muted" style={{ marginLeft: '0.45rem', fontSize: '0.85rem' }}>
+                            {openForBrand.length
+                              ? `${openForBrand.length} open deal${openForBrand.length === 1 ? '' : 's'}`
+                              : 'No open campaigns yet'}
+                          </span>
+                        </span>
+                      </span>
+                      {row.brand?.slug ? (
+                        <Link
+                          href={`/gigs#brand-${row.brand.slug}`}
+                          className="soft-link"
+                          onClick={() => {
+                            const hit = openForBrand[0];
+                            if (hit) {
+                              document
+                                .getElementById(`gig-${hit.id}`)
+                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }}
+                        >
+                          View deals
+                        </Link>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Panel>
+          ) : null}
+
           <Panel
             compact
             className="gigs-desk__campaigns"
@@ -158,7 +225,7 @@ export default function GigsPage() {
                     if (c.minScore != null) metaBits.push(`Min score ${c.minScore}`);
 
                     return (
-                      <article key={c.id} className="gig-card gig-card--compact">
+                      <article key={c.id} id={`gig-${c.id}`} className="gig-card gig-card--compact">
                         <div className="gig-card__top">
                           <BrandLogo
                             name={brandName}
