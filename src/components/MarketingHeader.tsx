@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import BrandMark from '@/components/BrandMark';
-import ThemePicker from '@/components/ThemePicker';
 
 /** Marketing top nav — brand always in the header. */
 export default function MarketingHeader() {
@@ -33,9 +32,6 @@ export default function MarketingHeader() {
         <Link href="/for" className="mkt-nav-pricing-mobile" style={{ color: 'var(--muted)' }}>
           Roles
         </Link>
-        <SignedIn>
-          <ThemePicker compact lightDarkOnly />
-        </SignedIn>
         <SignedOut>
           <Link href="/sign-in" style={{ color: 'var(--muted)' }}>
             Sign in
