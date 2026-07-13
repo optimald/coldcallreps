@@ -10,6 +10,7 @@ import {
   defaultPlaybookTitle,
   getDefaultPlaybook,
 } from '@/lib/playbooks/default';
+import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
 
 /** Seed all starter playbooks when the user has none. Idempotent: skip if count > 0. */
 async function ensureDefaultPlaybooks(userId: string) {
@@ -108,10 +109,11 @@ export async function POST(req: Request) {
     }
 
     const useDefault = body.useDefault === true || Boolean(templateKey) || !body.content;
-    const content =
+    const content = sanitizePlaybookContent(
       useDefault && !body.content
         ? defaultPlaybookContent(templateKey ?? 'foundation')
-        : body.content || {};
+        : body.content || {}
+    );
     const resolvedTitle =
       title ||
       (templateKey ? defaultPlaybookTitle(templateKey) : useDefault ? DEFAULT_PLAYBOOK_TITLE : '');

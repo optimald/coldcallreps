@@ -33,16 +33,27 @@ export async function GET(req: Request) {
     // Practice contacts — any signed-in user
     if (training) {
       const role = effectiveRole(profile);
-      const prospects = await listTrainingLeads({
+      const skip = Math.max(
+        parseInt(searchParams.get('skip') || searchParams.get('offset') || '0', 10) || 0,
+        0
+      );
+      const { prospects, hasMore, total } = await listTrainingLeads({
         brandId: brandId || undefined,
         take,
+        skip,
         ownerUserId:
           role === 'BRAND' || role === 'RECRUITER' ? profile.id : undefined,
       });
       const filtered = status
         ? prospects.filter((p) => p.status === status)
         : prospects;
-      return NextResponse.json({ prospects: filtered, purpose: 'training' });
+      return NextResponse.json({
+        prospects: filtered,
+        purpose: 'training',
+        hasMore,
+        total,
+        skip,
+      });
     }
 
     // SDR: leads for campaigns they're accepted on (excludes training)

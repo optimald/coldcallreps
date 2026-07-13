@@ -217,7 +217,7 @@ export default function OnboardingRepPage() {
                 Payouts (optional now)
               </p>
               <p className="muted" style={{ margin: '0 0 0.65rem', fontSize: '0.85rem' }}>
-                Training stays open without Connect. Finish Stripe Connect before brands can pay you.
+                Practice stays open without Connect. Finish Stripe Connect before brands can pay you.
               </p>
               <button
                 type="button"

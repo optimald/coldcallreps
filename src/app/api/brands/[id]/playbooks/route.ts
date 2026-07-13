@@ -7,6 +7,7 @@ import {
   defaultPlaybookContent,
   getDefaultPlaybook,
 } from '@/lib/playbooks/default';
+import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
 
 async function loadBrand(idOrSlug: string) {
   return prisma.brand.findFirst({
@@ -65,9 +66,9 @@ export async function POST(
       return NextResponse.json({ error: `Unknown template "${templateKey}"` }, { status: 400 });
     }
 
-    const content =
-      body.content ||
-      defaultPlaybookContent(templateKey ?? 'foundation');
+    const content = sanitizePlaybookContent(
+      body.content || defaultPlaybookContent(templateKey ?? 'foundation')
+    );
     const resolvedTitle =
       title ||
       (templateKey ? getDefaultPlaybook(templateKey)!.title : DEFAULT_PLAYBOOK_TITLE);

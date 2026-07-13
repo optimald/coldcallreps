@@ -22,8 +22,8 @@ export type HomeFaqItem = {
 const tierBandSummary = CAMPAIGN_TIERS.map((t) => `${t.label} ${t.subtitle}`).join('; ');
 
 const applyGateAnswer = DEFAULT_REQUIRE_CERTIFICATION
-  ? `Campaigns use an apply gate: complete at least ${DEFAULT_MIN_PRACTICE_SESSIONS} AI trainer session${DEFAULT_MIN_PRACTICE_SESSIONS === 1 ? '' : 's'} on the brand pack, score at least ${DEFAULT_CAMPAIGN_MIN_SCORE}, and earn brand certification (usually score ≥${DEFAULT_CAMPAIGN_MIN_SCORE}). Exact thresholds can vary by campaign, but practice + proof come first.`
-  : `Campaigns use an apply gate: complete at least ${DEFAULT_MIN_PRACTICE_SESSIONS} AI trainer session${DEFAULT_MIN_PRACTICE_SESSIONS === 1 ? '' : 's'} on the brand pack and score at least ${DEFAULT_CAMPAIGN_MIN_SCORE}. Exact thresholds can vary by campaign, but practice + proof come first.`;
+  ? `Campaigns use an apply gate: complete at least ${DEFAULT_MIN_PRACTICE_SESSIONS} practice session${DEFAULT_MIN_PRACTICE_SESSIONS === 1 ? '' : 's'} on the brand pack, score at least ${DEFAULT_CAMPAIGN_MIN_SCORE}, and earn brand certification (usually score ≥${DEFAULT_CAMPAIGN_MIN_SCORE}). Exact thresholds can vary by campaign, but practice + proof come first.`
+  : `Campaigns use an apply gate: complete at least ${DEFAULT_MIN_PRACTICE_SESSIONS} practice session${DEFAULT_MIN_PRACTICE_SESSIONS === 1 ? '' : 's'} on the brand pack and score at least ${DEFAULT_CAMPAIGN_MIN_SCORE}. Exact thresholds can vary by campaign, but practice + proof come first.`;
 
 /**
  * Homepage FAQ copy — single source for UI accordion + FAQPage JSON-LD.
@@ -41,7 +41,7 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
   },
   {
     question: 'How much does AI practice cost?',
-    answer: `Free includes ${TRIAL_MINUTES} practice minutes to start. Starter is $${PLAN.STARTER.price}/mo, Pro is $${PLAN.PRO.price}/mo, and Org is $${PLAN.TEAM.price}/user/mo. Marketplace gigs stay free for reps — practice plans buy minutes and coaching tools. Train, prove, apply to gigs, connect Stripe, get paid.`,
+    answer: `Free includes ${TRIAL_MINUTES} practice minutes to start. Starter is $${PLAN.STARTER.price}/mo, Pro is $${PLAN.PRO.price}/mo, and Org is $${PLAN.TEAM.price}/user/mo. Brand deals stay free for reps — practice plans buy minutes and coaching tools. Train, prove, apply to brand deals, connect Stripe, get paid.`,
     links: [
       { href: '/pricing', label: 'See pricing' },
       { href: '/sign-up?role=REP', label: 'Sign up as a rep' },
@@ -52,7 +52,7 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     answer:
       'No. Marketplace campaigns are free for reps to join once they clear the quality gate. Brands fund payouts; reps get paid for approved results via Stripe Connect (Billing / Earnings).',
     links: [
-      { href: '/gigs', label: 'Browse campaigns' },
+      { href: '/gigs', label: 'Browse brand deals' },
       { href: '/sign-up?role=REP', label: 'Start getting paid' },
     ],
   },
@@ -61,7 +61,7 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     answer: applyGateAnswer,
     links: [
       { href: '/for/reps', label: 'Rep path' },
-      { href: '/gigs', label: 'Open gigs' },
+      { href: '/gigs', label: 'Open brand deals' },
       { href: '/sign-up?role=REP', label: 'Sign up as a rep' },
     ],
   },
@@ -72,20 +72,20 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     links: [
       { href: '/for/brands', label: 'For brands' },
       { href: '/pricing', label: 'Pricing' },
-      { href: '/gigs', label: 'Open gigs' },
+      { href: '/gigs', label: 'Open brand deals' },
     ],
   },
   {
     question: 'What counts as a booked meeting?',
     answer:
       'A booked meeting is a claimed outcome that passes AI post-call audit — typically a calendar hold with a qualified decision-maker, supported by notes or transcript. Claims without enough evidence do not pay.',
-    links: [{ href: '/gigs', label: 'How campaigns pay' }],
+    links: [{ href: '/gigs', label: 'How brand deals pay' }],
   },
   {
     question: 'What are the campaign payout tiers?',
     answer: `Campaigns use flat tier bands per verified set (not bidding): ${tierBandSummary}. Rates depend on ICP difficulty and gatekeeper friction.`,
     links: [
-      { href: '/gigs', label: 'Campaigns' },
+      { href: '/gigs', label: 'Brand deals' },
       { href: '/for/brands', label: 'Post a campaign' },
     ],
   },

@@ -312,7 +312,7 @@ export default function AcademyPage() {
                     {focusAreas.map((fa) => (
                       <Link
                         key={fa}
-                        href={`/trainer?focus=${fa}`}
+                        href={`/practice?focus=${fa}`}
                         style={{
                           fontSize: '0.8rem',
                           color: 'var(--accent)',

@@ -13,8 +13,11 @@ export interface RoleLanding {
   primaryCta: { href: string; label: string };
   secondaryCta: { href: string; label: string };
   proof: string;
+  outcomesHeadline: string;
   outcomes: { title: string; body: string }[];
+  stepsHeadline: string;
   steps: { n: string; title: string; body: string }[];
+  pricingHeadline: string;
   pricingNote: string;
   planHref: string;
 }
@@ -23,82 +26,116 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
   reps: {
     key: 'reps',
     path: '/for/reps',
-    navLabel: 'Reps',
-    eyebrow: 'SDR · outbound talent',
+    navLabel: 'Sales Reps',
+    eyebrow: 'AI voice training · high-ticket SDR coaching',
     title: 'For SDRs & closers',
-    headline: 'Train. Prove. Get paid.',
-    sub: 'Practice with AI voice, earn a score founders trust, then pick up paid outbound campaigns. Marketplace gigs are free for reps — brands pay, you get paid (~20% platform fee on payouts).',
-    primaryCta: { href: '/sign-up?role=REP', label: 'Start free — get paid' },
-    secondaryCta: { href: '/gigs', label: 'See campaigns' },
-    proof: `${TRIAL_MINUTES} free minutes · Starter $${PLAN.STARTER.price}/mo · gigs free for reps`,
+    headline: 'Master high-ticket cold calls with AI.',
+    sub: 'Train on realistic gatekeeper and decision-maker calls with live AI voice coaching. Sharpen openers, objections, and transfers until your score proves you’re ready — then unlock paid brand campaigns.',
+    primaryCta: { href: '/sign-up?role=REP', label: 'Start Free — Get Paid' },
+    secondaryCta: { href: '/gigs', label: 'Browse Brand Deals' },
+    proof: '',
+    outcomesHeadline: 'The AI coaching gym for serious SDRs',
     outcomes: [
       {
-        title: 'AI voice practice',
-        body: 'Gatekeepers, objections, pricing pushback — warm up before real dials or campaign work.',
+        title: 'High-Ticket Scenarios',
+        body: 'Practice premium outbound — gatekeepers, pricing pushback, and decision-maker conversations that feel like the real dial.',
       },
       {
-        title: 'Proof on your profile',
-        body: 'Scorecards, integrity gate, and highlights founders can trust before they hire you for outbound.',
+        title: 'Live AI Coach',
+        body: 'Real-time whispers mid-call: what to say next, how to handle objections, and when to ask for the transfer or meeting.',
       },
       {
-        title: 'Paid campaigns',
-        body: 'Browse open gigs from bootstrapped founders. Apply with practice signal, not a résumé.',
+        title: 'Scorecards That Matter',
+        body: 'Objective scoring and call recordings so you know exactly what to fix — and brands can hear proof you’re ready.',
       },
       {
-        title: 'Freemium grind',
-        body: `${TRIAL_MINUTES} free minutes to start. Starter for daily practice. Marketplace access stays free — Connect Stripe when you’re ready to get paid.`,
+        title: 'Get Paid to Dial',
+        body: 'High scores unlock brand campaigns. Apply, get accepted, and earn when qualified leads or meetings land.',
       },
     ],
+    stepsHeadline: 'Four Moves to Getting Paid',
     steps: [
-      { n: '01', title: 'Train', body: 'AI scenarios until your opens and transfers are clean.' },
-      { n: '02', title: 'Prove', body: 'Clear the quality gate. Climb the board. Own your profile.' },
+      {
+        n: '01',
+        title: 'Train',
+        body: 'Run AI voice sessions on brand packs until your high-ticket openers, objections, and transfers are sharp.',
+      },
+      {
+        n: '02',
+        title: 'Prove',
+        body: 'Hit the quality gate. Build a public profile brands trust.',
+      },
       {
         n: '03',
-        title: 'Get paid',
-        body: 'Apply to gigs, finish Stripe Connect, deliver — brands pay; reps don’t pay to join.',
+        title: 'Get Paid',
+        body: 'Apply to campaigns. Finish Stripe Connect. Brands pay you for results.',
       },
-      { n: '04', title: 'Level up', body: 'More minutes with Starter/Pro when you want longer practice blocks.' },
+      {
+        n: '04',
+        title: 'Level Up',
+        body: 'Unlock more practice minutes and higher-paying deals as you win.',
+      },
     ],
-    pricingNote: `Free (${TRIAL_MINUTES} min) · Starter $${PLAN.STARTER.price}/mo (${PLAN.STARTER.minutes} min) · Pro $${PLAN.PRO.price}/mo · gigs free for reps · Stripe Connect to get paid`,
+    pricingHeadline: 'Ready when you are',
+    pricingNote: `Free (${TRIAL_MINUTES} min) · Starter $${PLAN.STARTER.price}/mo (${PLAN.STARTER.minutes} min) · Pro $${PLAN.PRO.price}/mo · Brand deals are free for reps · Stripe Connect when you’re ready to get paid`,
     planHref: '/sign-up?role=REP',
   },
   brands: {
     key: 'brands',
     path: '/for/brands',
-    navLabel: 'Founders',
+    navLabel: 'Brand Founders',
     eyebrow: 'Bootstrapped founders · brands',
     title: 'For founders',
     headline: 'Post a campaign. Get trained reps on your outbound.',
-    sub: 'You’re busy building. Cold Call Reps trains SDRs with AI voice, gates quality, then matches them to your paid outbound campaigns. You pay for results — ~20% platform fee on payouts. Reps practice free to join gigs.',
-    primaryCta: { href: '/sign-up?role=BRAND', label: 'Post a campaign' },
-    secondaryCta: { href: '/gigs', label: 'See open gigs' },
-    proof: 'Founders pay · reps free for gigs · ~20% platform fee on payouts',
+    sub: 'You’re busy building. Cold Call Reps trains SDRs with AI voice on your exact offer, gates quality, then matches them to your paid campaigns. You only pay for results.',
+    primaryCta: { href: '/sign-up?role=BRAND', label: 'Post a Campaign' },
+    secondaryCta: { href: '/gigs', label: 'See Open Brand Deals' },
+    proof: '',
+    outcomesHeadline: 'For founders who want booked meetings without the grind',
     outcomes: [
       {
-        title: 'Campaigns as gigs',
-        body: 'Publish what you need dialed — ICP, offer, talk track — and attract practice-proven reps on /gigs.',
+        title: 'Product-Ready Reps',
+        body: 'SDRs train on your pitch, objections, and ICP before calling your leads.',
       },
       {
-        title: 'AI quality gate',
-        body: 'Reps train on live voice scenarios. Integrity scoring keeps weak sessions off your shortlist.',
+        title: 'Real Humans on the Dial',
+        body: 'No AI calling. Just sharp reps with live AI coaching.',
       },
       {
-        title: 'Pay for outbound, not seats',
-        body: 'Brand/founder accounts stay free to start. You fund campaigns; platform takes ~20% on payouts.',
+        title: 'Meetings on Your Calendar',
+        body: 'Booked calls land directly in your calendar + pushed to Close.com.',
       },
       {
-        title: 'Packs & proof',
-        body: 'Inject your offer into practice, then certify closers before they dial for real.',
+        title: 'Pay Only for Results',
+        body: 'You set the price per lead and choose the goal — qualified lead or booked appointment. Pay only when it’s met.',
       },
     ],
+    stepsHeadline: 'Four Moves to Getting Leads',
     steps: [
-      { n: '01', title: 'Create brand', body: 'Sign up as Brand / founder and name your offer.' },
-      { n: '02', title: 'Post a campaign', body: 'Ship ICP + talk track to the gig marketplace.' },
-      { n: '03', title: 'Review proof', body: 'See scores and highlights before you fund work.' },
-      { n: '04', title: 'Pay for results', body: 'Reps run outbound; you pay — platform fee ~20%.' },
+      {
+        n: '01',
+        title: 'Create Brand',
+        body: 'Sign up free and upload your offer, ICP, and talk track.',
+      },
+      {
+        n: '02',
+        title: 'Post a Campaign',
+        body: 'Create a campaign free. Set your price per lead and choose qualified lead or booked appointment.',
+      },
+      {
+        n: '03',
+        title: 'Review Proof',
+        body: 'Reps practice your campaign with AI, then apply. You listen to their calls and only approve SDRs who sound ready.',
+      },
+      {
+        n: '04',
+        title: 'Pay for Results',
+        body: 'You only pay when a lead goal is met.',
+      },
     ],
+    pricingHeadline: 'Free to start. Pay only when a goal is met.',
     pricingNote:
-      'Founder/brand accounts free to start. Campaign payouts: brands pay per result via Stripe Connect; ~20% platform fee. SDRs connect payouts under Billing.',
+      'Sign up and create a campaign at no cost. Set your own price per lead and choose the goal — qualified lead or booked appointment. You only pay when that goal is delivered.',
     planHref: '/sign-up?role=BRAND',
   },
   teams: {
@@ -112,6 +149,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     primaryCta: { href: '/sign-up?plan=TEAM', label: 'Get Org seats' },
     secondaryCta: { href: '/for/brands', label: 'Post a campaign instead' },
     proof: `Org $${PLAN.TEAM.price}/user/mo · ${PLAN.TEAM.minutesPerSeat} min/user/mo · optional vs campaigns`,
+    outcomesHeadline: 'What teams get',
     outcomes: [
       {
         title: 'Pooled minutes',
@@ -130,12 +168,14 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
         body: 'Sessions and scores in one place for the whole desk.',
       },
     ],
+    stepsHeadline: 'Four moves',
     steps: [
       { n: '01', title: 'Start free', body: 'Reps join and put in the practice.' },
       { n: '02', title: 'Invite the desk', body: 'Clerk orgs + academy membership.' },
-      { n: '03', title: 'Assign playbooks', body: 'Shared scripts in trainer + coach.' },
+      { n: '03', title: 'Assign playbooks', body: 'Shared scripts in Practice + coach.' },
       { n: '04', title: 'Coach from data', body: 'Sessions, scores, org board.' },
     ],
+    pricingHeadline: 'Ready when you are',
     pricingNote: `Org plan $${PLAN.TEAM.price}/user/mo — ${PLAN.TEAM.minutesPerSeat} practice minutes / user / mo (pooled). Prefer campaigns if you’re a solo founder.`,
     planHref: '/sign-up?plan=TEAM',
   },

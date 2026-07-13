@@ -178,7 +178,7 @@ export default function AdminPage() {
       >
         <Panel title="Recent sessions">
           {sessions.length === 0 ? (
-            <EmptyState title="No sessions yet" description="Trainer activity will land here." />
+            <EmptyState title="No sessions yet" description="Practice activity will land here." />
           ) : (
             <ul className="list-quiet">
               {sessions.map((s) => (

@@ -63,13 +63,13 @@ export default function PricingPage() {
       <p style={{ color: 'var(--muted)', marginBottom: '1rem', maxWidth: 640 }}>
         Free practice ({TRIAL_MINUTES} min), Starter ${PLAN.STARTER.price}/mo (
         {PLAN.STARTER.minutes} min), Pro ${PLAN.PRO.price}/mo ({PLAN.PRO.minutes} min) with
-        recording storage. Marketplace gigs are free for reps — brands pay (~20% platform fee).
+        recording storage. Brand deals are free for reps — brands pay (~20% platform fee).
         Org ${PLAN.TEAM.price}/user/mo is optional for desks. Refer a friend — you both get{' '}
         {REFERRAL_REWARD_LABEL}.
       </p>
       <p style={{ color: 'var(--muted)', marginBottom: '2.5rem', maxWidth: 640 }}>
-        Reps: train → prove → apply to gigs → connect Stripe → get paid. Practice plans buy minutes;
-        gigs are not a paywall.
+        Reps: train → prove → apply to brand deals → connect Stripe → get paid. Practice plans buy minutes;
+        brand deals are not a paywall.
       </p>
 
       <div className="auto-fit-grid" style={{ gap: '1.25rem' }}>
@@ -156,12 +156,12 @@ export default function PricingPage() {
         <ul style={{ color: 'var(--muted)', lineHeight: 1.7 }}>
           <li>
             <strong style={{ color: 'var(--ink)' }}>Free:</strong> {TRIAL_MINUTES} practice minutes,
-            scorecards, marketplace gigs free for reps — then Stripe Connect under Billing / Earnings
+            scorecards, brand deals free for reps — then Stripe Connect under Billing / Earnings
             to get paid.
           </li>
           <li>
             <strong style={{ color: 'var(--ink)' }}>Starter (${PLAN.STARTER.price}/mo):</strong>{' '}
-            {PLAN.STARTER.minutes} monthly practice minutes — daily warm-ups, not a gig paywall.
+            {PLAN.STARTER.minutes} monthly practice minutes — daily warm-ups, not a brand deal paywall.
           </li>
           <li>
             <strong style={{ color: 'var(--ink)' }}>Pro (${PLAN.PRO.price}/mo):</strong>{' '}
@@ -185,7 +185,7 @@ export default function PricingPage() {
             Sign up as a rep
           </Link>
           <Link href="/gigs" className="btn-ghost">
-            Browse gigs
+            Browse brand deals
           </Link>
           <Link href="/for/reps" className="btn-ghost">
             Rep path

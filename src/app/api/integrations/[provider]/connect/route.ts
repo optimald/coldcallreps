@@ -6,6 +6,7 @@ import {
   GOOGLE_CALENDAR_PROVIDER,
   googleCalendarConfigured,
 } from '@/lib/google-calendar';
+import { buildHubspotAuthUrl, hubspotConfigured, HUBSPOT_PROVIDER } from '@/lib/crm/hubspot';
 
 /**
  * Start Google Calendar OAuth for brands, or return coming-soon for CRM / Microsoft.
@@ -45,8 +46,19 @@ export async function GET(
       );
     }
 
-    // Honest CRM stubs — no fake workspace / coach-memory seeding
-    const crmSoon = ['close', 'close_com', 'hubspot', 'salesforce', 'pipedrive'];
+    if (provider === HUBSPOT_PROVIDER) {
+      if (!hubspotConfigured()) {
+        return NextResponse.redirect(
+          `${appUrl}/integrations?error=${encodeURIComponent(
+            'HubSpot OAuth is not configured on this server yet'
+          )}`
+        );
+      }
+      return NextResponse.redirect(buildHubspotAuthUrl(profile.id));
+    }
+
+    // Remaining CRM adapters — sync only; ColdCallReps leads stay the source of truth
+    const crmSoon = ['close', 'close_com', 'salesforce', 'pipedrive'];
     if (crmSoon.includes(provider)) {
       return NextResponse.redirect(
         `${appUrl}/integrations?error=${encodeURIComponent('CRM sync coming soon')}`

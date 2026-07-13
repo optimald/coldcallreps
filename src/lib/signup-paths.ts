@@ -21,7 +21,7 @@ export const SIGNUP_PATHS: SignupPath[] = [
     sublabel: 'Sales Development Rep',
     tagline: 'Train. Prove. Get paid.',
     blurb:
-      'Practice with AI voice, prove your skill, then take paid outbound campaigns. Marketplace gigs are free for reps.',
+      'Practice with AI voice, prove your skill, then take paid outbound campaigns. Brand deals are free for reps.',
     role: 'REP',
     home: '/dashboard',
   },

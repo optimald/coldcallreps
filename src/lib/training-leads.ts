@@ -270,27 +270,41 @@ const trainingLeadSelect = {
 export async function listTrainingLeads(opts?: {
   brandId?: string;
   take?: number;
+  skip?: number;
   /** Brand managers: platform demos (ownerId null) + their brands only. */
   ownerUserId?: string;
 }) {
   const take = Math.min(opts?.take ?? 80, 200);
-  return prisma.prospect.findMany({
-    where: {
-      source: TRAINING_SOURCE,
-      ...(opts?.brandId ? { brandId: opts.brandId } : {}),
-      ...(opts?.ownerUserId && !opts?.brandId
-        ? {
-            OR: [
-              { brand: { ownerId: null } },
-              { brand: { ownerId: opts.ownerUserId } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ brandId: 'asc' }, { companyName: 'asc' }],
-    take,
-    select: trainingLeadSelect,
-  });
+  const skip = Math.max(opts?.skip ?? 0, 0);
+  const where = {
+    source: TRAINING_SOURCE,
+    ...(opts?.brandId ? { brandId: opts.brandId } : {}),
+    ...(opts?.ownerUserId && !opts?.brandId
+      ? {
+          OR: [
+            { brand: { ownerId: null } },
+            { brand: { ownerId: opts.ownerUserId } },
+          ],
+        }
+      : {}),
+  };
+
+  const [prospects, total] = await Promise.all([
+    prisma.prospect.findMany({
+      where,
+      orderBy: [{ brandId: 'asc' }, { companyName: 'asc' }],
+      take,
+      skip,
+      select: trainingLeadSelect,
+    }),
+    prisma.prospect.count({ where }),
+  ]);
+
+  return {
+    prospects,
+    total,
+    hasMore: skip + prospects.length < total,
+  };
 }
 
-export type TrainingLeadRow = Awaited<ReturnType<typeof listTrainingLeads>>[number];
+export type TrainingLeadRow = Awaited<ReturnType<typeof listTrainingLeads>>['prospects'][number];

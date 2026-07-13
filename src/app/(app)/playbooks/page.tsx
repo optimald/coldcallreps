@@ -68,7 +68,7 @@ export default function PlaybooksPage() {
       <PageHeader
         eyebrow="Train"
         title="Playbooks"
-        description="Your talk-track skeleton injects into trainer cheat sheets and live coach. Select a playbook on the trainer before you start a rep."
+        description="Your talk-track skeleton injects into Practice playbooks and live coach. Review the playbook before you start a rep."
       />
 
       <Panel

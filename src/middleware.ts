@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   '/developers(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/media(.*)',
   '/r/(.*)',
   '/t/(.*)',
   '/h/(.*)',
@@ -59,7 +60,8 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Skip Next internals and common static assets (include video for hero / marketing media)
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|mp4|webm|mov)).*)',
     '/(api|trpc)(.*)',
   ],
 };

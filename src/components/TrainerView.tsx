@@ -1,18 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useXaiTrainerRealtime } from '@/hooks/useXaiTrainerRealtime';
 import { useLiveCoach } from '@/hooks/useLiveCoach';
 import { FOCUS_LABELS, type FocusArea } from '@/lib/product';
 import { formatDuration, scoreColor } from '@/lib/trainer/session-utils';
 import Toggle from '@/components/ui/Toggle';
+import Modal from '@/components/ui/Modal';
 import { PageHeader } from '@/components/ui/PagePrimitives';
 import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheetPanel';
+import FloatingCallWidget, { type CallDisposition } from '@/components/FloatingCallWidget';
+import CallWrapUpPanel from '@/components/CallWrapUpPanel';
+import SessionTranscript from '@/components/SessionTranscript';
+import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
+import {
+  TRAINER_VOICES,
+  trainerVoiceLabel,
+  type TrainerVoiceId,
+} from '@/lib/trainer/voices';
 
 type Difficulty = 'easy' | 'medium' | 'hard';
 type LeadTab = 'training' | 'brand';
+
+const TRAINING_PAGE_SIZE = 20;
 
 interface ProspectRow {
   id: string;
@@ -44,13 +56,7 @@ interface Scorecard {
 const FOCUS_OPTIONS = Object.entries(FOCUS_LABELS) as [FocusArea, string][];
 
 function parseHooks(hooksJSON?: string | null): string[] {
-  if (!hooksJSON) return [];
-  try {
-    const parsed = JSON.parse(hooksJSON);
-    return Array.isArray(parsed) ? parsed.map(String).slice(0, 4) : [];
-  } catch {
-    return [];
-  }
+  return parseHooksPayload(hooksJSON).slice(0, 4);
 }
 
 function mapLead(raw: Record<string, unknown>, purpose: 'training' | 'brand'): ProspectRow {
@@ -78,14 +84,21 @@ function mapLead(raw: Record<string, unknown>, purpose: 'training' | 'brand'): P
 
 export default function TrainerView() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [focus, setFocus] = useState<FocusArea>('budget_500');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [hintMode, setHintMode] = useState(true);
+  const [gatekeeperVoice, setGatekeeperVoice] = useState<TrainerVoiceId>('ara');
+  const [bossVoice, setBossVoice] = useState<TrainerVoiceId>('sal');
+  const [soloVoice, setSoloVoice] = useState<TrainerVoiceId>('leo');
   const [coachOn, setCoachOn] = useState(true);
   const [trainingLeads, setTrainingLeads] = useState<ProspectRow[]>([]);
+  const [trainingHasMore, setTrainingHasMore] = useState(false);
+  const [trainingTotal, setTrainingTotal] = useState<number | null>(null);
+  const [trainingLoadingMore, setTrainingLoadingMore] = useState(false);
   const [brandLeads, setBrandLeads] = useState<ProspectRow[]>([]);
   const [leadTab, setLeadTab] = useState<LeadTab>('training');
   const [prospectId, setProspectId] = useState<string>('');
+  const trainingSentinelRef = useRef<HTMLLIElement | null>(null);
   const [brandPacks, setBrandPacks] = useState<
     {
       brandId: string;
@@ -117,17 +130,40 @@ export default function TrainerView() {
   const [gateHoldId, setGateHoldId] = useState<string | null>(null);
   const [minutesRemaining, setMinutesRemaining] = useState<number | null>(null);
   const [scriptSections, setScriptSections] = useState<CheatSheetSection[]>([]);
+  const [cheatProductUrl, setCheatProductUrl] = useState<string | undefined>();
+  const [cheatTrainingImages, setCheatTrainingImages] = useState<string[]>([]);
+  const [cheatTrainingVideoUrl, setCheatTrainingVideoUrl] = useState<string | undefined>();
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState('Ready');
+  const [configOpen, setConfigOpen] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false);
+  const [wrapOpen, setWrapOpen] = useState(false);
+  const [wrapNotes, setWrapNotes] = useState('');
+  const [wrapDisposition, setWrapDisposition] = useState<CallDisposition | null>(null);
+  const [wrapSaving, setWrapSaving] = useState(false);
+  const [wrapDuration, setWrapDuration] = useState(0);
+  const [scoring, setScoring] = useState(false);
+  const [lastTranscriptText, setLastTranscriptText] = useState('');
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [recordingClipId, setRecordingClipId] = useState<string | null>(null);
+  const endingCallRef = useRef(false);
+  const recordingObjectUrlRef = useRef<string | null>(null);
   const [coachLog, setCoachLog] = useState<
     { atSeconds: number; prospectText: string; suggestion: string }[]
   >([]);
 
   const onError = useCallback((message: string) => setError(message), []);
 
+  const endAndScoreRef = useRef<() => Promise<void>>(async () => {});
+
   const realtime = useXaiTrainerRealtime({
     onError,
-    onCallEnded: () => setPhaseLabel('Ended'),
+    onCallEnded: () => {
+      setPhaseLabel('Ended');
+      if (!endingCallRef.current) {
+        void endAndScoreRef.current();
+      }
+    },
   });
 
   useEffect(() => {
@@ -173,7 +209,7 @@ export default function TrainerView() {
 
   const loadLeads = useCallback(async () => {
     const [trainingRes, brandRes] = await Promise.all([
-      fetch('/api/prospects?training=1&limit=80'),
+      fetch(`/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0`),
       fetch('/api/prospects?dialable=1&limit=80'),
     ]);
 
@@ -182,13 +218,18 @@ export default function TrainerView() {
       setTrainingLeads(
         (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
       );
+      setTrainingHasMore(Boolean(data.hasMore));
+      setTrainingTotal(typeof data.total === 'number' ? data.total : null);
     } else {
       const legacy = await fetch('/api/prospects/search');
       if (legacy.ok) {
         const data = await legacy.json();
-        setTrainingLeads(
-          (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
+        const rows = (data.prospects || []).map((p: Record<string, unknown>) =>
+          mapLead(p, 'training')
         );
+        setTrainingLeads(rows);
+        setTrainingHasMore(false);
+        setTrainingTotal(rows.length);
       }
     }
 
@@ -202,9 +243,49 @@ export default function TrainerView() {
     }
   }, [searchParams]);
 
+  const loadMoreTrainingLeads = useCallback(async () => {
+    if (trainingLoadingMore || !trainingHasMore) return;
+    setTrainingLoadingMore(true);
+    try {
+      const skip = trainingLeads.length;
+      const res = await fetch(
+        `/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=${skip}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const next = (data.prospects || []).map((p: Record<string, unknown>) =>
+        mapLead(p, 'training')
+      ) as ProspectRow[];
+      setTrainingLeads((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...next.filter((p) => !seen.has(p.id))];
+      });
+      setTrainingHasMore(Boolean(data.hasMore));
+      if (typeof data.total === 'number') setTrainingTotal(data.total);
+    } finally {
+      setTrainingLoadingMore(false);
+    }
+  }, [trainingHasMore, trainingLoadingMore, trainingLeads.length]);
+
   useEffect(() => {
     void loadLeads();
   }, [loadLeads]);
+
+  useEffect(() => {
+    if (leadTab !== 'training' || !trainingHasMore) return;
+    const node = trainingSentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          void loadMoreTrainingLeads();
+        }
+      },
+      { root: node.closest('.cc-desk__col-body'), rootMargin: '80px', threshold: 0 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [leadTab, trainingHasMore, trainingLeads.length, loadMoreTrainingLeads]);
 
   useEffect(() => {
     const fromUrl = searchParams.get('prospectId');
@@ -361,19 +442,71 @@ export default function TrainerView() {
   }, [selectedBrandId, playbooks, playbookId, selectedPack?.playbookId]);
 
   useEffect(() => {
-    fetch('/api/trainer/script', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        focus,
-        difficulty,
-        prospectId: prospectId || undefined,
-        playbookId: playbookId || undefined,
-      }),
-    })
-      .then((r) => r.json())
-      .then((d) => setScriptSections(d.sections || []))
-      .catch(() => {});
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/trainer/script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            focus,
+            difficulty,
+            prospectId: prospectId || undefined,
+            playbookId: playbookId || undefined,
+          }),
+        });
+        const d = await res.json();
+        if (cancelled) return;
+
+        setScriptSections(d.sections || []);
+        let productUrl = typeof d.productUrl === 'string' ? d.productUrl : undefined;
+        let trainingImages = Array.isArray(d.trainingImages)
+          ? d.trainingImages.map(String)
+          : [];
+        let trainingVideoUrl =
+          typeof d.trainingVideoUrl === 'string' ? d.trainingVideoUrl : undefined;
+
+        // Fallback from playbook GET if script omitted product media.
+        if (
+          playbookId &&
+          (!productUrl || !trainingImages.length || !trainingVideoUrl)
+        ) {
+          try {
+            const pbRes = await fetch(`/api/playbooks/${playbookId}`);
+            if (pbRes.ok) {
+              const pbData = await pbRes.json();
+              const content = JSON.parse(pbData?.playbook?.contentJSON || '{}');
+              if (!productUrl && typeof content.productUrl === 'string') {
+                productUrl = content.productUrl;
+              }
+              if (!trainingImages.length && Array.isArray(content.trainingImages)) {
+                trainingImages = content.trainingImages.map(String);
+              }
+              if (!trainingVideoUrl && typeof content.trainingVideoUrl === 'string') {
+                trainingVideoUrl = content.trainingVideoUrl;
+              }
+            }
+          } catch {
+            /* ignore fallback */
+          }
+        }
+
+        if (cancelled) return;
+        setCheatProductUrl(productUrl);
+        setCheatTrainingImages(trainingImages);
+        setCheatTrainingVideoUrl(trainingVideoUrl);
+      } catch {
+        if (!cancelled) {
+          setScriptSections([]);
+          setCheatProductUrl(undefined);
+          setCheatTrainingImages([]);
+          setCheatTrainingVideoUrl(undefined);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [focus, difficulty, prospectId, playbookId]);
 
   useEffect(() => {
@@ -388,10 +521,22 @@ export default function TrainerView() {
   async function startCall() {
     setError(null);
     setScorecard(null);
+    setRecapOpen(false);
+    setWrapOpen(false);
+    setWrapDisposition(null);
+    setWrapNotes('');
+    setScoring(false);
     setPointsEarned(null);
     setEarnedBadge(null);
     setSessionId(null);
     setCoachLog([]);
+    setLastTranscriptText('');
+    setRecordingClipId(null);
+    if (recordingObjectUrlRef.current) {
+      URL.revokeObjectURL(recordingObjectUrlRef.current);
+      recordingObjectUrlRef.current = null;
+    }
+    setRecordingUrl(null);
 
     let gateToken: string | undefined;
     try {
@@ -425,16 +570,28 @@ export default function TrainerView() {
       prospectId: prospectId || undefined,
       difficulty,
       focus,
-      voice: 'ara',
-      gatekeeperVoice: 'ara',
-      bossVoice: focus === 'pen_pitch' ? 'rex' : 'sal',
-      hintMode,
+      voice: focus === 'standard' || focus === 'budget_500' ? gatekeeperVoice : soloVoice,
+      gatekeeperVoice,
+      bossVoice: focus === 'pen_pitch' ? 'rex' : bossVoice,
       brandId: selectedPack?.brandId,
       packId: selectedPack?.packId || undefined,
       playbookId: playbookId || undefined,
       userId: userId || undefined,
       orgId: orgId || undefined,
       gateToken,
+      // Always send selected lead so training prospects (platform-owned) still drive persona
+      prospectOverride: selected
+        ? {
+            companyName: selected.companyName,
+            industry: selected.industry || undefined,
+            city: selected.city || undefined,
+            state: selected.state || undefined,
+            ownerName: selected.ownerName || undefined,
+            ownerTitle: selected.ownerTitle || undefined,
+            hooks: parseHooks(selected.hooksJSON),
+            hasWebsite: Boolean(selected.website),
+          }
+        : undefined,
     });
     if (!ok) {
       setPhaseLabel('Ready');
@@ -443,13 +600,47 @@ export default function TrainerView() {
   }
 
   async function endAndScore() {
-    const transcriptText = realtime.transcript
+    if (endingCallRef.current) return;
+    endingCallRef.current = true;
+
+    const transcriptSnapshot = realtime.transcript;
+    const transcriptText = transcriptSnapshot
       .map((e) => `${e.role.toUpperCase()}: ${e.text}`)
       .join('\n');
     const duration = callStartedAt ? Math.floor((Date.now() - callStartedAt) / 1000) : 0;
+    const coachLogSnapshot = [...coachLog];
+
+    // Show wrap-up immediately — don't wait on scoring.
+    setLastTranscriptText(transcriptText);
+    setWrapDuration(duration);
+    setWrapNotes('');
+    setWrapOpen(true);
+    setRecapOpen(false);
+    setScorecard(null);
+    setPointsEarned(null);
+    setEarnedBadge(null);
+    setEarnedCert(null);
+    setBountiesCleared([]);
+    setSessionId(null);
+    setRecordingClipId(null);
+    if (recordingObjectUrlRef.current) {
+      URL.revokeObjectURL(recordingObjectUrlRef.current);
+      recordingObjectUrlRef.current = null;
+    }
+    setRecordingUrl(null);
+    setPhaseLabel('Scoring…');
+    setScoring(true);
+    setCallStartedAt(null);
+
     const audioBlob = await realtime.stopRecording();
     realtime.disconnect();
-    setPhaseLabel('Scoring…');
+
+    if (audioBlob && audioBlob.size > 1000) {
+      const objUrl = URL.createObjectURL(audioBlob);
+      recordingObjectUrlRef.current = objUrl;
+      setRecordingUrl(objUrl);
+    }
+
     setBusy(true);
     try {
       const clientRequestId =
@@ -461,7 +652,7 @@ export default function TrainerView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcript: transcriptText,
-          coachLog,
+          coachLog: coachLogSnapshot,
           prospectId: prospectId || undefined,
           scenarioType: focus,
           focusArea: focus,
@@ -482,6 +673,7 @@ export default function TrainerView() {
       setBountiesCleared((data.bountiesCleared || []).map((b: { title: string }) => b.title));
       setSessionId(data.sessionId || null);
       setGateHoldId(null);
+      if (data.notice) setError(null);
       if (typeof data.minutesRemaining === 'number') {
         setMinutesRemaining(data.minutesRemaining);
       } else {
@@ -507,9 +699,7 @@ export default function TrainerView() {
             }),
           });
           const upData = await up.json();
-          if (up.status === 403) {
-            setPhaseLabel('Scored');
-          } else if (up.ok && upData.uploadUrl) {
+          if (up.ok && upData.uploadUrl) {
             const putHeaders: Record<string, string> = {
               'Content-Type': audioBlob.type || 'audio/webm',
               ...(upData.uploadHeaders || {}),
@@ -522,26 +712,24 @@ export default function TrainerView() {
             if (putRes.ok) {
               const done = await fetch(`/api/clips/${upData.clipId}/complete`, { method: 'POST' });
               if (done.ok) {
-                setPhaseLabel('Scored · audio highlight saved');
+                setRecordingClipId(upData.clipId);
+                setRecordingUrl(`/api/clips/media?clipId=${encodeURIComponent(upData.clipId)}`);
+                if (recordingObjectUrlRef.current) {
+                  URL.revokeObjectURL(recordingObjectUrlRef.current);
+                  recordingObjectUrlRef.current = null;
+                }
+                setPhaseLabel('Scored · recording saved');
               } else {
-                setPhaseLabel('Scored · highlight upload incomplete');
-                setError(
-                  'Call scored, but audio highlight failed to save. You can create a clip draft below.'
-                );
+                setPhaseLabel('Scored');
               }
             } else {
-              setPhaseLabel('Scored · highlight upload failed');
-              setError(
-                'Call scored, but audio highlight upload failed. You can create a clip draft below.'
-              );
+              setPhaseLabel('Scored');
             }
           } else {
-            setPhaseLabel('Scored · highlight unavailable');
-            setError(upData.error || 'Call scored, but highlight upload could not start.');
+            setPhaseLabel('Scored');
           }
         } catch {
-          setPhaseLabel('Scored · highlight failed');
-          setError('Call scored, but audio highlight failed. You can create a clip draft below.');
+          setPhaseLabel('Scored');
         }
       } else {
         setPhaseLabel('Scored');
@@ -550,9 +738,109 @@ export default function TrainerView() {
       setError(e.message);
       setPhaseLabel('Ready');
     } finally {
+      setScoring(false);
       setBusy(false);
-      setCallStartedAt(null);
+      endingCallRef.current = false;
     }
+  }
+
+  endAndScoreRef.current = endAndScore;
+
+  function applyLeadPatch(next: {
+    id: string;
+    companyName: string;
+    ownerName?: string | null;
+    ownerTitle?: string | null;
+    phone?: string | null;
+    website?: string | null;
+    industry?: string | null;
+    city?: string | null;
+    state?: string | null;
+    notes?: string | null;
+  }) {
+    const patch = (rows: ProspectRow[]) =>
+      rows.map((r) =>
+        r.id === next.id
+          ? {
+              ...r,
+              companyName: next.companyName,
+              ownerName: next.ownerName,
+              ownerTitle: next.ownerTitle,
+              phone: next.phone,
+              website: next.website,
+              industry: next.industry,
+              city: next.city,
+              state: next.state,
+              notes: next.notes,
+            }
+          : r
+      );
+    setTrainingLeads(patch);
+    setBrandLeads(patch);
+  }
+
+  function openLeadRecord() {
+    if (!selected) return;
+    // Always use the shared lead page from Practice — brand-scoped URLs
+    // redirect non-managers back to /practice (looks like a flash).
+    router.push(`/leads/${selected.id}?from=practice`);
+  }
+
+  async function savePracticeWrap() {
+    if (!wrapDisposition) return;
+    setWrapSaving(true);
+    try {
+      if (sessionId) {
+        await fetch(`/api/trainer/sessions/${sessionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            outcome: wrapDisposition,
+            wrapNotes: wrapNotes.trim() || null,
+          }),
+        });
+      }
+      if (prospectId) {
+        const noteLine = `[${wrapDisposition.replace(/_/g, ' ')}] ${wrapNotes.trim()}`.trim();
+        const baseNotes = selected?.notes || '';
+        const mergedNotes = [baseNotes, noteLine].filter(Boolean).join('\n').slice(0, 4000);
+        const res = await fetch(`/api/prospects/${prospectId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes: mergedNotes || null,
+            source: 'practice_wrap',
+          }),
+        });
+        if (res.ok && selected) {
+          applyLeadPatch({
+            id: selected.id,
+            companyName: selected.companyName,
+            ownerName: selected.ownerName,
+            ownerTitle: selected.ownerTitle,
+            phone: selected.phone,
+            website: selected.website,
+            industry: selected.industry,
+            city: selected.city,
+            state: selected.state,
+            notes: mergedNotes,
+          });
+        }
+      }
+      setWrapOpen(false);
+      setWrapDisposition(null);
+      setRecapOpen(true);
+    } catch (e: any) {
+      setError(e.message || 'Could not save wrap-up');
+    } finally {
+      setWrapSaving(false);
+    }
+  }
+
+  function skipPracticeWrap() {
+    setWrapOpen(false);
+    setWrapDisposition(null);
+    setRecapOpen(true);
   }
 
   async function createClipDraft() {
@@ -577,17 +865,30 @@ export default function TrainerView() {
 
   const hooks = parseHooks(selected?.hooksJSON);
   const liveOnLead = realtime.isConnected && selected?.id === prospectId;
+  const focusLabel = FOCUS_LABELS[focus] || focus;
+  const voiceSummary =
+    focus === 'standard' || focus === 'budget_500'
+      ? `${trainerVoiceLabel(gatekeeperVoice)} → ${trainerVoiceLabel(bossVoice)}`
+      : trainerVoiceLabel(soloVoice);
+  const transcriptEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [realtime.transcript.length, coach.visible, coach.sayNext]);
 
   return (
     <div className="app-page app-page--desk">
       <PageHeader
         compact
-        eyebrow="Workspace"
-        title="Trainer"
-        description="AI voice warm-up — pick a lead, then start a practice call."
+        eyebrow="Intelligence"
+        title="Cold Call Trainer"
+        description="AI-powered practice simulator — configure a scenario, pick a lead, then call."
         actions={
           <>
-            <Link href="/outbound" className="btn-ghost">
+            <Link href="/sessions" className="btn-ghost">
+              Past calls
+            </Link>
+            <Link href="/cold_calls" className="btn-ghost">
               Cold Call
             </Link>
             <Link href="/billing" className="btn-ghost">
@@ -597,82 +898,225 @@ export default function TrainerView() {
         }
       />
 
-      <div className="cc-desk-config" aria-label="Session config">
-        <label className="cc-desk-config__field">
-          <span>Scenario</span>
-          <select
-            value={focus}
-            onChange={(e) => setFocus(e.target.value as FocusArea)}
+      <div className="cc-desk-config-bar" aria-label="Session summary">
+        <div className="cc-desk-config-bar__summary">
+          <span className="cc-desk-config-bar__chip">
+            <em>Difficulty</em> {difficulty}
+          </span>
+          <span className="cc-desk-config-bar__chip">
+            <em>Scenario</em> {focusLabel}
+          </span>
+          <span className="cc-desk-config-bar__chip">
+            <em>Voices</em> {voiceSummary}
+          </span>
+          {selectedPack ? (
+            <span className="cc-desk-config-bar__chip">
+              <em>Pack</em> {selectedPack.brandName}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className={`cc-desk-config-bar__toggle cc-desk-config-bar__toggle--coach${coachOn ? ' is-on' : ' is-off'}`}
+            aria-pressed={coachOn}
+            title={
+              coachOn
+                ? 'Live coach on — say-next tips during the call'
+                : 'Live coach off — no in-call tips'
+            }
+            onClick={() => setCoachOn((v) => !v)}
+          >
+            <span className="cc-desk-config-bar__toggle-dot" aria-hidden />
+            <span className="cc-desk-config-bar__toggle-label">Coach</span>
+            <span className="cc-desk-config-bar__toggle-state">{coachOn ? 'On' : 'Off'}</span>
+          </button>
+          <button
+            type="button"
+            className="cc-desk-config-bar__tag"
+            onClick={() => setCheatSheetOpen(true)}
+          >
+            Playbook
+          </button>
+          {selected ? (
+            <span className="cc-desk-config-bar__context">
+              Context · <strong>{selected.companyName}</strong>
+            </span>
+          ) : (
+            <span className="cc-desk-config-bar__context muted">Select a lead to personalize</span>
+          )}
+        </div>
+        <div className="cc-desk-config-bar__actions">
+          <button
+            type="button"
+            className="btn-ghost cc-desk-config-bar__btn"
+            onClick={() => setConfigOpen(true)}
             disabled={realtime.isConnected}
           >
-            {FOCUS_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="cc-desk-config__field">
-          <span>Difficulty</span>
-          <select
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-            disabled={realtime.isConnected}
-          >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </label>
-        <label className="cc-desk-config__field">
-          <span>Brand</span>
-          <select
-            value={packKey}
-            onChange={(e) => onPackKeyChange(e.target.value)}
-            disabled={realtime.isConnected}
-          >
-            <option value="">None — generic</option>
-            {brandPacks.map((p) => (
-              <option key={`${p.brandId}:${p.packId || 'pb'}`} value={`${p.brandId}:${p.packId}`}>
-                {p.brandName} · {p.packName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="cc-desk-config__field">
-          <span>Playbook</span>
-          <select
-            value={playbookId}
-            onChange={(e) => setPlaybookId(e.target.value)}
-            disabled={realtime.isConnected}
-          >
-            <option value="">None — default</option>
-            {filteredPlaybooks.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="cc-desk-config__toggles">
-          <Toggle
-            compact
-            inline
-            checked={hintMode}
-            onChange={setHintMode}
-            label="Hint mode"
-            disabled={realtime.isConnected}
-          />
-          <Toggle
-            compact
-            inline
-            checked={coachOn}
-            onChange={setCoachOn}
-            label="Live coach"
-            disabled={realtime.isConnected}
-          />
+            Configure practice
+          </button>
         </div>
       </div>
+
+      <Modal
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        title="Configure practice"
+        description="Difficulty, scenario, and voice cast for this session."
+        wide
+      >
+        <div className="cc-desk-config cc-desk-config--modal" aria-label="Session config">
+          <div className="cc-desk-config__row">
+            <div className="cc-desk-config__group">
+              <span className="cc-desk-config__label">Difficulty</span>
+              <div className="cc-desk-pills" role="group" aria-label="Difficulty">
+                {(['easy', 'medium', 'hard'] as Difficulty[]).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    className={`cc-desk-pill${difficulty === level ? ' is-active' : ''}`}
+                    onClick={() => setDifficulty(level)}
+                    disabled={realtime.isConnected}
+                  >
+                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="cc-desk-config__field cc-desk-config__field--grow">
+              <span>Scenario focus</span>
+              <select
+                value={focus}
+                onChange={(e) => setFocus(e.target.value as FocusArea)}
+                disabled={realtime.isConnected}
+              >
+                {FOCUS_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="cc-desk-config__field">
+              <span>Brand pack</span>
+              <select
+                value={packKey}
+                onChange={(e) => onPackKeyChange(e.target.value)}
+                disabled={realtime.isConnected}
+              >
+                <option value="">None — generic</option>
+                {brandPacks.map((p) => (
+                  <option key={`${p.brandId}:${p.packId || 'pb'}`} value={`${p.brandId}:${p.packId}`}>
+                    {p.brandName} · {p.packName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="cc-desk-config__field">
+              <span>Playbook</span>
+              <select
+                value={playbookId}
+                onChange={(e) => setPlaybookId(e.target.value)}
+                disabled={realtime.isConnected}
+              >
+                <option value="">None — default</option>
+                {filteredPlaybooks.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="cc-desk-config__toggles">
+              <Toggle
+                compact
+                inline
+                checked={coachOn}
+                onChange={setCoachOn}
+                label="Live coach (say-next tips)"
+              />
+            </div>
+          </div>
+
+          <div className="cc-desk-config__voices">
+            <span className="cc-desk-config__label">
+              {focus === 'standard' || focus === 'budget_500'
+                ? 'Voice cast'
+                : 'Voice persona'}
+            </span>
+            {focus === 'standard' || focus === 'budget_500' ? (
+              <div className="cc-desk-voice-cast">
+                <div className="cc-desk-voice-cast__col">
+                  <span className="cc-desk-voice-cast__role">Gatekeeper</span>
+                  <div className="cc-desk-voices" role="group" aria-label="Gatekeeper voice">
+                    {TRAINER_VOICES.map((v) => (
+                      <button
+                        key={`gk-${v.id}`}
+                        type="button"
+                        className={`cc-desk-voice${gatekeeperVoice === v.id ? ' is-active' : ''}`}
+                        onClick={() => setGatekeeperVoice(v.id)}
+                        disabled={realtime.isConnected}
+                        title={`${v.label} (${v.hint})`}
+                      >
+                        <strong>{v.label}</strong>
+                        <span>{v.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="cc-desk-voice-cast__col">
+                  <span className="cc-desk-voice-cast__role">Decision maker</span>
+                  <div className="cc-desk-voices" role="group" aria-label="Decision maker voice">
+                    {TRAINER_VOICES.map((v) => (
+                      <button
+                        key={`boss-${v.id}`}
+                        type="button"
+                        className={`cc-desk-voice${bossVoice === v.id ? ' is-active' : ''}`}
+                        onClick={() => setBossVoice(v.id)}
+                        disabled={realtime.isConnected}
+                        title={`${v.label} (${v.hint})`}
+                      >
+                        <strong>{v.label}</strong>
+                        <span>{v.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="cc-desk-voices" role="group" aria-label="Voice persona">
+                {TRAINER_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`cc-desk-voice${soloVoice === v.id ? ' is-active' : ''}`}
+                    onClick={() => setSoloVoice(v.id)}
+                    disabled={realtime.isConnected}
+                    title={`${v.label} (${v.hint})`}
+                  >
+                    <strong>{v.label}</strong>
+                    <span>{v.hint}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selected && (
+            <p className="cc-desk-config__context-ok">
+              Context loaded — <strong>{selected.companyName}</strong> will drive the prospect persona.
+            </p>
+          )}
+
+          <div className="cc-desk-config__footer">
+            <button type="button" className="btn" onClick={() => setConfigOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <div className="cc-desk">
         {/* Left: practice leads */}
@@ -688,8 +1132,10 @@ export default function TrainerView() {
                   onClick={() => setLeadTab('training')}
                   disabled={realtime.isConnected}
                 >
-                  Training
-                  <span className="cc-desk__tab-count">{trainingLeads.length}</span>
+                  Practice
+                  <span className="cc-desk__tab-count">
+                    {trainingTotal ?? trainingLeads.length}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -705,8 +1151,10 @@ export default function TrainerView() {
               </div>
             ) : (
               <>
-                <strong>Training leads</strong>
-                <span className="cc-desk__tab-count">{trainingLeads.length}</span>
+                <strong>Call queue</strong>
+                <span className="cc-desk__tab-count">
+                  {trainingTotal ?? trainingLeads.length}
+                </span>
               </>
             )}
           </div>
@@ -715,16 +1163,27 @@ export default function TrainerView() {
             {queue.length === 0 ? (
               <div className="cc-desk__gate">
                 <p className="cc-desk__gate-title">
-                  {leadTab === 'brand' ? 'No brand leads' : 'No training leads'}
+                  {leadTab === 'brand' ? 'No brand leads' : 'No practice leads'}
                 </p>
                 <p className="cc-desk__gate-desc">
                   {leadTab === 'brand'
                     ? 'Accepted campaign leads appear here for AI practice personalization.'
-                    : 'Seed demo training leads or open Leads to add practice contacts.'}
+                    : 'Seed demo practice leads, then refresh — or browse brand deals for practice packs.'}
                 </p>
-                <Link href={leadTab === 'brand' ? '/gigs' : '/leads'} className="btn-ghost">
-                  {leadTab === 'brand' ? 'Browse gigs →' : 'Training leads →'}
-                </Link>
+                {leadTab === 'brand' ? (
+                  <Link href="/gigs" className="btn-ghost">
+                    Browse brand deals →
+                  </Link>
+                ) : (
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <Link href="/gigs" className="btn-ghost">
+                      Browse brand deals →
+                    </Link>
+                    <button type="button" className="btn-ghost" onClick={() => void loadLeads()}>
+                      Refresh
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <ul className="cc-desk__list">
@@ -746,7 +1205,11 @@ export default function TrainerView() {
                             {p.city ? ` · ${p.city}` : ''}
                           </span>
                           {p.brandName ? (
-                            <span className="cc-desk__row-phone">{p.brandName}</span>
+                            <span className="cc-desk__row-phone">
+                              {p.purpose === 'training'
+                                ? `Sell · ${p.brandName.replace(/^Demo ·\s*/i, '')}`
+                                : p.brandName}
+                            </span>
                           ) : null}
                         </span>
                         {isLive && <span className="cc-desk__live-dot" aria-hidden />}
@@ -754,62 +1217,32 @@ export default function TrainerView() {
                     </li>
                   );
                 })}
+                {leadTab === 'training' && trainingHasMore ? (
+                  <li
+                    ref={trainingSentinelRef}
+                    className="cc-desk__load-more muted"
+                    aria-hidden={!trainingLoadingMore}
+                  >
+                    {trainingLoadingMore ? 'Loading more…' : '\u00a0'}
+                  </li>
+                ) : null}
               </ul>
             )}
           </div>
-
-          <div className="cc-desk__col-foot">
-            <Link href="/leads" className="cc-desk__foot-link">
-              All training leads →
-            </Link>
-          </div>
         </section>
-
-        {/* Center: AI session */}
+        {/* Center: transcript / wrap-up */}
         <section className="cc-desk__col cc-desk__dialer" aria-label="AI voice session">
           <div className="cc-desk__col-head">
-            <strong>AI voice call</strong>
+            <strong>Practice simulator</strong>
             <span className="cc-desk__status muted">
-              {phaseLabel}
+              {wrapOpen
+                ? 'Wrap-up'
+                : phaseLabel}
               {realtime.isConnected ? ` · ${formatDuration(durationSecs)}` : ''}
             </span>
           </div>
 
           <div className="cc-desk__col-body cc-desk__dialer-body">
-            {realtime.isConnected && (
-              <div className="cc-desk__live-bar">
-                <div className="cc-desk__live-info">
-                  <span className="cc-desk__live-dot" />
-                  <div>
-                    <strong>{phaseLabel}</strong>
-                    <div className="muted" style={{ fontSize: '0.8rem' }}>
-                      {formatDuration(durationSecs)}
-                      {realtime.isProspectSpeaking ? ' · Prospect speaking' : ''}
-                      {realtime.isUserSpeaking ? ' · You speaking' : ''}
-                    </div>
-                  </div>
-                </div>
-                <div className="cc-desk__live-actions">
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() => realtime.setMicEnabled(!realtime.micEnabled)}
-                  >
-                    Mic {realtime.micEnabled ? 'On' : 'Off'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => void endAndScore()}
-                    disabled={busy}
-                    style={{ background: 'var(--bad)', borderColor: 'var(--bad)' }}
-                  >
-                    End & score
-                  </button>
-                </div>
-              </div>
-            )}
-
             {error && (
               <p className="cc-desk__error" role="alert">
                 {error}
@@ -822,157 +1255,118 @@ export default function TrainerView() {
               </p>
             )}
 
-            {selected ? (
-              <div className="cc-desk__active-card">
-                {selected.brandName && (
-                  <div className="cc-desk__brand-row">
-                    <span className="muted" style={{ fontSize: '0.8rem' }}>
-                      {selected.brandName}
-                      {selected.purpose === 'training' ? ' · practice ICP' : ' · brand lead'}
-                    </span>
-                  </div>
-                )}
-                <h2 className="cc-desk__active-name">{selected.companyName}</h2>
-                <p className="cc-desk__active-contact">
-                  {selected.ownerName || 'Decision maker'}
-                  {selected.ownerTitle ? ` · ${selected.ownerTitle}` : ''}
-                </p>
-                <p className="cc-desk__active-phone muted" style={{ fontSize: '0.85rem' }}>
-                  AI roleplay · not a real phone dial
-                </p>
-                {!realtime.isConnected &&
-                  (minutesRemaining != null && minutesRemaining <= 0 ? (
-                    <Link href="/billing" className="btn cc-desk__call-btn">
-                      Upgrade minutes
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn cc-desk__call-btn"
-                      onClick={() => void startCall()}
-                      disabled={busy}
-                    >
-                      Start voice call
-                    </button>
-                  ))}
-              </div>
+            {wrapOpen ? (
+              <CallWrapUpPanel
+                companyName={selected?.companyName || 'Practice call'}
+                durationSecs={wrapDuration}
+                scorePending={scoring}
+                notes={wrapNotes}
+                onNotesChange={setWrapNotes}
+                disposition={wrapDisposition}
+                onDisposition={setWrapDisposition}
+                onSave={() => void savePracticeWrap()}
+                onSkip={skipPracticeWrap}
+                onEditLead={selected ? openLeadRecord : undefined}
+                saving={wrapSaving}
+                mode="practice"
+              />
             ) : (
-              <div className="cc-desk__idle">
-                <p className="cc-desk__gate-title">Select a lead</p>
-                <p className="cc-desk__gate-desc">
-                  Pick a training or brand lead to personalize the AI scenario.
-                </p>
-              </div>
-            )}
-
-            <div className="cc-desk__transcript" aria-live="polite">
-              {realtime.transcript.length === 0 ? (
-                <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-                  Transcript appears here once the call starts.
-                </p>
-              ) : (
-                realtime.transcript.map((entry) => (
-                  <div key={`${entry.id}-${entry.seq}`} className={`bubble bubble--${entry.role}`}>
-                    <strong>{entry.role}</strong>
-                    <span>{entry.text}</span>
+              <>
+                {!realtime.isConnected && selected ? (
+                  <div className="cc-desk__start-strip">
+                    {minutesRemaining != null && minutesRemaining <= 0 ? (
+                      <Link href="/billing" className="btn cc-desk__call-btn">
+                        Upgrade minutes
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn cc-desk__call-btn"
+                        onClick={() => void startCall()}
+                        disabled={busy}
+                      >
+                        Start practice call
+                      </button>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
+                ) : null}
 
-            {coachOn && coach.visible && coach.sayNext && (
-              <div className="cc-desk__coach">
-                <strong>
-                  Coach whisper
-                  {coach.source === 'llm' ? ' · AI' : coach.source === 'instant' ? ' · quick tip' : ''}
-                </strong>
-                <p>{coach.sayNext}</p>
-              </div>
-            )}
+                {!selected && !realtime.isConnected ? (
+                  <div className="cc-desk__idle">
+                    <p className="cc-desk__gate-title">Select a lead</p>
+                    <p className="cc-desk__gate-desc">
+                      Pick a practice or brand lead from the queue, then start the call.
+                    </p>
+                  </div>
+                ) : null}
 
-            {scorecard && (
-              <div className="cc-desk__scorecard">
-                <h2 style={{ color: scoreColor(scorecard.overallScore) }}>
-                  {scorecard.overallScore}/100
-                  {pointsEarned != null && <small> · +{pointsEarned} pts</small>}
-                </h2>
-                {earnedBadge && (
-                  <p style={{ color: 'var(--accent-2)', fontWeight: 600 }}>
-                    Badge unlocked: {earnedBadge}
-                  </p>
-                )}
-                {earnedCert && (
-                  <p style={{ color: 'var(--accent-2)', fontWeight: 600 }}>
-                    Certification: {earnedCert}
-                  </p>
-                )}
-                {bountiesCleared.length > 0 && (
-                  <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                    Bounty cleared: {bountiesCleared.join(', ')}
-                  </p>
-                )}
-                <p>{scorecard.summary}</p>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '0.75rem',
-                    marginTop: '0.5rem',
-                  }}
-                >
-                  <div>
-                    <h4 style={{ margin: '0 0 0.35rem', fontSize: '0.8rem' }}>Strengths</h4>
-                    <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
-                      {(scorecard.feedback?.strengths || []).map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 style={{ margin: '0 0 0.35rem', fontSize: '0.8rem' }}>Improve</h4>
-                    <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
-                      {(scorecard.feedback?.improvements || []).map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    flexWrap: 'wrap',
-                    marginTop: '0.75rem',
-                  }}
-                >
-                  {sessionId && (
-                    <Link
-                      href={`/sessions/${sessionId}`}
-                      style={{ fontWeight: 600, color: 'var(--accent-2)' }}
-                    >
-                      View session →
-                    </Link>
+                <div className="cc-desk__transcript" aria-live="polite">
+                  {realtime.transcript.length === 0 ? (
+                    <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                      {realtime.isConnected
+                        ? 'Listening… transcript appears as you talk.'
+                        : 'Transcript appears here once the call starts.'}
+                    </p>
+                  ) : (
+                    realtime.transcript.map((entry) => {
+                      const isUser = entry.role === 'user';
+                      return (
+                        <div
+                          key={`${entry.id}-${entry.seq}`}
+                          className={`bubble bubble--${entry.role}${isUser ? ' bubble--right' : ' bubble--left'}`}
+                        >
+                          <strong>{entry.role.replace(/_/g, ' ')}</strong>
+                          <span>{entry.text}</span>
+                        </div>
+                      );
+                    })
                   )}
-                  {sessionId && scorecard.overallScore >= 70 && (
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      onClick={() => void createClipDraft()}
-                      disabled={busy}
-                    >
-                      Create clip draft
+                  <div ref={transcriptEndRef} aria-hidden />
+                </div>
+
+                {coachOn && coach.visible && coach.sayNext && (
+                  <div className="cc-desk__coach" role="status">
+                    <strong>
+                      Coach whisper
+                      {coach.source === 'llm'
+                        ? ' · AI'
+                        : coach.source === 'instant'
+                          ? ' · quick tip'
+                          : ''}
+                    </strong>
+                    <p>{coach.sayNext}</p>
+                  </div>
+                )}
+
+                {scorecard && !recapOpen && !realtime.isConnected && !wrapOpen ? (
+                  <div className="cc-desk__recap-actions">
+                    <button type="button" className="btn-ghost" onClick={() => setRecapOpen(true)}>
+                      View call recap
                     </button>
-                  )}
-                </div>
-              </div>
+                    <Link href="/sessions" className="btn-ghost">
+                      Past calls
+                    </Link>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         </section>
 
         {/* Right: context */}
-        <section className="cc-desk__col cc-desk__context" aria-label="Lead context">
+        <section className="cc-desk__col cc-desk__context" aria-label="Lead intel">
           <div className="cc-desk__col-head">
-            <strong>Context</strong>
+            <strong>Lead intel</strong>
+            {selected ? (
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem' }}
+                onClick={openLeadRecord}
+              >
+                Open record
+              </button>
+            ) : null}
           </div>
           <div className="cc-desk__col-body">
             {selected ? (
@@ -1037,28 +1431,12 @@ export default function TrainerView() {
                     <p className="cc-desk__notes">{selected.notes}</p>
                   </div>
                 )}
-
-                <div className="cc-desk__ctx-block">
-                  <h4 className="cc-desk__ctx-label">Playbook</h4>
-                  <p className="cc-desk__gate-desc" style={{ marginBottom: '0.65rem' }}>
-                    {selectedPack?.playbookTitle && playbookId === selectedPack.playbookId
-                      ? `Brand playbook “${selectedPack.playbookTitle}” drives cues & coach.`
-                      : 'Cues update from scenario, difficulty, lead, and playbook.'}
-                  </p>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() => setCheatSheetOpen(true)}
-                  >
-                    Open playbook cheat →
-                  </button>
-                </div>
               </>
             ) : (
               <div className="cc-desk__gate">
                 <p className="cc-desk__gate-title">No lead selected</p>
                 <p className="cc-desk__gate-desc">
-                  Select a queue row to see contact details, hooks, and playbook cues.
+                  Select a queue row to see contact details and hooks.
                 </p>
               </div>
             )}
@@ -1066,10 +1444,154 @@ export default function TrainerView() {
         </section>
       </div>
 
+      <Modal
+        open={recapOpen}
+        onClose={() => setRecapOpen(false)}
+        title="Call recap"
+        description={
+          scoring
+            ? 'Scoring your call…'
+            : 'Score, transcript, and recording for this practice session.'
+        }
+        wide
+      >
+        <div className="cc-desk__scorecard">
+          {scoring && !scorecard ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Scoring in progress…
+            </p>
+          ) : null}
+
+          {scorecard ? (
+            <>
+              <h2 style={{ color: scoreColor(scorecard.overallScore) }}>
+                {scorecard.overallScore}/100
+                {pointsEarned != null && <small> · +{pointsEarned} pts</small>}
+              </h2>
+              {earnedBadge && (
+                <p style={{ color: 'var(--accent-2)', fontWeight: 600, margin: 0 }}>
+                  Badge unlocked: {earnedBadge}
+                </p>
+              )}
+              {earnedCert && (
+                <p style={{ color: 'var(--accent-2)', fontWeight: 600, margin: 0 }}>
+                  Certification: {earnedCert}
+                </p>
+              )}
+              {bountiesCleared.length > 0 && (
+                <p style={{ color: 'var(--muted)', fontSize: '0.9rem', margin: 0 }}>
+                  Bounty cleared: {bountiesCleared.join(', ')}
+                </p>
+              )}
+              <p style={{ margin: '0.35rem 0 0' }}>{scorecard.summary}</p>
+              <div className="cc-desk__scorecard-grid">
+                <div>
+                  <h4>Strengths</h4>
+                  <ul>
+                    {(scorecard.feedback?.strengths || []).map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h4>Improve</h4>
+                  <ul>
+                    {(scorecard.feedback?.improvements || []).map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </>
+          ) : !scoring ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Score unavailable for this call.
+            </p>
+          ) : null}
+
+          {recordingUrl ? (
+            <div className="cc-desk__recap-audio">
+              <h4>Recording</h4>
+              <audio controls preload="metadata" src={recordingUrl} style={{ width: '100%' }}>
+                Your browser does not support audio playback.
+              </audio>
+            </div>
+          ) : scoring ? (
+            <p className="muted" style={{ fontSize: '0.82rem', margin: '0.5rem 0 0' }}>
+              Recording will appear when ready.
+            </p>
+          ) : null}
+
+          {lastTranscriptText ? (
+            <div className="cc-desk__recap-transcript">
+              <h4>Transcript</h4>
+              <SessionTranscript transcript={lastTranscriptText} />
+            </div>
+          ) : null}
+
+          <div className="cc-desk__scorecard-links">
+            {sessionId && (
+              <Link
+                href={`/sessions/${sessionId}`}
+                style={{ fontWeight: 600, color: 'var(--accent-2)' }}
+              >
+                View full session →
+              </Link>
+            )}
+            {sessionId && scorecard && scorecard.overallScore >= 70 && (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => void createClipDraft()}
+                disabled={busy}
+              >
+                Create clip draft
+              </button>
+            )}
+            <Link href="/sessions" className="btn-ghost">
+              Past calls
+            </Link>
+            <button type="button" className="btn" onClick={() => setRecapOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <FloatingCallWidget
+        open={realtime.isConnected && !wrapOpen}
+        title={selected?.companyName || 'Practice call'}
+        subtitle={
+          selected
+            ? [selected.ownerName, selected.ownerTitle].filter(Boolean).join(' · ')
+            : undefined
+        }
+        statusLabel={
+          realtime.isProspectSpeaking
+            ? 'Prospect speaking'
+            : realtime.isUserSpeaking
+              ? 'You speaking'
+              : phaseLabel
+        }
+        durationSecs={durationSecs}
+        onEnd={() => void endAndScore()}
+        endLabel="End & score"
+        micEnabled={realtime.micEnabled}
+        onToggleMic={() => realtime.setMicEnabled(!realtime.micEnabled)}
+        dispositions
+        onQuickDisposition={(id) => {
+          setWrapDisposition(id);
+          void endAndScore();
+        }}
+      />
+
       <CheatSheetPanel
         open={cheatSheetOpen}
         onClose={() => setCheatSheetOpen(false)}
         sections={scriptSections}
+        productUrl={cheatProductUrl}
+        trainingImages={cheatTrainingImages}
+        trainingVideoUrl={cheatTrainingVideoUrl}
       />
     </div>
   );

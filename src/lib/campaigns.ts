@@ -84,7 +84,7 @@ export function practiceHref(campaign: {
   const qs = new URLSearchParams({ brandId: campaign.brandId });
   if (campaign.packId) qs.set('packId', campaign.packId);
   if (campaign.playbookId) qs.set('playbookId', campaign.playbookId);
-  return `/trainer?${qs.toString()}`;
+  return `/practice?${qs.toString()}`;
 }
 
 type CampaignWithRelations = Campaign & {
@@ -118,6 +118,9 @@ export function serializeCampaign(c: CampaignWithRelations) {
     budgetCents: c.budgetCents,
     escrowLockedCents: (c as { escrowLockedCents?: number }).escrowLockedCents ?? 0,
     maxAwards: c.maxAwards,
+    bookingLink: (c as { bookingLink?: string | null }).bookingLink ?? null,
+    targetVertical: (c as { targetVertical?: string | null }).targetVertical ?? null,
+    targetLocation: (c as { targetLocation?: string | null }).targetLocation ?? null,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     brand: c.brand

@@ -241,6 +241,19 @@ export async function POST(req: Request) {
         playbookId,
         budgetCents,
         maxAwards,
+        bookingLink: body.bookingLink
+          ? String(body.bookingLink).trim().slice(0, 500)
+          : null,
+        targetVertical: body.targetVertical
+          ? String(body.targetVertical).trim().slice(0, 160)
+          : body.query
+            ? String(body.query).trim().slice(0, 160)
+            : null,
+        targetLocation: body.targetLocation
+          ? String(body.targetLocation).trim().slice(0, 160)
+          : body.location
+            ? String(body.location).trim().slice(0, 160)
+            : null,
       },
       include: {
         brand: { select: { id: true, name: true, slug: true, logoUrl: true } },

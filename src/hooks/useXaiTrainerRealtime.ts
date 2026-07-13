@@ -21,11 +21,9 @@ export interface TrainerSessionConfig {
     voice: string;
     gatekeeperVoice?: string;
     bossVoice?: string;
-    hintMode?: boolean;
     brandId?: string;
     packId?: string;
     playbookId?: string;
-    /** Clerk user id — required for playbook/memory resolution via worker internal prompt fetch */
     userId?: string;
     orgId?: string;
     gateToken?: string;
@@ -60,6 +58,10 @@ function base64ToInt16(base64: string): Int16Array {
     return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
 }
 
+/**
+ * Browser ↔ local/CF trainer realtime bridge.
+ * Playback path aligned with the working trojan.markets (v2_engine) trainer.
+ */
 export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}) {
     const { onError, onCallEnded } = options;
 
@@ -85,14 +87,64 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     const earlyAudioBufferRef = useRef<string[]>([]);
     const audioFlushReadyRef = useRef(false);
     const awaitingGatekeeperGreetingRef = useRef(false);
+    const greetingDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const prospectSpeakingRef = useRef(false);
     const acceptProspectAudioRef = useRef(false);
+    const recordingBlobRef = useRef<Blob | null>(null);
     const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordedChunksRef = useRef<Blob[]>([]);
-    const recordingBlobRef = useRef<Blob | null>(null);
 
     micEnabledRef.current = micEnabled;
+
+    const stopMediaRecorder = useCallback((): Promise<Blob | null> => {
+        return new Promise((resolve) => {
+            const recorder = mediaRecorderRef.current;
+            if (!recorder || recorder.state === 'inactive') {
+                resolve(recordingBlobRef.current);
+                return;
+            }
+            recorder.onstop = () => {
+                const type = recorder.mimeType || 'audio/webm';
+                const blob =
+                    recordedChunksRef.current.length > 0
+                        ? new Blob(recordedChunksRef.current, { type })
+                        : null;
+                recordingBlobRef.current = blob && blob.size > 0 ? blob : null;
+                mediaRecorderRef.current = null;
+                resolve(recordingBlobRef.current);
+            };
+            try {
+                recorder.stop();
+            } catch {
+                resolve(recordingBlobRef.current);
+            }
+        });
+    }, []);
+
+    const startMediaRecorder = useCallback((stream: MediaStream) => {
+        recordedChunksRef.current = [];
+        recordingBlobRef.current = null;
+        try {
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : MediaRecorder.isTypeSupported('audio/webm')
+                  ? 'audio/webm'
+                  : '';
+            const recorder = mimeType
+                ? new MediaRecorder(stream, { mimeType })
+                : new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) {
+                    recordedChunksRef.current.push(event.data);
+                }
+            };
+            recorder.start(1000);
+        } catch {
+            mediaRecorderRef.current = null;
+        }
+    }, []);
 
     const interruptPlayback = useCallback(() => {
         scheduledSourcesRef.current.forEach((source) => {
@@ -114,6 +166,10 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         if (!ctx) return;
 
         const pcm = base64ToInt16(base64);
+        if (pcm.length === 0) return;
+
+        // Use the context's actual rate for the buffer clock; PCM is 24k from xAI.
+        // createBuffer(,,, SAMPLE_RATE) lets the browser resample into ctx.sampleRate.
         const buffer = ctx.createBuffer(1, pcm.length, SAMPLE_RATE);
         const channel = buffer.getChannelData(0);
         for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
@@ -121,7 +177,9 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
-        if (mixDestRef.current) source.connect(mixDestRef.current);
+        if (mixDestRef.current) {
+            source.connect(mixDestRef.current);
+        }
 
         const now = ctx.currentTime;
         const start = Math.max(now, nextPlayTimeRef.current);
@@ -148,10 +206,61 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const buffered = earlyAudioBufferRef.current;
         earlyAudioBufferRef.current = [];
+        // Discard preroll during/just after IVR — it is mostly speaker echo
+        if (awaitingGatekeeperGreetingRef.current) return;
         for (const chunk of buffered) {
             ws.send(JSON.stringify({ type: 'audio', audio: chunk }));
         }
     }, []);
+
+    /**
+     * response.done / gatekeeper.ready fire when TTS bytes are *sent*, not when
+     * Web Audio finished playing. Opening the mic early lets speaker echo
+     * trigger barge-in and interruptPlayback() mid-greeting.
+     */
+    const releaseGreetingMic = useCallback(
+        (pcmMsHint?: number) => {
+            if (greetingDrainTimerRef.current) {
+                clearTimeout(greetingDrainTimerRef.current);
+                greetingDrainTimerRef.current = null;
+            }
+
+            const finish = () => {
+                greetingDrainTimerRef.current = null;
+                if (!awaitingGatekeeperGreetingRef.current) return;
+                awaitingGatekeeperGreetingRef.current = false;
+                earlyAudioBufferRef.current = [];
+                audioFlushReadyRef.current = true;
+                flushEarlyAudio();
+            };
+
+            const poll = () => {
+                const ctx = audioContextRef.current;
+                if (!ctx) {
+                    finish();
+                    return;
+                }
+                const remainingMs = Math.max(
+                    0,
+                    (nextPlayTimeRef.current - ctx.currentTime) * 1000
+                );
+                if (remainingMs <= 80 && scheduledSourcesRef.current.length === 0) {
+                    finish();
+                    return;
+                }
+                greetingDrainTimerRef.current = setTimeout(poll, 120);
+            };
+
+            // Fallback ceiling so a stuck queue can't mute the mic forever
+            const ceilingMs = Math.max(3000, Math.min(10000, (pcmMsHint || 4000) + 800));
+            setTimeout(() => {
+                if (awaitingGatekeeperGreetingRef.current) finish();
+            }, ceilingMs);
+
+            poll();
+        },
+        [flushEarlyAudio]
+    );
 
     const startMicCapture = useCallback(async () => {
         const ctx = audioContextRef.current;
@@ -171,13 +280,18 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
 
         const source = ctx.createMediaStreamSource(stream);
         micSourceRef.current = source;
+        if (mixDestRef.current) {
+            source.connect(mixDestRef.current);
+        }
 
         const processor = ctx.createScriptProcessor(2048, 1, 1);
         processorRef.current = processor;
 
         processor.onaudioprocess = (event) => {
-            // Half-duplex: don't uplink while prospect is speaking (prevents speaker bleed → false VAD turn)
             if (!micEnabledRef.current || prospectSpeakingRef.current) return;
+            // Don't uplink or buffer during forced gatekeeper greeting
+            if (awaitingGatekeeperGreetingRef.current) return;
+
             const input = event.inputBuffer.getChannelData(0);
             const pcm = floatTo16BitPCM(input);
             const encoded = int16ToBase64(pcm);
@@ -192,7 +306,6 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         };
 
         source.connect(processor);
-        if (mixDestRef.current) source.connect(mixDestRef.current);
         const silent = ctx.createGain();
         silent.gain.value = 0;
         processor.connect(silent);
@@ -200,31 +313,24 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     }, [stopMicCapture]);
 
     const stopRecording = useCallback((): Promise<Blob | null> => {
-        return new Promise((resolve) => {
-            const recorder = mediaRecorderRef.current;
-            if (!recorder || recorder.state === 'inactive') {
-                resolve(recordingBlobRef.current);
-                return;
-            }
-            recorder.onstop = () => {
-                const blob = new Blob(recordedChunksRef.current, {
-                    type: recorder.mimeType || 'audio/webm',
-                });
-                recordingBlobRef.current = blob.size > 0 ? blob : null;
-                recordedChunksRef.current = [];
-                mediaRecorderRef.current = null;
-                resolve(recordingBlobRef.current);
-            };
+        return stopMediaRecorder();
+    }, [stopMediaRecorder]);
+
+    const disconnect = useCallback(() => {
+        if (greetingDrainTimerRef.current) {
+            clearTimeout(greetingDrainTimerRef.current);
+            greetingDrainTimerRef.current = null;
+        }
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
             try {
                 recorder.stop();
             } catch {
-                resolve(recordingBlobRef.current);
+                /* ignore */
             }
-        });
-    }, []);
-
-    const disconnect = useCallback(() => {
-        void stopRecording();
+        }
+        mediaRecorderRef.current = null;
+        mixDestRef.current = null;
         stopMicCapture();
         interruptPlayback();
 
@@ -243,7 +349,6 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         audioFlushReadyRef.current = false;
         earlyAudioBufferRef.current = [];
         awaitingGatekeeperGreetingRef.current = false;
-        mixDestRef.current = null;
 
         if (audioContextRef.current) {
             audioContextRef.current.close().catch(() => {});
@@ -256,13 +361,15 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         setIsUserSpeaking(false);
         setPhase('prospect');
         setTwoStage(false);
-    }, [interruptPlayback, stopMicCapture, stopRecording]);
+    }, [interruptPlayback, stopMicCapture]);
 
     const connect = useCallback(
         async (config: TrainerSessionConfig): Promise<boolean> => {
             disconnect();
             setIsConnecting(true);
             setTranscript([]);
+            recordingBlobRef.current = null;
+            recordedChunksRef.current = [];
 
             try {
                 const AudioCtx =
@@ -271,43 +378,15 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                         .webkitAudioContext;
                 const ctx = new AudioCtx({ sampleRate: SAMPLE_RATE });
                 audioContextRef.current = ctx;
-                // iOS / Safari often start suspended until a user gesture — resume aggressively
                 if (ctx.state === 'suspended') {
-                    try {
-                        await ctx.resume();
-                    } catch {
-                        /* ignore */
-                    }
+                    await ctx.resume();
                 }
-                const unlock = () => {
-                    if (audioContextRef.current?.state === 'suspended') {
-                        void audioContextRef.current.resume();
-                    }
-                };
-                window.addEventListener('touchstart', unlock, { once: true, passive: true });
-                window.addEventListener('click', unlock, { once: true });
 
-                // Mixed recording destination for highlight clips (mic + prospect playback)
-                recordingBlobRef.current = null;
-                recordedChunksRef.current = [];
                 const mixDest = ctx.createMediaStreamDestination();
                 mixDestRef.current = mixDest;
-                try {
-                    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                        ? 'audio/webm;codecs=opus'
-                        : 'audio/webm';
-                    const recorder = new MediaRecorder(mixDest.stream, { mimeType: mime });
-                    mediaRecorderRef.current = recorder;
-                    recorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
-                    };
-                    recorder.start(1000);
-                } catch {
-                    mediaRecorderRef.current = null;
-                }
 
-                // Parallel init: start mic capture before WebSocket is ready (xAI best practice)
                 await startMicCapture();
+                startMediaRecorder(mixDest.stream);
 
                 const realtimeUrl =
                     process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL ||
@@ -327,7 +406,10 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                             ws.onmessage = null;
                             ws.onerror = null;
                             ws.onclose = null;
-                            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                            if (
+                                ws.readyState === WebSocket.OPEN ||
+                                ws.readyState === WebSocket.CONNECTING
+                            ) {
                                 ws.close();
                             }
                         } catch {
@@ -340,8 +422,8 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                     const timeout = setTimeout(() => {
                         failConnect(
                             process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL
-                                ? 'Realtime voice unavailable. Check the Cloudflare Durable Object worker is deployed and NEXT_PUBLIC_TRAINER_REALTIME_URL is correct.'
-                                : 'Realtime voice unavailable. Start with "npm run dev" (node server.js), or set NEXT_PUBLIC_TRAINER_REALTIME_URL to the Cloudflare worker.'
+                                ? 'Realtime voice unavailable. Check the Cloudflare worker and NEXT_PUBLIC_TRAINER_REALTIME_URL.'
+                                : 'Realtime voice unavailable. Start with "npm run dev" (node server.js).'
                         );
                     }, 8000);
 
@@ -369,29 +451,44 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 if (msg.gatekeeperName) setGatekeeperName(msg.gatekeeperName);
                                 if (msg.decisionMakerName) setDecisionMakerName(msg.decisionMakerName);
                                 awaitingGatekeeperGreetingRef.current = !!msg.twoStage;
+                                earlyAudioBufferRef.current = [];
                                 if (!msg.twoStage) {
                                     audioFlushReadyRef.current = true;
-                                    flushEarlyAudio();
                                 }
+                                // Accept greeting audio immediately (force_message may stream
+                                // before response.created / prospect.speaking in some builds)
+                                acceptProspectAudioRef.current = true;
                                 resolve();
                                 break;
                             case 'gatekeeper.ready':
-                                awaitingGatekeeperGreetingRef.current = false;
-                                audioFlushReadyRef.current = true;
-                                flushEarlyAudio();
+                                // Prefer draining scheduled greeting audio before uplink
+                                releaseGreetingMic();
                                 break;
                             case 'phase':
                                 setPhase(msg.phase || 'decision_maker');
                                 if (msg.label) setDecisionMakerName(msg.label);
                                 interruptPlayback();
+                                acceptProspectAudioRef.current = true;
                                 break;
                             case 'audio':
-                                if (msg.audio && acceptProspectAudioRef.current) playPcm16Chunk(msg.audio);
+                                // Always play prospect TTS — do not drop chunks if speaking
+                                // signal is slightly late (was cutting "Thank you…" mid-word).
+                                if (msg.audio) {
+                                    if (!prospectSpeakingRef.current) {
+                                        prospectSpeakingRef.current = true;
+                                        setIsProspectSpeaking(true);
+                                    }
+                                    acceptProspectAudioRef.current = true;
+                                    playPcm16Chunk(msg.audio);
+                                }
                                 break;
                             case 'interrupt':
+                                // Never kill the forced gatekeeper intro for echo barge-in
+                                if (awaitingGatekeeperGreetingRef.current) break;
                                 interruptPlayback();
                                 acceptProspectAudioRef.current = false;
                                 prospectSpeakingRef.current = false;
+                                setIsProspectSpeaking(false);
                                 break;
                             case 'prospect.speaking':
                                 prospectSpeakingRef.current = true;
@@ -400,17 +497,19 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 break;
                             case 'prospect.done':
                                 prospectSpeakingRef.current = false;
-                                acceptProspectAudioRef.current = false;
+                                // Keep accepting briefly; scheduled buffers still play out
                                 setIsProspectSpeaking(false);
                                 if (awaitingGatekeeperGreetingRef.current) {
-                                    awaitingGatekeeperGreetingRef.current = false;
-                                    audioFlushReadyRef.current = true;
-                                    flushEarlyAudio();
+                                    releaseGreetingMic(
+                                        typeof msg.pcmMs === 'number' ? msg.pcmMs : undefined
+                                    );
                                 }
                                 break;
                             case 'user.speaking':
+                                if (awaitingGatekeeperGreetingRef.current) break;
                                 acceptProspectAudioRef.current = false;
                                 prospectSpeakingRef.current = false;
+                                setIsProspectSpeaking(false);
                                 setIsUserSpeaking(true);
                                 break;
                             case 'user.done':
@@ -420,7 +519,12 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 setTranscript((prev) => {
                                     const text = (msg.text || '').trim();
                                     if (!text) return prev;
-                                    const id = typeof msg.id === 'number' ? msg.id : typeof msg.seq === 'number' ? msg.seq : prev.length + 1;
+                                    const id =
+                                        typeof msg.id === 'number'
+                                            ? msg.id
+                                            : typeof msg.seq === 'number'
+                                              ? msg.seq
+                                              : prev.length + 1;
 
                                     if (msg.update) {
                                         const idx = prev.findIndex((entry) => entry.id === id);
@@ -440,14 +544,6 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                         const b = text.toLowerCase().replace(/\s+/g, ' ');
                                         if (a === b) return prev;
                                         if (a.length > 20 && b.startsWith(a.slice(0, 30))) return prev;
-                                        if (/\bone at a time\b/.test(a) && /\bone at a time\b/.test(b)) return prev;
-                                        const emailCta = /\b(email|send (the )?details)\b/;
-                                        if (emailCta.test(a) && emailCta.test(b)) {
-                                            const wordsA = a.split(' ').filter((w: string) => w.length > 3);
-                                            const wordsB = new Set(b.split(' ').filter((w: string) => w.length > 3));
-                                            const shared = wordsA.filter((w: string) => wordsB.has(w)).length;
-                                            if (shared / Math.min(wordsA.length, wordsB.size) >= 0.38) return prev;
-                                        }
                                     }
 
                                     return [...prev, { role: msg.role, text, id, seq: id }];
@@ -459,6 +555,9 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 break;
                             case 'error': {
                                 const errText = msg.message || msg.error || 'Realtime session error';
+                                if (/cancellation failed|no active response/i.test(String(errText))) {
+                                    break;
+                                }
                                 if (!settled) {
                                     failConnect(errText);
                                 } else {
@@ -482,8 +581,8 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                         if (!settled) {
                             failConnect(
                                 process.env.NEXT_PUBLIC_TRAINER_REALTIME_URL
-                                    ? 'Realtime voice unavailable. Check the Cloudflare Durable Object worker is deployed and NEXT_PUBLIC_TRAINER_REALTIME_URL is correct.'
-                                    : 'Realtime voice unavailable. Start with "npm run dev" (node server.js), or set NEXT_PUBLIC_TRAINER_REALTIME_URL to the Cloudflare worker.'
+                                    ? 'Realtime voice unavailable. Check the Cloudflare worker.'
+                                    : 'Realtime voice unavailable. Start with "npm run dev" (node server.js).'
                             );
                             return;
                         }
@@ -498,11 +597,20 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                 disconnect();
                 setIsConnecting(false);
                 onError?.(message);
-                // Do not rethrow — callers surface via onError / return value
                 return false;
             }
         },
-        [disconnect, flushEarlyAudio, interruptPlayback, onCallEnded, onError, playPcm16Chunk, startMicCapture]
+        [
+            disconnect,
+            flushEarlyAudio,
+            interruptPlayback,
+            onCallEnded,
+            onError,
+            playPcm16Chunk,
+            releaseGreetingMic,
+            startMediaRecorder,
+            startMicCapture,
+        ]
     );
 
     useEffect(() => () => disconnect(), [disconnect]);

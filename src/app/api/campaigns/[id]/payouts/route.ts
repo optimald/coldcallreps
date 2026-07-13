@@ -87,7 +87,7 @@ export async function POST(
     const { id } = await params;
     const campaign = await prisma.campaign.findUnique({
       where: { id },
-      include: { brand: { select: { ownerId: true, name: true } } },
+      include: { brand: { select: { id: true, slug: true, ownerId: true, name: true } } },
     });
     if (!campaign) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageBrand(profile, campaign.brand.ownerId)) {
@@ -269,8 +269,8 @@ export async function POST(
           brandUserId: profile.id,
         },
       },
-      success_url: `${base}/campaigns/${id}?payout=success&payoutId=${payout.id}`,
-      cancel_url: `${base}/campaigns/${id}?payout=cancel&payoutId=${payout.id}`,
+      success_url: `${base}/brands/${campaign.brand.slug || campaign.brand.id}/campaigns/${id}?payout=success&payoutId=${payout.id}`,
+      cancel_url: `${base}/brands/${campaign.brand.slug || campaign.brand.id}/campaigns/${id}?payout=cancel&payoutId=${payout.id}`,
       metadata: {
         kind: 'campaign_payout',
         payoutId: payout.id,

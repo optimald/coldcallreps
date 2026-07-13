@@ -67,7 +67,7 @@ End call → scorecard → Prisma + points / minutes
 
 | Plan | Price | Minutes |
 |------|-------|---------|
-| Free | $0 | **5** minutes on signup (`TRIAL_MINUTES`) |
+| Free | $0 | **15** minutes on signup (`TRIAL_MINUTES`) |
 | Starter | **$7**/mo | **100** minutes / billing cycle |
 | Pro | **$29**/mo | **600** minutes / billing cycle |
 | Org (TEAM) | **$60/user/mo** | **60** practice minutes / user / mo (pooled) |
@@ -85,5 +85,5 @@ Referral bonus: `REFERRAL_BONUS_MINUTES` (defaults to one month of Starter minut
 - Vercel for Next.js · Cloudflare DO for voice (`npm run deploy:voice`)
 - Set `NEXT_PUBLIC_TRAINER_REALTIME_URL` + worker `APP_ORIGIN`
 - Stripe webhook → `/api/billing/webhook`
-- Set `TRIAL_MINUTES=5` on Vercel production (match `.env.example` / product allotment)
+- Set `TRIAL_MINUTES=15` on Vercel production (match `.env.example` / product allotment)
 - Update Stripe prices for Starter $7 / Pro $29 before live checkout

@@ -6,13 +6,28 @@ import { resolve } from 'node:path';
 /**
  * Dev singleton must invalidate after `prisma generate`.
  * Otherwise Next keeps an old PrismaClient on globalThis whose DMMF
- * lacks newer fields (e.g. Prospect.brandId) → "Unknown argument `brandId`".
+ * lacks newer fields (e.g. Campaign.bookingLink) → PrismaClientValidationError.
+ *
+ * Guard Object.keys: webpack can briefly serve a stale @prisma/client
+ * where a newly-added *ScalarFieldEnum is still undefined.
  */
-const PROSPECT_FIELD_FINGERPRINT = Object.keys(Prisma.ProspectScalarFieldEnum).sort().join(',');
+function enumKeys(e: Record<string, string> | undefined): string {
+  return e ? Object.keys(e).sort().join(',') : '';
+}
+
+const PRISMA_SCHEMA_FINGERPRINT = [
+  enumKeys(Prisma.ProspectScalarFieldEnum as Record<string, string> | undefined),
+  enumKeys(Prisma.CampaignScalarFieldEnum as Record<string, string> | undefined),
+  enumKeys(Prisma.CallLogScalarFieldEnum as Record<string, string> | undefined),
+  enumKeys(
+    (Prisma as { PipelineJobScalarFieldEnum?: Record<string, string> })
+      .PipelineJobScalarFieldEnum
+  ),
+].join('|');
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
-  prismaProspectFingerprint?: string;
+  prismaSchemaFingerprint?: string;
 };
 
 /** Next.js loads `.env.local`; Prisma CLI / tsx scripts may not — pull it in when missing. */
@@ -72,7 +87,7 @@ export function createPrismaClient() {
 function getPrismaClient() {
   if (
     globalForPrisma.prisma &&
-    globalForPrisma.prismaProspectFingerprint === PROSPECT_FIELD_FINGERPRINT
+    globalForPrisma.prismaSchemaFingerprint === PRISMA_SCHEMA_FINGERPRINT
   ) {
     return globalForPrisma.prisma;
   }
@@ -82,7 +97,7 @@ function getPrismaClient() {
   const client = createPrismaClient();
   if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.prisma = client;
-    globalForPrisma.prismaProspectFingerprint = PROSPECT_FIELD_FINGERPRINT;
+    globalForPrisma.prismaSchemaFingerprint = PRISMA_SCHEMA_FINGERPRINT;
   }
   return client;
 }

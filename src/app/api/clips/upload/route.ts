@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canStoreRecordingsForProfile } from '@/lib/plans';
+import { RESUME_RECORDING_ALLOWANCE, canStoreRecordingsForProfile } from '@/lib/plans';
 import { getUploadTarget, r2Configured, publicUrlForKey } from '@/lib/r2';
 
-const STORAGE_UPGRADE_MSG =
-  'Call recording storage requires Pro ($29/mo) or Org. Scorecards and transcripts still work on Free and SDR.';
+const STORAGE_UPGRADE_MSG = `Call recording storage requires Pro ($29/mo) or Org after your ${RESUME_RECORDING_ALLOWANCE} resume starter recordings. Scorecards and transcripts still work on Free and SDR.`;
 
 /** Get an upload URL for a session audio highlight (R2 worker or S3). */
 export async function POST(req: Request) {

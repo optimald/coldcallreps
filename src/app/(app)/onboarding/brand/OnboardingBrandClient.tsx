@@ -40,7 +40,7 @@ export default function OnboardingBrandClient() {
       .then((d: MePrefill | null) => {
         if (!d) return;
         if (d.roleMode?.modes?.BRAND?.onboarded) {
-          router.replace('/campaigns');
+          router.replace('/brands');
           return;
         }
         if (d.displayName) {
@@ -76,7 +76,7 @@ export default function OnboardingBrandClient() {
         window.location.href = data.walletFundUrl;
         return;
       }
-      router.replace(data.redirectTo || '/campaigns');
+      router.replace(data.redirectTo || '/brands');
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : 'Could not finish onboarding');
     } finally {

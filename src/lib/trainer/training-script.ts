@@ -8,6 +8,9 @@ export interface TrainingScript {
   focus: string;
   difficulty: string;
   sections: ScriptSection[];
+  productUrl?: string;
+  trainingImages?: string[];
+  trainingVideoUrl?: string;
 }
 
 const FOCUS_FLOWS: Record<string, ScriptSection[]> = {
@@ -128,6 +131,10 @@ export async function buildTrainingScript(options: {
     points: s.points.map((pt) => pt.replace(/\[Owner\]/g, 'the owner').replace(/\[Company\]/g, companyName)),
   }));
 
+  let productUrl: string | undefined;
+  let trainingImages: string[] | undefined;
+  let trainingVideoUrl: string | undefined;
+
   if (options.playbookId && options.userId) {
     try {
       const { resolvePlaybookContext } = await import('@/lib/trainer/playbook-context');
@@ -141,11 +148,22 @@ export async function buildTrainingScript(options: {
           { title: `Playbook — ${pb.title}`, points: [`Using agency playbook: ${pb.title}`] },
           ...pb.sections,
         ];
+        productUrl = pb.productUrl;
+        trainingImages = pb.trainingImages;
+        trainingVideoUrl = pb.trainingVideoUrl;
       }
     } catch {
       /* keep default sections */
     }
   }
 
-  return { companyName, focus, difficulty, sections };
+  return {
+    companyName,
+    focus,
+    difficulty,
+    sections,
+    ...(productUrl ? { productUrl } : {}),
+    ...(trainingImages?.length ? { trainingImages } : {}),
+    ...(trainingVideoUrl ? { trainingVideoUrl } : {}),
+  };
 }

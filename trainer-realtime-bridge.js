@@ -28,9 +28,18 @@ function normalizeRealtimeVoice(voice, fallback = VOICES.GATEKEEPER) {
 }
 
 async function fetchTrainerPrompt(port, config) {
+    // Match Cloudflare worker: prompt route requires Clerk session OR x-trainer-internal.
+    // The bridge has no browser cookies, so auth via TRAINER_INTERNAL_SECRET / CRON_SECRET.
+    const headers = { 'Content-Type': 'application/json' };
+    const internal =
+        process.env.TRAINER_INTERNAL_SECRET || process.env.CRON_SECRET || '';
+    if (internal) {
+        headers['x-trainer-internal'] = internal;
+    }
+
     const res = await fetch(`http://127.0.0.1:${port}/api/trainer/prompt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(config),
         signal: AbortSignal.timeout(10000),
     });
@@ -73,12 +82,55 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
     let audioStreamForResponse = null;
     let activeResponseId = null;
     const cancelledResponseIds = new Set();
+    let audioChunksSent = 0;
+    let audioPcmBytesSent = 0;
+    let greetingBargeInTimer = null;
 
     let phase = 'prospect';
     let scenario = null;
 
     const SILENCE_PROMPT_MS = 9000;
     const MAX_SILENCE_PROMPTS = 2;
+
+    function pcmMsFromBytes(bytes) {
+        // pcm16 mono @ 24kHz
+        return Math.round((bytes / 2 / 24000) * 1000);
+    }
+
+    function base64DecodedBytes(b64) {
+        if (!b64) return 0;
+        const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+        return Math.max(0, Math.floor((b64.length * 3) / 4) - pad);
+    }
+
+    function openGreetingBargeIn(pcmMs) {
+        if (greetingComplete) return;
+        const holdMs = Math.max(2800, Math.min(9000, (pcmMs || 0) + 600));
+        console.log(
+            `[Trainer Realtime] greeting audio committed — holding barge-in ${holdMs}ms (pcmMs=${pcmMs || 0})`
+        );
+        if (greetingBargeInTimer) clearTimeout(greetingBargeInTimer);
+        greetingBargeInTimer = setTimeout(() => {
+            greetingBargeInTimer = null;
+            if (greetingComplete || endingCall) return;
+            greetingComplete = true;
+            console.log('[Trainer Realtime] greeting barge-in open');
+            try {
+                xaiWs.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+            } catch {
+                /* ignore */
+            }
+            sendJson(browserWs, { type: 'gatekeeper.ready' });
+            try {
+                xaiWs.send(JSON.stringify({
+                    type: 'session.update',
+                    session: { tools: [TRANSFER_TOOL] },
+                }));
+            } catch {
+                /* ignore */
+            }
+        }, holdMs);
+    }
 
     function allocEntryId() {
         return ++nextEntryId;
@@ -412,6 +464,10 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
 
     function cleanup() {
         clearSilenceTimer();
+        if (greetingBargeInTimer) {
+            clearTimeout(greetingBargeInTimer);
+            greetingBargeInTimer = null;
+        }
         try {
             if (xaiWs?.readyState === WebSocket.OPEN) xaiWs.close();
         } catch {
@@ -594,7 +650,8 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
                                 item: {
                                     type: 'force_message',
                                     role: 'assistant',
-                                    interruptible: true,
+                                    // Opening IVR line must finish — barge-in was cutting "Thank you…" mid-word
+                                    interruptible: false,
                                     content: [{ type: 'output_text', text: greetingText }],
                                 },
                             }));
@@ -622,23 +679,35 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
                     }
                 }
 
+                // Prefer output_audio (current xAI/OpenAI name). Never lock out
+                // output_audio just because a legacy audio.delta arrived first —
+                // that dropped the rest of TTS after "Thank yo…".
                 if (event.type === 'response.output_audio.delta' && event.delta) {
                     const rid = event.response_id || event.response?.id || activeResponseId;
                     if (rid && cancelledResponseIds.has(rid)) return;
-                    if (audioStreamForResponse === 'audio') return;
                     audioStreamForResponse = 'output_audio';
+                    audioChunksSent += 1;
+                    audioPcmBytesSent += base64DecodedBytes(event.delta);
                     sendJson(browserWs, { type: 'audio', audio: event.delta });
-                }
-
-                if (event.type === 'response.audio.delta' && event.delta) {
+                } else if (event.type === 'response.audio.delta' && event.delta) {
                     const rid = event.response_id || event.response?.id || activeResponseId;
                     if (rid && cancelledResponseIds.has(rid)) return;
-                    if (audioStreamForResponse) return;
+                    if (audioStreamForResponse === 'output_audio') return;
                     audioStreamForResponse = 'audio';
+                    audioChunksSent += 1;
+                    audioPcmBytesSent += base64DecodedBytes(event.delta);
                     sendJson(browserWs, { type: 'audio', audio: event.delta });
                 }
 
                 if (event.type === 'input_audio_buffer.speech_started') {
+                    // Ignore barge-in until greeting audio has had time to finish playing.
+                    // response.done fires when TTS is *sent*, not when the browser finished playing —
+                    // opening the mic early lets speaker echo cancel the rest of the intro.
+                    if (!greetingComplete) {
+                        console.log('[Trainer Realtime] speech_started ignored (greeting still playing)');
+                        return;
+                    }
+                    console.log('[Trainer Realtime] speech_started → interrupt');
                     clearSilenceTimer();
                     silencePromptCount = 0;
                     pendingSilenceResponse = false;
@@ -666,6 +735,8 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
                 if (event.type === 'response.created') {
                     prospectSpeaking = true;
                     audioStreamForResponse = null;
+                    audioChunksSent = 0;
+                    audioPcmBytesSent = 0;
                     activeResponseId = event.response?.id || null;
                     sendJson(browserWs, { type: 'prospect.speaking' });
                     lastProspectResponseId = activeResponseId;
@@ -673,20 +744,19 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
 
                 if (event.type === 'response.done') {
                     const doneId = event.response?.id || activeResponseId;
+                    const pcmMs = pcmMsFromBytes(audioPcmBytesSent);
+                    console.log(
+                        `[Trainer Realtime] response.done chunks=${audioChunksSent} pcmMs=${pcmMs} stream=${audioStreamForResponse || 'none'} status=${event.response?.status || '?'}`
+                    );
                     if (doneId) cancelledResponseIds.delete(doneId);
                     activeResponseId = null;
                     prospectSpeaking = false;
-                    sendJson(browserWs, { type: 'prospect.done' });
+                    sendJson(browserWs, { type: 'prospect.done', pcmMs });
                     if (pendingTransfer) {
                         completeTransfer();
                     }
-                    if (isTwoStage && phase === 'gatekeeper' && !greetingComplete) {
-                        greetingComplete = true;
-                        sendJson(browserWs, { type: 'gatekeeper.ready' });
-                        xaiWs.send(JSON.stringify({
-                            type: 'session.update',
-                            session: { tools: [TRANSFER_TOOL] },
-                        }));
+                    if (isTwoStage && phase === 'gatekeeper' && !greetingComplete && !greetingBargeInTimer) {
+                        openGreetingBargeIn(pcmMs);
                     }
                     if (greetingComplete && !awaitingUserTranscript && !endingCall && !pendingSilenceResponse) {
                         const lastCommitted = transcript[transcript.length - 1];
@@ -712,10 +782,16 @@ function handleTrainerRealtime(browserWs, port, WebSocket) {
                 }
 
                 if (event.type === 'error') {
+                    const errMsg = event.error?.message || 'xAI realtime error';
+                    // Benign: we sometimes cancel after the response already finished (greeting barge-in echo).
+                    if (/cancellation failed|no active response/i.test(errMsg)) {
+                        console.log('[Trainer Realtime] ignoring benign cancel error:', errMsg);
+                        return;
+                    }
                     console.error('[Trainer Realtime] xAI error:', JSON.stringify(event.error));
                     sendJson(browserWs, {
                         type: 'error',
-                        message: event.error?.message || 'xAI realtime error',
+                        message: errMsg,
                     });
                 }
             });

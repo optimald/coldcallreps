@@ -28,7 +28,7 @@ export const FOCUS_LABELS: Record<FocusArea, string> = {
 };
 
 /** Free minutes granted once on signup (Free plan allotment). */
-export const TRIAL_MINUTES = Number(process.env.TRIAL_MINUTES || 5);
+export const TRIAL_MINUTES = Number(process.env.TRIAL_MINUTES || 15);
 
 /** Org plan practice minutes contributed per seat / month. */
 export const TEAM_MINUTES_PER_SEAT = Number(process.env.TEAM_MINUTES_PER_SEAT || 60);
@@ -51,7 +51,7 @@ export const PLAN = {
     features: [
       `${TRIAL_MINUTES} practice minutes to start`,
       'All practice scenarios + scorecards',
-      'Marketplace gigs free for reps',
+      'Brand deals free for reps',
       'Train → prove → apply → Stripe Connect → get paid',
       'Global leaderboard',
       'Public profile when you’re ready',
@@ -65,7 +65,7 @@ export const PLAN = {
     minutes: Number(process.env.STARTER_MONTHLY_MINUTES || 100),
     features: [
       'Daily practice + live coach',
-      'Marketplace gigs free for reps',
+      'Brand deals free for reps',
       'Stripe Connect payouts on approved results',
       'Global leaderboard + public profile',
       'Scorecards (recording storage on Pro/Org)',
@@ -82,7 +82,7 @@ export const PLAN = {
       'Call recording storage + shareable audio',
       'Priority coach model',
       'Verified badge path (faster)',
-      'Marketplace gigs free for reps',
+      'Brand deals free for reps',
       'Stripe Connect payouts on approved results',
       'Top-10 weekly digest highlight eligibility',
       'Public profile + shareable highlights',

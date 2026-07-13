@@ -9,6 +9,7 @@ import {
   MINUTE_PACKS,
   type PaidPlanKey,
 } from '@/lib/product';
+import BrandBillingPanel from '@/components/BrandBillingPanel';
 
 const MONTHLY_CARDS: { tier: 'STARTER' | 'PRO'; features: string[]; highlight?: boolean }[] = [
   {
@@ -37,14 +38,6 @@ export default function AppPricingPage() {
   const [platformRole, setPlatformRole] = useState<string | null>(null);
   const [loadError, setLoadError] = useState('');
   const [orgSeats, setOrgSeats] = useState(PLAN.TEAM.seats || 5);
-  const [connect, setConnect] = useState<{
-    hasAccount?: boolean;
-    ready?: boolean;
-    detailsSubmitted?: boolean;
-    payoutsEnabled?: boolean;
-    statusLabel?: string;
-  } | null>(null);
-  const [connectBusy, setConnectBusy] = useState(false);
 
   useEffect(() => {
     fetch('/api/me')
@@ -60,58 +53,9 @@ export default function AppPricingPage() {
         setMinuteSource(d.minuteSource || null);
         setHasSubscription(Boolean(d.hasSubscription));
         setPlatformRole(d.platformRole || null);
-        if (d.connect) setConnect(d.connect);
       })
       .catch((e) => setLoadError(e.message || 'Could not load billing profile.'));
-
-    fetch('/api/billing/connect')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.connect) setConnect(d.connect);
-      })
-      .catch(() => {});
-
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('connect') === 'return') {
-        setMsg('Stripe Connect returned — refreshing payout status…');
-        fetch('/api/billing/connect')
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => {
-            if (d?.connect) {
-              setConnect(d.connect);
-              setMsg(
-                d.connect.ready
-                  ? 'Payouts connected — brands can pay you for completed gigs.'
-                  : 'Connect onboarding saved. Finish any remaining Stripe steps if status is still incomplete.'
-              );
-            }
-          })
-          .catch(() => {});
-      } else if (params.get('connect') === 'refresh') {
-        setMsg('Connect link expired — start onboarding again below.');
-      }
-    }
   }, []);
-
-  async function startConnect(action: 'onboard' | 'dashboard' = 'onboard') {
-    setConnectBusy(true);
-    setMsg('');
-    try {
-      const res = await fetch('/api/billing/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else setMsg(data.error || 'Could not open Stripe Connect');
-    } catch (e: any) {
-      setMsg(e.message || 'Could not open Stripe Connect');
-    } finally {
-      setConnectBusy(false);
-    }
-  }
 
   async function buyPack(pack: string, target: 'personal' | 'org_pool' = 'personal') {
     setBusy(true);
@@ -179,17 +123,21 @@ export default function AppPricingPage() {
   }
 
   async function portal() {
-    const res = await fetch('/api/billing/portal', { method: 'POST' });
+    const res = await fetch('/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnPath: '/billing' }),
+    });
     const data = await res.json();
     if (data.url) window.location.href = data.url;
     else setMsg(data.error || 'Portal unavailable');
   }
 
   const role = platformRole || 'REP';
+  const isBrandDesk = role === 'BRAND' || role === 'RECRUITER';
   const showSdrPlans = role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN';
   const showOrgPlan = role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN';
-  const showBrandPlan =
-    role === 'BRAND' || role === 'RECRUITER' || role === 'SUPERADMIN' || role === 'REP';
+  const showBrandPlan = !isBrandDesk && (role === 'SUPERADMIN' || role === 'REP');
   const showMinutePacks = showSdrPlans;
   const brandActive = role === 'BRAND' || role === 'SUPERADMIN';
   const orgPriceLabel = `$${PLAN.TEAM.price.toFixed(2)}`;
@@ -201,7 +149,9 @@ export default function AppPricingPage() {
           <p className="page-eyebrow">Account</p>
           <h1 className="page-title">Billing</h1>
           <p className="page-desc">
-            {plan ? (
+            {role === 'BRAND' || role === 'RECRUITER' ? (
+              <>Fund campaign escrow, review the ledger, and manage payment methods.</>
+            ) : plan ? (
               <>
                 Current plan: <strong style={{ color: 'var(--ink)' }}>{plan}</strong>
                 {minutes != null && <> · {minutes} min left</>}
@@ -213,75 +163,19 @@ export default function AppPricingPage() {
             )}
           </p>
         </div>
-        {hasSubscription && (
+        {(hasSubscription || role === 'BRAND' || role === 'RECRUITER') && (
           <div className="page-header__actions">
             <button type="button" onClick={portal} className="btn-ghost">
-              Manage subscription
+              {role === 'BRAND' || role === 'RECRUITER'
+                ? 'Payment methods & invoices'
+                : 'Manage subscription'}
             </button>
           </div>
         )}
       </header>
       {loadError && <p className="msg-err">{loadError}</p>}
 
-      {(role === 'REP' || role === 'MANAGER' || role === 'SUPERADMIN') && (
-        <section className="panel" style={{ marginBottom: '1.5rem' }}>
-          <div className="panel__head">
-            <div>
-              <h2 className="panel__title">Gig payouts</h2>
-              <p className="panel__desc">
-                Connect Stripe to receive campaign earnings. Brands pay per approved result; Cold
-                Call Reps keeps ~20% as the platform fee. Track pending and paid amounts on{' '}
-                <Link href="/earnings" className="soft-link">
-                  Earnings
-                </Link>
-                . Separate from practice-minute plans.
-              </p>
-            </div>
-          </div>
-          <p className="muted" style={{ marginTop: 0, fontSize: '0.95rem' }}>
-            Status:{' '}
-            <strong style={{ color: 'var(--ink)' }}>
-              {connect?.ready
-                ? 'Ready for payouts'
-                : connect?.detailsSubmitted
-                  ? 'Under review'
-                  : connect?.hasAccount
-                    ? 'Onboarding incomplete'
-                    : 'Not connected'}
-            </strong>
-          </p>
-          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn"
-              disabled={connectBusy}
-              onClick={() => startConnect('onboard')}
-            >
-              {connectBusy
-                ? 'Opening…'
-                : connect?.ready
-                  ? 'Update payout details'
-                  : 'Connect Stripe for payouts'}
-            </button>
-            {connect?.detailsSubmitted && (
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={connectBusy}
-                onClick={() => startConnect('dashboard')}
-              >
-                Open Express dashboard
-              </button>
-            )}
-            <Link href="/earnings" className="btn-ghost">
-              View earnings →
-            </Link>
-            <Link href="/gigs" className="btn-ghost">
-              Browse gigs →
-            </Link>
-          </div>
-        </section>
-      )}
+      {isBrandDesk ? <BrandBillingPanel /> : null}
 
       {showSdrPlans && (
         <section style={{ marginBottom: '1.5rem' }}>

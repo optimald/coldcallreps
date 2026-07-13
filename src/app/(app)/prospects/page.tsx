@@ -9,6 +9,7 @@ import {
   Panel,
   SoftLink,
 } from '@/components/ui/PagePrimitives';
+import { parseHooks } from '@/lib/prospect-intel';
 
 type Prospect = {
   id: string;
@@ -450,19 +451,14 @@ export default function ProspectsCrmPage() {
     }
   }
 
-  let hooks: string[] = [];
-  try {
-    hooks = selected?.hooksJSON ? JSON.parse(selected.hooksJSON) : [];
-  } catch {
-    hooks = [];
-  }
+  const hooks = parseHooks(selected?.hooksJSON);
 
   return (
     <main className="app-page">
       <PageHeader
         eyebrow="Train"
         title="Prospects CRM"
-        description="Pull Maps leads, import a CSV, attach a storefront photo, enrich websites — then warm up on them in the trainer before real dials."
+        description="Pull Maps leads, import a CSV, attach a storefront photo, enrich websites — then warm up on them in Practice before real dials."
         actions={
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <button type="button" className="btn-ghost" disabled={busy} onClick={exportCsv}>
@@ -487,8 +483,8 @@ export default function ProspectsCrmPage() {
                 e.target.value = '';
               }}
             />
-            <Link href="/trainer" className="btn">
-              Open trainer
+            <Link href="/practice" className="btn">
+              Open Practice
             </Link>
           </div>
         }
@@ -675,15 +671,15 @@ export default function ProspectsCrmPage() {
             <Panel>
               <EmptyState
                 title="Select a lead"
-                description="Edit details, attach a photo, scrape the site, or warm up in the trainer."
+                description="Edit details, attach a photo, scrape the site, or warm up in Practice."
               />
             </Panel>
           ) : (
             <Panel
               title="Lead detail"
-              description="Saved to your CRM — pick this prospect on the trainer for personalized warm-ups."
+              description="Saved to your CRM — pick this prospect in Practice for personalized warm-ups."
               actions={
-                <Link href={`/trainer?prospectId=${selected.id}`} className="btn">
+                <Link href={`/practice?prospectId=${selected.id}`} className="btn">
                   Practice
                 </Link>
               }
@@ -815,7 +811,7 @@ export default function ProspectsCrmPage() {
                 <button type="button" className="btn-ghost" disabled={busy} onClick={enrichSelected}>
                   Scrape website
                 </button>
-                <SoftLink href={`/trainer?prospectId=${selected.id}`}>Warm up →</SoftLink>
+                <SoftLink href={`/practice?prospectId=${selected.id}`}>Warm up →</SoftLink>
                 <button type="button" className="btn-ghost" disabled={busy} onClick={removeSelected}>
                   Delete
                 </button>

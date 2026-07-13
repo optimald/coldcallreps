@@ -164,6 +164,7 @@ export function useLiveCoach(options: UseLiveCoachOptions) {
           gatekeeperName,
           decisionMakerName,
           companyName: companyName || undefined,
+          prospectLine: last.text,
         })
       : instant;
 

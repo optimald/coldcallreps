@@ -96,14 +96,14 @@ export default function GigsPage() {
       <PageHeader
         compact
         eyebrow="Earn"
-        title="Gigs"
+        title="Brand deals"
         description="Open campaigns — practice, apply, deliver, get paid from escrow."
         actions={
           <>
             <Link href="/earnings" className="btn-ghost">
               Earnings
             </Link>
-            <Link href="/trainer" className="btn-ghost">
+            <Link href="/practice" className="btn-ghost">
               Practice
             </Link>
           </>
@@ -125,7 +125,7 @@ export default function GigsPage() {
       ) : null}
 
       {loading ? (
-        <p className="muted">Loading gigs…</p>
+        <p className="muted">Loading brand deals…</p>
       ) : (
         <div className="gigs-desk">
           <Panel
@@ -136,11 +136,11 @@ export default function GigsPage() {
           >
             {campaigns.length === 0 ? (
               <EmptyState
-                title="No open gigs yet"
-                description="Come back when founders go live, or practice in Trainer while you wait."
+                title="No open brand deals yet"
+                description="Come back when founders go live, or warm up in Practice while you wait."
                 action={
-                  <Link href="/trainer" className="btn" style={{ marginTop: '0.75rem' }}>
-                    Open Trainer
+                  <Link href="/practice" className="btn" style={{ marginTop: '0.75rem' }}>
+                    Open Practice
                   </Link>
                 }
               />

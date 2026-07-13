@@ -16,14 +16,16 @@ export default function MarketingHeader() {
             Who it’s for
           </Link>
           <Link href="/for/reps" style={{ color: 'var(--muted)' }}>
-            Reps
+            Sales Reps
           </Link>
           <Link href="/for/brands" style={{ color: 'var(--muted)' }}>
-            Founders
+            Brand Founders
           </Link>
-          <Link href="/gigs" style={{ color: 'var(--muted)' }}>
-            Campaigns
-          </Link>
+          <SignedIn>
+            <Link href="/gigs" style={{ color: 'var(--muted)' }}>
+              Brand deals
+            </Link>
+          </SignedIn>
           <Link href="/pricing" style={{ color: 'var(--muted)' }}>
             Pricing
           </Link>
@@ -31,7 +33,9 @@ export default function MarketingHeader() {
         <Link href="/for" className="mkt-nav-pricing-mobile" style={{ color: 'var(--muted)' }}>
           Roles
         </Link>
-        <ThemePicker compact lightDarkOnly />
+        <SignedIn>
+          <ThemePicker compact lightDarkOnly />
+        </SignedIn>
         <SignedOut>
           <Link href="/sign-in" style={{ color: 'var(--muted)' }}>
             Sign in

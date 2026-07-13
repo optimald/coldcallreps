@@ -24,6 +24,8 @@ export const RESERVED_HANDLES = new Set([
   'me',
   'onboarding',
   'outbound',
+  'cold_calls',
+  'practice',
   'pricing',
   'privacy',
   'profile',

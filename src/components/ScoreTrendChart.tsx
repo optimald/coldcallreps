@@ -27,7 +27,7 @@ export default function ScoreTrendChart({
         <p className="muted score-trend__empty-desc">
           Run a few AI warm-ups — your last sessions will chart here.
         </p>
-        <Link href="/trainer" className="btn btn--sm" style={{ marginTop: '0.65rem' }}>
+        <Link href="/practice" className="btn btn--sm" style={{ marginTop: '0.65rem' }}>
           Start practice
         </Link>
       </div>

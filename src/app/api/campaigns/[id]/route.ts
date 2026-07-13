@@ -138,6 +138,21 @@ export async function PATCH(
           ? null
           : Math.max(1, Math.round(Number(body.maxAwards)));
     }
+    if (body.bookingLink !== undefined) {
+      data.bookingLink = body.bookingLink
+        ? String(body.bookingLink).trim().slice(0, 500)
+        : null;
+    }
+    if (body.targetVertical !== undefined) {
+      data.targetVertical = body.targetVertical
+        ? String(body.targetVertical).trim().slice(0, 160)
+        : null;
+    }
+    if (body.targetLocation !== undefined) {
+      data.targetLocation = body.targetLocation
+        ? String(body.targetLocation).trim().slice(0, 160)
+        : null;
+    }
 
     if (body.packId !== undefined) {
       const packId = body.packId ? String(body.packId) : null;

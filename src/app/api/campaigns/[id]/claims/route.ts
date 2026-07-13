@@ -71,6 +71,19 @@ export async function POST(
     });
 
     if (!audit.passed) {
+      if (body.callLogId) {
+        await prisma.callLog
+          .update({
+            where: { id: String(body.callLogId) },
+            data: {
+              isAudited: true,
+              needsManualReview: true,
+              aiAuditResult: JSON.stringify(audit),
+              transcript: transcriptSnippet || undefined,
+            },
+          })
+          .catch(() => null);
+      }
       return NextResponse.json(
         {
           claim,
@@ -80,6 +93,22 @@ export async function POST(
         },
         { status: 422 }
       );
+    }
+
+    if (body.callLogId) {
+      await prisma.callLog
+        .update({
+          where: { id: String(body.callLogId) },
+          data: {
+            status: 'APPOINTMENT_SET',
+            outcome: 'appointment_set',
+            isAudited: true,
+            needsManualReview: false,
+            aiAuditResult: JSON.stringify(audit),
+            transcript: transcriptSnippet || undefined,
+          },
+        })
+        .catch(() => null);
     }
 
     // Escrow release + payout record

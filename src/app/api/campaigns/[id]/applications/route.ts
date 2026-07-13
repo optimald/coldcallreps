@@ -134,7 +134,7 @@ export async function PATCH(
       practiceHref: practiceHref(campaign),
       notice:
         status === 'ACTIVE'
-          ? 'Applicant activated — they can practice the brand pack and start the gig.'
+          ? 'Applicant activated — they can practice the brand pack and start the brand deal.'
           : `Marked ${status}.`,
     });
   } catch (error: any) {

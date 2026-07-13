@@ -5,12 +5,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import BrandMark from '@/components/BrandMark';
+import CreateBrandModal from '@/components/CreateBrandModal';
 import NavIconGlyph from '@/components/NavIcon';
 import ThemePicker from '@/components/ThemePicker';
-import { NAV_SECTIONS_BY_ROLE, type AppRole, type NavSection } from '@/lib/roles';
+import { NAV_SECTIONS_BY_ROLE, brandNavSections, type AppRole, type NavSection } from '@/lib/roles';
 import { PLAN, type PlanKey } from '@/lib/product';
 import { repPublicPath } from '@/lib/public-urls';
 import type { RoleModeState, SwitchableMode } from '@/lib/role-mode';
+import {
+  brandPathKey,
+  readSelectedBrandKey,
+  resolveSelectedBrand,
+  writeSelectedBrandKey,
+  SELECTED_BRAND_COOKIE,
+  type BrandRef,
+} from '@/lib/brand-context';
+import { useBrandDeskMode } from '@/hooks/useBrandDeskMode';
 
 const FALLBACK = NAV_SECTIONS_BY_ROLE.REP;
 const SIDEBAR_COLLAPSED_KEY = 'ccr-sidebar-collapsed';
@@ -26,8 +36,18 @@ type MeMetrics = {
   profileSlug: string | null;
 };
 
+function syncBrandCookie(key: string) {
+  try {
+    document.cookie = `${SELECTED_BRAND_COOKIE}=${encodeURIComponent(key)}; path=/; max-age=31536000; samesite=lax`;
+  } catch {
+    /* ignore */
+  }
+}
+
 function isActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
+  // /brands list should not highlight for nested brand routes
+  if (href === '/brands') return pathname === '/brands' || pathname === '/brands/';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -106,6 +126,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     plan: null,
     profileSlug: null,
   });
+  const [ownedBrands, setOwnedBrands] = useState<BrandRef[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<BrandRef | null>(null);
+  const [createBrandOpen, setCreateBrandOpen] = useState(false);
+  const { mode: deskMode, setDeskMode } = useBrandDeskMode();
 
   useEffect(() => {
     try {
@@ -134,7 +158,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const r = (d.platformRole || 'REP') as AppRole;
         setRole(r);
         setRoleMode(d.roleMode || null);
-        setSections(NAV_SECTIONS_BY_ROLE[r] || FALLBACK);
         setMetrics({
           minutesRemaining: typeof d.minutesRemaining === 'number' ? d.minutesRemaining : null,
           minutesUsed: typeof d.minutesUsed === 'number' ? d.minutesUsed : null,
@@ -145,6 +168,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           plan: d.plan || 'FREE',
           profileSlug: d.profileSlug || null,
         });
+
+        if (r === 'BRAND' || r === 'RECRUITER') {
+          fetch('/api/brands?mine=1')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((bd) => {
+              const list: BrandRef[] = (bd?.brands || []).map((b: any) => ({
+                id: b.id,
+                slug: b.slug,
+                name: b.name,
+              }));
+              setOwnedBrands(list);
+              // Prefer brand id/slug from current URL when under /brands/[id]/...
+              const m = pathname.match(/^\/brands\/([^/]+)/);
+              const fromPath = m?.[1] || null;
+              const resolved = resolveSelectedBrand(list, fromPath || readSelectedBrandKey());
+              setSelectedBrand(resolved);
+              if (resolved) {
+                const key = brandPathKey(resolved);
+                writeSelectedBrandKey(key);
+                syncBrandCookie(key);
+              }
+              setSections(brandNavSections(resolved ? brandPathKey(resolved) : null));
+            })
+            .catch(() => {
+              setSections(brandNavSections(null));
+            });
+        } else {
+          setSections(NAV_SECTIONS_BY_ROLE[r] || FALLBACK);
+        }
       })
       .catch(() => {});
   }, [pathname]);
@@ -167,7 +219,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       const hit = section.items.find((item) => isActive(pathname, item.href));
       if (hit) return hit.label;
     }
+    if (pathname.startsWith('/sessions')) return 'Past calls';
     if (pathname.startsWith('/onboarding')) return 'Onboarding';
+    if (/\/brands\/[^/]+\/practice/.test(pathname)) return 'Practice calls';
     return 'App';
   }, [pathname, sections]);
 
@@ -205,7 +259,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         console.warn('[switchMode]', data.error || data.notice);
         return;
       }
-      window.location.href = data.redirectTo || (target === 'BRAND' ? '/campaigns' : '/dashboard');
+      window.location.href = data.redirectTo || (target === 'BRAND' ? '/brands' : '/dashboard');
     } catch (e) {
       console.warn('[switchMode]', e);
     } finally {
@@ -232,12 +286,57 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app-sidebar__scroll">
         {sections.map((section) => (
           <div key={section.id} className="app-nav-section">
-            <p className="app-nav-section__label">{section.label}</p>
+            <div className="app-nav-section__head">
+              <p className="app-nav-section__label">{section.label}</p>
+              {section.id === 'brand' && (role === 'BRAND' || role === 'RECRUITER') ? (
+                <div className="app-brand-controls">
+                  <select
+                    className="field app-brand-switcher app-brand-switcher--inline"
+                    aria-label="Selected brand"
+                    value={selectedBrand ? brandPathKey(selectedBrand) : ''}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      if (key === '__create__') {
+                        setCreateBrandOpen(true);
+                        return;
+                      }
+                      if (key === '__all__') {
+                        router.push('/brands');
+                        return;
+                      }
+                      const next = ownedBrands.find((b) => brandPathKey(b) === key) || null;
+                      setSelectedBrand(next);
+                      if (next) {
+                        writeSelectedBrandKey(brandPathKey(next));
+                        syncBrandCookie(brandPathKey(next));
+                        setSections(brandNavSections(brandPathKey(next)));
+                        const m = pathname.match(/^\/brands\/[^/]+(\/.*)?$/);
+                        const rest = m?.[1] && m[1] !== '/' ? m[1].replace(/^\//, '') : '';
+                        router.push(
+                          rest
+                            ? `/brands/${brandPathKey(next)}/${rest}`
+                            : `/brands/${brandPathKey(next)}`
+                        );
+                      }
+                    }}
+                  >
+                    {ownedBrands.length === 0 ? <option value="">No brands yet</option> : null}
+                    {ownedBrands.map((b) => (
+                      <option key={b.id} value={brandPathKey(b)}>
+                        {b.name}
+                      </option>
+                    ))}
+                    <option value="__all__">All brands…</option>
+                    <option value="__create__">+ Create brand…</option>
+                  </select>
+                </div>
+              ) : null}
+            </div>
             <ul className="app-nav-section__list">
               {section.items.map((item) => {
                 const active = isActive(pathname, item.href);
                 return (
-                  <li key={item.href}>
+                  <li key={`${section.id}-${item.href}`}>
                     <Link
                       href={item.href}
                       className={`app-nav-link${active ? ' is-active' : ''}`}
@@ -259,6 +358,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="app-sidebar__footer">
+        {(role === 'BRAND' || role === 'RECRUITER') && (
+          <div
+            className="app-desk-mode app-desk-mode--footer"
+            role="group"
+            aria-label="Brand desk mode"
+          >
+            <button
+              type="button"
+              className={`app-desk-mode__btn${deskMode === 'live' ? ' is-active' : ''}`}
+              aria-pressed={deskMode === 'live'}
+              title="Live — real campaign leads & dials"
+              onClick={() => setDeskMode('live')}
+            >
+              Live
+            </button>
+            <button
+              type="button"
+              className={`app-desk-mode__btn${deskMode === 'demo' ? ' is-active' : ''}`}
+              aria-pressed={deskMode === 'demo'}
+              title="Demo — sample brand desk data (not written to Live CRM)"
+              onClick={() => setDeskMode('demo')}
+            >
+              Demo
+            </button>
+          </div>
+        )}
         {metrics.profileSlug && role !== 'BRAND' && role !== 'RECRUITER' && (
           <Link
             href={repPublicPath(metrics.profileSlug)}
@@ -388,10 +513,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               )}
               {minutesLeft != null && (
-                <Link href="/billing" className="app-metric app-metric--accent" title="Minutes remaining">
-                  <span className="app-metric__label">Min</span>
-                  <span className="app-metric__value">{minutesLeft}</span>
-                </Link>
+                <>
+                  <Link href="/billing" className="app-metric app-metric--accent" title="Minutes remaining">
+                    <span className="app-metric__label">Min</span>
+                    <span className="app-metric__value">{minutesLeft}</span>
+                  </Link>
+                  <Link href="/billing" className="app-metric-upgrade">
+                    Upgrade →
+                  </Link>
+                </>
               )}
               <Link href="/billing" className="app-metric app-metric--plan" title="Current plan">
                 <span className="app-metric__label">Plan</span>
@@ -420,6 +550,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </aside>
         </>
       )}
+
+      <CreateBrandModal
+        open={createBrandOpen}
+        onClose={() => setCreateBrandOpen(false)}
+        onCreated={(key) => {
+          if (!key) return;
+          writeSelectedBrandKey(key);
+          syncBrandCookie(key);
+          setSections(brandNavSections(key));
+        }}
+      />
     </div>
   );
 }

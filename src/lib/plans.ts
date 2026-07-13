@@ -34,7 +34,7 @@ export function canManageTeam(profile: Pick<UserProfile, 'plan' | 'platformRole'
 
 /**
  * Sync gate for call recording storage (R2 upload + complete).
- * PRO and TEAM plans store audio; FREE/STARTER get scorecards only.
+ * PRO and TEAM plans store unlimited audio; everyone gets a resume starter allowance.
  */
 export function canStoreRecordings(
   profile: Pick<UserProfile, 'plan' | 'platformRole'>
@@ -43,20 +43,27 @@ export function canStoreRecordings(
   return profile.plan === 'PRO' || profile.plan === 'TEAM';
 }
 
+/** Ready clips an SDR can store on Free/Starter for their public resume. */
+export const RESUME_RECORDING_ALLOWANCE = 3;
+
 /**
- * Recording storage including Org seats: anyone in a Clerk org that has an
- * active TEAM subscriber qualifies, even if their personal plan is FREE/STARTER.
+ * Recording storage including Org seats + resume starter (up to 3 ready clips).
  */
 export async function canStoreRecordingsForProfile(
   profile: Pick<UserProfile, 'id' | 'plan' | 'platformRole' | 'orgId'>
 ): Promise<boolean> {
   if (canStoreRecordings(profile)) return true;
-  if (!profile.orgId) return false;
-  const teamSubscriber = await prisma.userProfile.findFirst({
-    where: { orgId: profile.orgId, plan: 'TEAM' },
-    select: { id: true },
+  if (profile.orgId) {
+    const teamSubscriber = await prisma.userProfile.findFirst({
+      where: { orgId: profile.orgId, plan: 'TEAM' },
+      select: { id: true },
+    });
+    if (teamSubscriber) return true;
+  }
+  const readyCount = await prisma.clip.count({
+    where: { userId: profile.id, status: 'ready' },
   });
-  return Boolean(teamSubscriber);
+  return readyCount < RESUME_RECORDING_ALLOWANCE;
 }
 
 /**

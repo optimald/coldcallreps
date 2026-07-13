@@ -6,6 +6,7 @@ import {
   googleCalendarConfigured,
   serializeCalendarConnection,
 } from '@/lib/google-calendar';
+import { hubspotConfigured, HUBSPOT_PROVIDER } from '@/lib/crm/hubspot';
 import { effectiveRole } from '@/lib/roles';
 
 function sanitizeConnection(c: {
@@ -51,6 +52,10 @@ export async function GET() {
         microsoftAvailable: false,
         canConnectCalendar: role === 'BRAND' || role === 'SUPERADMIN',
       },
+      crm: {
+        hubspotConfigured: hubspotConfigured(),
+        providers: [HUBSPOT_PROVIDER],
+      },
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
@@ -60,11 +65,12 @@ export async function GET() {
   }
 }
 
-/** CRM OAuth is not live yet — use Google Calendar connect route for calendar. */
+/** Prefer Google Calendar / HubSpot connect routes for OAuth. */
 export async function POST() {
   return NextResponse.json(
     {
-      error: 'CRM sync is coming soon. Use GET /api/integrations/google_calendar/connect for calendar OAuth.',
+      error:
+        'Use /api/integrations/hubspot/connect or /api/integrations/google_calendar/connect to start OAuth. Sync via POST /api/integrations/crm/sync.',
     },
     { status: 501 }
   );

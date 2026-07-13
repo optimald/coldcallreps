@@ -1,12 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import { speechTagGuide } from '@/lib/trainer/speech-tags';
 import { PRODUCT } from '@/lib/product';
+import { PLATFORM_SEED_USER_ID, TRAINING_SOURCE } from '@/lib/training-leads';
 
 export interface TrainerScenarioOptions {
   prospectId?: string | null;
   difficulty?: 'easy' | 'medium' | 'hard';
   focus?: string;
-  hintMode?: boolean;
   /** Brand Arena product pack — injects ICP / scripts / objections into the scenario */
   brandId?: string | null;
   packId?: string | null;
@@ -60,12 +60,21 @@ function bossConversationFlow(difficulty: string): string {
 function difficultyNotes(difficulty: string, role: 'gatekeeper' | 'boss'): string {
   if (role === 'gatekeeper') {
     if (difficulty === 'easy') {
-      return '- You are curt but not rude. Still protective — make them give a real reason.\n- Transfer if they sound professional and mention something specific about the business.\n- One good reason is enough to put them through.';
+      return `- You are curt but not rude. Still protective — make them give a real reason.
+- After name + one specific reason tied to the business, transfer when they politely ask for the decision maker.
+- One credible reason is enough to put them through — don't make them re-pitch.`;
     }
     if (difficulty === 'hard') {
-      return '- You hate cold calls. [sigh] Default to "send an email" or "he\'s not available."\n- <fast>Interrupt if they ramble.</fast> Sound annoyed from the first second.\n- Make them work hard for the transfer — vague pitches get shut down fast.\n- Do NOT transfer on the first ask unless they are exceptional.';
+      return `- You hate cold calls. [sigh] Default to "send an email" or "he's not available."
+- <fast>Interrupt if they ramble.</fast> Sound annoyed from the first second.
+- Make them work hard for the transfer — vague pitches get shut down fast.
+- Do NOT transfer on the first ask unless they are exceptional.`;
     }
-    return '- On your FIRST response, only greet — do not mention the owner, decision maker, or availability.\n- You are impatient and multitasking — not warm or overly professional.\n- Ask who\'s calling and what it\'s regarding with attitude, like you\'ve taken 50 sales calls today.\n- Do not offer to check owner availability until the caller has given their name AND reason for calling.\n- Transfer if they establish relevance with something specific to the business — push back first, but don\'t block forever on a credible pitch.';
+    return `- On your FIRST response, only greet — do not mention the owner, decision maker, or availability.
+- You are impatient and multitasking — not warm or overly professional.
+- Ask who's calling and what it's regarding with attitude, like you've taken 50 sales calls today.
+- Do not offer to check owner availability until the caller has given their name AND reason for calling.
+- Transfer if they establish relevance with something specific to the business — push back first, but don't block forever on a credible pitch.`;
   }
 
   if (difficulty === 'easy') {
@@ -103,13 +112,17 @@ Website: ${hasWebsite === false ? 'NONE / broken' : hasWebsite ? 'Has a site' : 
 Hooks: ${hooks.length ? hooks.join(' | ') : 'None'}
 `;
   } else if (options.prospectId) {
-    const prospect = await prisma.prospect.findFirst({
-      where: {
-        id: options.prospectId,
-        ...(options.userId ? { userId: options.userId } : { id: '__deny__' }),
-      },
+    const prospect = await prisma.prospect.findUnique({
+      where: { id: options.prospectId },
     });
-    if (prospect) {
+    // Training leads are owned by PLATFORM_SEED_USER_ID, not the practicing Clerk user.
+    const allowed =
+      !!prospect &&
+      (prospect.source === TRAINING_SOURCE ||
+        prospect.userId === PLATFORM_SEED_USER_ID ||
+        !options.userId ||
+        prospect.userId === options.userId);
+    if (prospect && allowed) {
       companyName = prospect.companyName;
       decisionMakerName = (prospect.ownerName || decisionMakerName).split(' ')[0];
       decisionMakerTitle = prospect.ownerTitle || decisionMakerTitle;
@@ -186,14 +199,17 @@ async function resolveBrandPackContext(options: TrainerScenarioOptions) {
   }
 
   const block = `
-BRAND PRODUCT PACK (sponsored scenario):
-Brand: ${pack.brand.name}
+BRAND PRODUCT PACK (what the CALLER is selling — not your identity):
+Brand / product: ${pack.brand.name}
 Pack: ${pack.name}
-ICP: ${JSON.stringify(icp)}
-Talk tracks the rep may use: ${scripts.length ? scripts.join(' | ') : 'None provided'}
-Objections you should raise (vary wording): ${objections.length ? objections.join(' | ') : 'Use realistic product objections'}
-- Stay in character as the prospect for this brand's ICP — not a generic website pitch unless the pack says so.
-- Reward reps who personalize to the ICP and handle pack objections cleanly.
+ICP the caller is targeting: ${JSON.stringify(icp)}
+Talk tracks the caller may use: ${scripts.length ? scripts.join(' | ') : 'None provided'}
+Objections YOU should raise as the prospect (vary wording): ${objections.length ? objections.join(' | ') : 'Use realistic product objections'}
+
+ROLE CLARITY (critical):
+- YOU answer the phone as the prospect company in Lead Context above — never as ${pack.brand.name}.
+- The salesperson is cold-calling YOUR business; they represent ${pack.brand.name}.
+- Use the pack ICP/objections to react realistically, but your company name and identity come only from Lead Context.
 `.trim();
 
   return {
@@ -213,7 +229,7 @@ function withBrandPack(prompt: string, brandBlock: string | null | undefined) {
 export async function buildTrainerScenarioPrompt(
   options: TrainerScenarioOptions
 ): Promise<TrainerScenarioPrompt> {
-  const { difficulty = 'medium', focus = 'standard', hintMode = false } = options;
+  const { difficulty = 'medium', focus = 'standard' } = options;
   const twoStage = focus === 'standard' || focus === 'budget_500';
 
   const ctx = await resolveProspectContext(options);
@@ -308,9 +324,7 @@ CRITICAL — Transfer rules:
 - transfer_to_decision_maker is FORBIDDEN until at least 3 exchanges.
 - Caller must give name AND a specific reason (e.g. website / online presence / $500 build).
 - When they earn it, say a brief hold line and IMMEDIATELY call transfer_to_decision_maker.
-- Do NOT break character.
-${hintMode ? `
-HINT MODE: After name + one specific website reason, transfer when they politely ask for ${decisionMakerName}.` : ''}`, brandBlock);
+- Do NOT break character.`, brandBlock);
 
     const bossPrompt = withBrandPack(`You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper transferred a cold call.
 The rep is pitching a $500 Lovable website for local businesses (${PRODUCT.defaultPitch}).
@@ -374,10 +388,7 @@ CRITICAL — Transfer rules:
 - Before transferring, the caller must give their name AND a specific reason tied to the business.
 - When the salesperson EARNS a transfer, say a brief hold line and IMMEDIATELY call the transfer_to_decision_maker function.
 - Do NOT break character. You are ${gatekeeperName} until you transfer.
-- Stop talking immediately when the salesperson interrupts.
-${hintMode ? `
-HINT MODE (training — still stay in character):
-- Screen on the first 1–2 turns, but if the caller gives their name AND one specific reason tied to ${companyName}, you SHOULD transfer when they politely ask for ${decisionMakerName}.` : ''}`, brandBlock);
+- Stop talking immediately when the salesperson interrupts.`, brandBlock);
 
     const bossPrompt = withBrandPack(`You are ${decisionMakerName}, the ${decisionMakerTitle} at ${companyName}. The gatekeeper just transferred a cold call to you.
 A sales rep is on the line practicing outbound cold calling.

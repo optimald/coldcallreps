@@ -17,19 +17,15 @@ export type TrainingLeadView = {
   hooksJSON?: string | null;
 };
 
+import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
+
 function parseHooks(hooksJSON?: string | null): string[] {
-  if (!hooksJSON) return [];
-  try {
-    const parsed = JSON.parse(hooksJSON);
-    return Array.isArray(parsed) ? parsed.map(String).slice(0, 3) : [];
-  } catch {
-    return [];
-  }
+  return parseHooksPayload(hooksJSON).slice(0, 3);
 }
 
 function trainerHref(lead: TrainingLeadView) {
-  if (!lead.brandId) return '/trainer';
-  return `/trainer?brandId=${encodeURIComponent(lead.brandId)}`;
+  if (!lead.brandId) return '/practice';
+  return `/practice?brandId=${encodeURIComponent(lead.brandId)}`;
 }
 
 /**
@@ -46,22 +42,22 @@ export default function TrainingLeadsPanel({
 }) {
   return (
     <Panel
-      title={`Training leads (${leads.length})`}
+      title={`Practice leads (${leads.length})`}
       description={
         mode === 'brand'
-          ? 'Practice contacts for your playbook — not paid campaign dials. Reps can dial these from Outbound without a gig.'
-          : 'Practice contacts from demo brands. Dial for reps, or open Trainer with the brand playbook — no gig acceptance required.'
+          ? 'Practice contacts for your playbook — not paid campaign dials. Reps can dial these from Outbound without a brand deal.'
+          : 'Practice contacts from demo brands. Dial for reps, or open Practice with the brand playbook — no brand deal acceptance required.'
       }
       actions={
-        <Link href="/outbound" className="btn-ghost">
+        <Link href="/cold_calls" className="btn-ghost">
           {mode === 'sdr' ? 'Open dialer' : 'Preview dialer'}
         </Link>
       }
     >
       {leads.length === 0 ? (
         <EmptyState
-          title="No training leads yet"
-          description="Run npm run seed:demo-brands to load platform practice contacts, or add your own on the Training tab."
+          title="No practice leads yet"
+          description="Run npm run seed:demo-brands to load platform practice contacts, or add your own on the Practice tab."
           action={emptyAction}
         />
       ) : (
@@ -100,7 +96,7 @@ export default function TrainingLeadsPanel({
                     Practice
                   </Link>
                   <Link
-                    href={`/outbound?lead=${encodeURIComponent(l.id)}&training=1`}
+                    href={`/cold_calls?lead=${encodeURIComponent(l.id)}&training=1`}
                     className="btn"
                   >
                     Dial

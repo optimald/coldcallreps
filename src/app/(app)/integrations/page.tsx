@@ -33,18 +33,23 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [calendar, setCalendar] = useState<CalendarMeta>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch('/api/integrations');
-      const data = await res.json();
-      if (!res.ok) {
+      const [intRes, meRes] = await Promise.all([fetch('/api/integrations'), fetch('/api/me')]);
+      const data = await intRes.json();
+      if (!intRes.ok) {
         setErr(data.error || 'Could not load integrations.');
         return;
       }
       setConnections(data.connections || []);
       setCalendar(data.calendar || {});
+      if (meRes.ok) {
+        const me = await meRes.json().catch(() => null);
+        setRole(me?.platformRole || null);
+      }
     } catch {
       setErr('Could not load integrations.');
     } finally {
@@ -66,6 +71,34 @@ export default function IntegrationsPage() {
 
   function connectGoogle() {
     window.location.href = '/api/integrations/google_calendar/connect';
+  }
+
+  function connectHubspot() {
+    window.location.href = '/api/integrations/hubspot/connect';
+  }
+
+  async function pullCrm() {
+    setBusyId('crm-pull');
+    setMsg('');
+    setErr('');
+    try {
+      const res = await fetch('/api/integrations/crm/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: 'pull' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Pull failed');
+      const n = (data.results || []).reduce(
+        (acc: number, r: { updated?: number }) => acc + (r.updated || 0),
+        0
+      );
+      setMsg(`Pulled CRM updates — ${n} mapped lead${n === 1 ? '' : 's'} updated.`);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Pull failed');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function disconnect(id: string) {
@@ -91,9 +124,13 @@ export default function IntegrationsPage() {
   const googleConn = connections.find(
     (c) => c.provider === 'google_calendar' && c.status === 'connected'
   );
+  const hubspotConn = connections.find(
+    (c) => c.provider === 'hubspot' && c.status === 'connected'
+  );
   const googleAccount = googleConn?.email || googleConn?.externalId || null;
   const canConnect = Boolean(calendar.canConnectCalendar);
   const googleReady = Boolean(calendar.googleConfigured);
+  const hideConnectPayouts = role === 'BRAND' || role === 'RECRUITER';
 
   let googleStatus: { tone: StatusTone; label: string };
   if (!canConnect) {
@@ -111,7 +148,11 @@ export default function IntegrationsPage() {
       <PageHeader
         eyebrow="Workspace"
         title="Integrations"
-        description="Connect calendars for meeting handoffs, CRM for pipeline sync, and payouts when you’re ready to get paid."
+        description={
+          hideConnectPayouts
+            ? 'Connect calendars for meeting handoffs. ColdCallReps Leads is your CRM — HubSpot (and other adapters) only sync.'
+            : 'Connect calendars for meeting handoffs, sync your CRM adapters, and set up payouts when you’re ready to get paid.'
+        }
       />
 
       {msg ? <p className="msg-ok">{msg}</p> : null}
@@ -131,7 +172,7 @@ export default function IntegrationsPage() {
               <div>
                 <h3 className="integration-card__name">Google Calendar</h3>
                 <p className="integration-card__blurb">
-                  OAuth connect for brand meeting handoffs from booked gigs.
+                  OAuth connect for brand meeting handoffs from booked brand deals.
                 </p>
               </div>
               <StatusChip tone={googleStatus.tone} label={googleStatus.label} />
@@ -144,7 +185,7 @@ export default function IntegrationsPage() {
             {!canConnect ? (
               <p className="integration-card__hint">
                 Switch to a Brand account to connect. SDRs book from an{' '}
-                <Link href="/gigs">active gig</Link> once the brand is linked.
+                <Link href="/gigs">active brand deal</Link> once the brand is linked.
               </p>
             ) : null}
 
@@ -205,32 +246,63 @@ export default function IntegrationsPage() {
 
       <section className="integration-section">
         <header className="integration-section__head">
-          <h2 className="integration-section__title">CRM</h2>
+          <h2 className="integration-section__title">CRM sync</h2>
           <p className="integration-section__desc">
-            Push booked meetings and lead outcomes into your pipeline. Full OAuth sync is on the
-            roadmap — not fake workspace links.
+            ColdCallReps Leads is your CRM. Connect an external tool to two-way sync contacts —
+            never a second system of record.
           </p>
         </header>
 
         <div className="integration-grid">
-          <article className="integration-card integration-card--muted">
+          <article className={`integration-card${hubspotConn ? '' : ' integration-card--muted'}`}>
             <div className="integration-card__top">
               <div>
-                <h3 className="integration-card__name">Close</h3>
+                <h3 className="integration-card__name">HubSpot</h3>
                 <p className="integration-card__blurb">
-                  Sales CRM sync for marketplace dials, meetings, and campaign outcomes.
+                  Push enriched leads and pull contact updates. Portal{' '}
+                  {hubspotConn?.externalId ? `#${hubspotConn.externalId}` : 'not linked'}.
                 </p>
               </div>
-              <StatusChip tone="soon" label="Coming soon" />
+              <StatusChip
+                tone={hubspotConn ? 'connected' : 'available'}
+                label={hubspotConn ? 'Connected' : 'Available'}
+              />
+            </div>
+            <div className="integration-card__actions">
+              {hubspotConn ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busyId === 'crm-pull'}
+                    onClick={() => void pullCrm()}
+                  >
+                    {busyId === 'crm-pull' ? 'Pulling…' : 'Pull updates'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={busyId === hubspotConn.id}
+                    onClick={() => void disconnect(hubspotConn.id)}
+                  >
+                    Disconnect
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn" onClick={connectHubspot}>
+                  Connect HubSpot
+                </button>
+              )}
+              <SoftLink href="/leads">Open leads →</SoftLink>
             </div>
           </article>
 
           <article className="integration-card integration-card--muted">
             <div className="integration-card__top">
               <div>
-                <h3 className="integration-card__name">HubSpot</h3>
+                <h3 className="integration-card__name">Close</h3>
                 <p className="integration-card__blurb">
-                  Contacts and deal stages for brands running outbound campaigns.
+                  Sync adapter for dials, meetings, and campaign outcomes.
                 </p>
               </div>
               <StatusChip tone="soon" label="Coming soon" />
@@ -251,6 +323,7 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
+      {!hideConnectPayouts ? (
       <section className="integration-section">
         <header className="integration-section__head">
           <h2 className="integration-section__title">Payouts</h2>
@@ -269,7 +342,7 @@ export default function IntegrationsPage() {
               <div>
                 <h3 className="integration-card__name">Stripe Connect</h3>
                 <p className="integration-card__blurb">
-                  Track gig payouts on Earnings; practice-minute plans stay on Billing.
+                  Track brand deal payouts on Earnings; practice-minute plans stay on Billing.
                 </p>
               </div>
               <StatusChip tone="available" label="Via Earnings" />
@@ -283,6 +356,7 @@ export default function IntegrationsPage() {
           </article>
         </div>
       </section>
+      ) : null}
     </main>
   );
 }

@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageTeam } from '@/lib/plans';
 import { canManageBrand } from '@/lib/roles';
 import { prisma } from '@/lib/prisma';
+import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
 
 type ProfileAuth = Pick<UserProfile, 'id' | 'orgId' | 'plan' | 'platformRole' | 'email'>;
 
@@ -78,12 +79,15 @@ export async function PATCH(
     if (!existing) return NextResponse.json({ error: 'Not found or not allowed' }, { status: 404 });
 
     const body = await req.json();
+    const contentJSON =
+      body.content !== undefined
+        ? JSON.stringify(sanitizePlaybookContent(body.content))
+        : undefined;
     const playbook = await prisma.playbook.update({
       where: { id },
       data: {
         title: body.title ? String(body.title).slice(0, 160) : undefined,
-        contentJSON:
-          body.content !== undefined ? JSON.stringify(body.content) : undefined,
+        contentJSON,
       },
       include: { brand: { select: { id: true, name: true, slug: true } } },
     });

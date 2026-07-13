@@ -1,4 +1,5 @@
 import type { PlatformRole, UserProfile } from '@prisma/client';
+import { brandHref } from '@/lib/brand-context';
 
 export type AppRole = PlatformRole;
 
@@ -46,11 +47,11 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 const I = {
   admin: { href: '/admin', label: 'Admin', icon: 'admin' as const },
   dashboard: { href: '/dashboard', label: 'Home', icon: 'dashboard' as const },
-  trainer: { href: '/trainer', label: 'Trainer', icon: 'trainer' as const },
+  trainer: { href: '/practice', label: 'Practice', icon: 'trainer' as const },
   hiring: { href: '/hiring', label: 'Profile', icon: 'profile' as const },
-  gigs: { href: '/gigs', label: 'Gigs', icon: 'gigs' as const },
+  gigs: { href: '/gigs', label: 'Brand deals', icon: 'gigs' as const },
   earnings: { href: '/earnings', label: 'Earnings', icon: 'earnings' as const },
-  outbound: { href: '/outbound', label: 'Cold Call', icon: 'outbound' as const },
+  outbound: { href: '/cold_calls', label: 'Cold Call', icon: 'outbound' as const },
   campaigns: { href: '/campaigns', label: 'Campaigns', icon: 'campaigns' as const },
   leads: { href: '/leads', label: 'Leads', icon: 'leads' as const },
   brands: { href: '/brands', label: 'Brands', icon: 'brands' as const },
@@ -63,8 +64,48 @@ const I = {
 };
 
 /**
+ * Brand / recruiter nav when a brand is selected (campaigns live under the brand).
+ * Without a brand key, brand-context links fall back to /brands.
+ */
+export function brandNavSections(brandKey: string | null): NavSection[] {
+  const scoped = (path: string) => (brandKey ? brandHref(brandKey, path) : '/brands');
+  return [
+    {
+      id: 'main',
+      label: 'Workspace',
+      items: [I.dashboard, I.brands],
+    },
+    {
+      id: 'brand',
+      label: 'Brand',
+      items: [
+        { href: scoped('campaigns'), label: 'Campaigns', icon: 'campaigns' },
+        { href: scoped('leads'), label: 'Leads', icon: 'leads' },
+        { href: scoped('calls'), label: 'Live calls', icon: 'outbound' },
+      ],
+    },
+    {
+      id: 'sdrs',
+      label: 'SDRs',
+      items: [
+        { href: scoped('sdrs/applications'), label: 'Applications', icon: 'hiring' },
+        { href: scoped('sdrs/team'), label: 'Team', icon: 'team' },
+        { href: scoped('sdrs/stats'), label: 'Stats', icon: 'leaderboard' },
+        { href: scoped('sdrs/payouts'), label: 'Payouts', icon: 'earnings' },
+      ],
+    },
+    {
+      id: 'account',
+      label: 'Account',
+      items: [I.integrations, I.billing, I.settings],
+    },
+  ];
+}
+
+/**
  * Flat ~6–7 tab nav per role (PRD Jul 2026).
  * RECRUITER is demoted: same IA as Brand (no first-class desk).
+ * Brand/RECRUITER static sections are placeholders — AppShell rewrites via brandNavSections.
  */
 export const NAV_SECTIONS_BY_ROLE: Record<AppRole, NavSection[]> = {
   REP: [
@@ -79,31 +120,9 @@ export const NAV_SECTIONS_BY_ROLE: Record<AppRole, NavSection[]> = {
       items: [I.hiring, I.billing, I.settings],
     },
   ],
-  /** Legacy role — Brand IA; /recruiter soft-redirects to /leads */
-  RECRUITER: [
-    {
-      id: 'main',
-      label: 'Grow',
-      items: [I.dashboard, I.campaigns, I.leads, I.brands],
-    },
-    {
-      id: 'account',
-      label: 'Account',
-      items: [I.integrations, I.billing, I.settings],
-    },
-  ],
-  BRAND: [
-    {
-      id: 'main',
-      label: 'Grow',
-      items: [I.dashboard, I.campaigns, I.leads, I.brands],
-    },
-    {
-      id: 'account',
-      label: 'Account',
-      items: [I.integrations, I.billing, I.settings],
-    },
-  ],
+  /** Legacy role — Brand IA; /recruiter soft-redirects to brand leads */
+  RECRUITER: brandNavSections(null),
+  BRAND: brandNavSections(null),
   MANAGER: [
     {
       id: 'main',

@@ -66,45 +66,38 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
         </div>
 
         <div className="lp-ath-hero__overlay">
-          <motion.p
-            className="lp-ath-pretext"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45 }}
-          >
-            Turn leads into customers
-          </motion.p>
-
           <motion.h1
             id="lp-hero-title"
             className="lp-ath-h1 lp-ath-h1--hero"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.06 }}
+            transition={{ duration: 0.55 }}
           >
-            Put in the reps.
-            <br />
-            Fill your calendar.
+            Stop cold calling yourself.
+            <span className="lp-ath-h1__lead">
+              Get booked meetings from reps who actually trained on your product.
+            </span>
           </motion.h1>
 
           <motion.p
             className="lp-ath-sub lp-ath-sub--hero"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.12 }}
+            transition={{ duration: 0.55, delay: 0.08 }}
           >
-            We train SDRs with AI coaching, then they cold call so your brand gets the meetings and
-            attention it deserves.
+            We train independent SDRs with realistic AI voice practice on your offer. Only
+            high-scoring reps can run your campaigns. You pay only when they deliver qualified
+            leads or booked meetings.
           </motion.p>
 
           <motion.div
             className="lp-ath-cta lp-ath-cta--hero"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.18 }}
+            transition={{ duration: 0.55, delay: 0.14 }}
           >
             <Link href="/sign-up?role=BRAND" className="lp-ath-btn lp-ath-btn--primary">
-              Post a campaign
+              Post a Campaign
             </Link>
             <Link href="/sign-up?role=REP" className="lp-ath-btn lp-ath-btn--ghost">
               Join as an SDR
@@ -113,22 +106,19 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
         </div>
       </section>
 
-      {/* ─── Train → Call → Book ─── */}
+      {/* ─── Value proposition ─── */}
       <section className="lp-ath-bridge" id="how-it-works">
         <Reveal>
-          <p className="lp-ath-kicker">Turn leads into customers</p>
-          <h2 className="lp-ath-h2">You build the brand. We warm the leads.</h2>
-          <p className="lp-ath-sub" style={{ marginLeft: 0, marginBottom: '2rem', textAlign: 'left' }}>
-            Human SDRs, trained on your product with AI coaching — then they call until meetings land.
-          </p>
+          <h2 className="lp-ath-h2">You build the product. We fill the calendar.</h2>
         </Reveal>
 
         <div className="lp-ath-tri">
           <Reveal className="lp-ath-col">
             <p className="lp-ath-col__label">Train</p>
-            <h3 className="lp-ath-col__title">Product-ready SDRs</h3>
+            <h3 className="lp-ath-col__title">Product-Ready Reps</h3>
             <p className="lp-ath-col__body">
-              AI coaching on your pitch, objections, and ICP — until scores prove they’re ready.
+              Trained on your pitch, objections, and ICP. They hit the gatekeeper, handle pushback,
+              and earn the transfer — before they ever call your leads.
             </p>
             <div className="lp-ath-bio" aria-hidden>
               {METRICS.map((m) => (
@@ -145,9 +135,10 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
 
           <Reveal className="lp-ath-col lp-ath-col--center">
             <p className="lp-ath-col__label">Call</p>
-            <h3 className="lp-ath-col__title">Humans on the dial</h3>
+            <h3 className="lp-ath-col__title">Humans on the Dial</h3>
             <p className="lp-ath-col__body">
-              Certified reps run live outbound for your brand. AI coaches; people dial.
+              Real reps. Real voices. Live AI coaching during calls. No robocalls. Just sharp,
+              prepared humans representing your brand.
             </p>
             <div className="lp-ath-mock lp-ath-mock--volume" aria-hidden>
               <span>Live dials</span>
@@ -158,9 +149,10 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
 
           <Reveal className="lp-ath-col">
             <p className="lp-ath-col__label">Book</p>
-            <h3 className="lp-ath-col__title">Meetings on the calendar</h3>
+            <h3 className="lp-ath-col__title">Meetings on Your Calendar</h3>
             <p className="lp-ath-col__body">
-              Verified booked meetings — the attention your brand is missing.
+              Verified booked meetings land directly in your Google or Microsoft calendar. Clean
+              data pushed to Close.com. No guesswork.
             </p>
             <div className="lp-ath-gift" aria-hidden>
               <strong>Meeting booked</strong>
@@ -173,20 +165,20 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
       {/* ─── Matching ─── */}
       <section className="lp-ath-lab" id="lab">
         <Reveal>
-          <p className="lp-ath-kicker">Matching</p>
-          <h2 className="lp-ath-h2">High scores unlock brand campaigns.</h2>
-          <p className="lp-ath-sub" style={{ marginLeft: 0, marginTop: '0.75rem', maxWidth: '42ch' }}>
-            Top SDRs get matched to founder-led brands. Brands get proven callers — not cold resumes.
+          <h2 className="lp-ath-h2">High scores unlock real campaigns.</h2>
+          <p className="lp-ath-sub" style={{ marginLeft: 0, marginTop: '0.75rem', maxWidth: '46ch' }}>
+            Proven skill beats resumes. Only reps who consistently crush brand-specific practice get
+            access to paid gigs.
           </p>
         </Reveal>
 
         <div className="lp-ath-lab-grid">
           <Reveal className="lp-ath-card">
             <p className="lp-ath-card__eyebrow">For SDRs</p>
-            <h3>Score high. Get matched.</h3>
+            <h3>Score high. Get matched. Get paid for booked meetings.</h3>
             <p>
-              Train on the brand pack, hit the score gate, then apply. Winners get activated onto live
-              campaigns and paid for booked meetings.
+              Train on the brand pack, hit the score gate, then apply. Winners get activated onto
+              live campaigns.
             </p>
             <Link href="/sign-up?role=REP" className="lp-ath-link">
               Join as an SDR →
@@ -194,12 +186,9 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
           </Reveal>
 
           <Reveal className="lp-ath-card">
-            <p className="lp-ath-card__eyebrow">For brands</p>
-            <h3>Hire proof, not promises</h3>
-            <p>
-              Post a campaign. Only high-scoring, certified SDRs unlock apply — then they call for your
-              brand.
-            </p>
+            <p className="lp-ath-card__eyebrow">For Brands</p>
+            <h3>Post a campaign. Only battle-tested reps can apply.</h3>
+            <p>You only pay for results — qualified leads or booked meetings.</p>
             <div className="lp-ath-rank" aria-label="Example top scorers">
               {BOARD.map((r) => (
                 <div key={r.rank} className="lp-ath-rank__row">
@@ -210,7 +199,7 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
               ))}
             </div>
             <Link href="/sign-up?role=BRAND" className="lp-ath-link" style={{ marginTop: '1rem', display: 'inline-block' }}>
-              Post a campaign →
+              Post a Campaign →
             </Link>
           </Reveal>
         </div>
@@ -219,20 +208,19 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
       {/* ─── SDR testimonial ─── */}
       <section className="lp-ath-quote" id="sdr-story" aria-labelledby="lp-sdr-quote-title">
         <Reveal>
-          <p className="lp-ath-kicker">From an SDR</p>
-          <h2 id="lp-sdr-quote-title" className="lp-ath-h2">
-            Proof before the paycheck.
+          <h2 id="lp-sdr-quote-title" className="lp-ath-kicker">
+            From an SDR
           </h2>
         </Reveal>
         <div className="lp-ath-quote__grid">
           <Reveal className="lp-ath-quote__copy">
             <blockquote className="lp-ath-quote__text">
-              “I trained on the brand pack, hit the score gate, and got activated the same week. Real
-              campaigns — not resume spam.”
+              “I trained on the brand pack for 3 days, hit the score, and booked 11 meetings in my
+              first month.”
             </blockquote>
             <p className="lp-ath-quote__by">
               <strong>Maya R.</strong>
-              <span>SDR · booked 11 meetings in month one</span>
+              <span>Independent SDR</span>
             </p>
             <Link href="/sign-up?role=REP" className="lp-ath-link">
               Join as an SDR →
@@ -256,9 +244,8 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
       {/* ─── Brand testimonial ─── */}
       <section className="lp-ath-quote lp-ath-quote--brand" id="brand-story" aria-labelledby="lp-brand-quote-title">
         <Reveal>
-          <p className="lp-ath-kicker">From a founder</p>
-          <h2 id="lp-brand-quote-title" className="lp-ath-h2">
-            Attention for a brand nobody knew yet.
+          <h2 id="lp-brand-quote-title" className="lp-ath-kicker">
+            From a Founder
           </h2>
         </Reveal>
         <div className="lp-ath-quote__grid lp-ath-quote__grid--flip">
@@ -277,14 +264,14 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
           <Reveal className="lp-ath-quote__copy">
             <blockquote className="lp-ath-quote__text">
               “We posted a campaign and only high-scoring SDRs could apply. They already knew our
-              pitch — meetings showed up on the calendar.”
+              pitch — meetings showed up on the calendar the same week.”
             </blockquote>
             <p className="lp-ath-quote__by">
               <strong>Jordan K.</strong>
-              <span>Founder · B2B SaaS</span>
+              <span>Founder @ B2B SaaS</span>
             </p>
             <Link href="/sign-up?role=BRAND" className="lp-ath-link">
-              Post a campaign →
+              Post a Campaign →
             </Link>
           </Reveal>
         </div>
@@ -335,17 +322,18 @@ export default function HomePageClient({ faqs }: { faqs: readonly HomeFaqItem[] 
             Start putting in the reps.
           </h2>
           <p className="lp-ath-sub lp-ath-sub--final">
-            Join the elite outbound teams building an unstoppable sales engine.
+            Join the platform where founders get qualified outbound without becoming full-time
+            callers.
           </p>
           <div className="lp-ath-cta">
             <Link href="/sign-up?role=REP" className="lp-ath-btn lp-ath-btn--primary">
-              Sign up as a rep
+              Sign Up as a Rep
             </Link>
             <Link href="/gigs" className="lp-ath-btn lp-ath-btn--ghost">
-              Browse gigs
+              Browse Brand Deals
             </Link>
             <Link href="/sign-up?role=BRAND" className="lp-ath-btn lp-ath-btn--ghost">
-              Post a campaign
+              Post a Campaign
             </Link>
           </div>
         </Reveal>

@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import BrandLogo from '@/components/BrandLogo';
 import BrandPhonePoolPanel from '@/components/BrandPhonePoolPanel';
+import BrandDeskKpis from '@/components/BrandDeskKpis';
 import { EmptyState } from '@/components/ui/PagePrimitives';
+import { brandHref, brandPathKey } from '@/lib/brand-context';
 
 export default function BrandDetailPage() {
   const params = useParams();
@@ -188,7 +190,7 @@ export default function BrandDetailPage() {
   const practiceQs = new URLSearchParams({ brandId: brand.id });
   if (primaryPack) practiceQs.set('packId', primaryPack.id);
   if (primaryPlaybook) practiceQs.set('playbookId', primaryPlaybook.id);
-  const practiceHref = `/trainer?${practiceQs.toString()}`;
+  const practiceHref = `/practice?${practiceQs.toString()}`;
   const canEdit = Boolean(brand.canEdit);
 
   return (
@@ -227,10 +229,16 @@ export default function BrandDetailPage() {
             </p>
             <div className="brand-desk__actions">
               <Link href={practiceHref} className="btn">
-                Practice in trainer →
+                Practice →
               </Link>
-              <Link href="/campaigns" className="btn-ghost">
+              <Link href={brandHref(brand, 'campaigns')} className="btn-ghost">
                 Campaigns
+              </Link>
+              <Link href={brandHref(brand, 'leads')} className="btn-ghost">
+                Leads
+              </Link>
+              <Link href={brandHref(brand, 'sdrs', 'applications')} className="btn-ghost">
+                SDRs
               </Link>
               {canEdit ? (
                 <button
@@ -242,9 +250,30 @@ export default function BrandDetailPage() {
                 </button>
               ) : null}
             </div>
+            <p className="brand-desk__meta" style={{ marginTop: '0.85rem' }}>
+              <Link href={brandHref(brand, 'calls')} className="soft-link">
+                Live calls
+              </Link>
+              <span aria-hidden>·</span>
+              <Link href={brandHref(brand, 'sdrs', 'team')} className="soft-link">
+                Team
+              </Link>
+              <span aria-hidden>·</span>
+              <Link href={brandHref(brand, 'sdrs', 'stats')} className="soft-link">
+                Stats
+              </Link>
+              <span aria-hidden>·</span>
+              <Link href={brandHref(brand, 'sdrs', 'payouts')} className="soft-link">
+                Payouts
+              </Link>
+            </p>
           </div>
         </div>
       </header>
+
+      {canEdit ? <BrandDeskKpis brandKey={brandPathKey(brand)} /> : null}
+
+      {msg ? <p className={msg.includes('Could') || msg.includes('fail') ? 'msg-err' : 'msg-ok'}>{msg}</p> : null}
 
       {showSettings && canEdit ? (
         <section className="brand-section brand-section--settings" aria-labelledby="brand-settings">
@@ -310,7 +339,7 @@ export default function BrandDetailPage() {
               Packs & playbooks
             </h2>
             <p className="brand-section__lead">
-              Talk tracks inject into the trainer cheat sheet and live coach.
+              Talk tracks inject into the Practice playbook and live coach. Reps should review before dialing.
             </p>
           </div>
         </div>
@@ -328,7 +357,7 @@ export default function BrandDetailPage() {
                   return (
                     <li key={p.id}>
                       <span>{p.name}</span>
-                      <Link href={`/trainer?${qs.toString()}`}>Practice →</Link>
+                      <Link href={`/practice?${qs.toString()}`}>Practice →</Link>
                     </li>
                   );
                 })}
@@ -375,7 +404,7 @@ export default function BrandDetailPage() {
                       <span>{pb.title}</span>
                       <span className="brand-list__links">
                         <Link href={`/playbooks/${pb.id}`}>Edit</Link>
-                        <Link href={`/trainer?${qs.toString()}`}>Practice →</Link>
+                        <Link href={`/practice?${qs.toString()}`}>Practice →</Link>
                       </span>
                     </li>
                   );
@@ -479,10 +508,10 @@ export default function BrandDetailPage() {
         {certs.length === 0 ? (
           <EmptyState
             title="None yet"
-            description="Send reps into the trainer with your pack — certifications show up here."
+            description="Send reps into Practice with your pack — certifications show up here."
             action={
               <Link href={practiceHref} className="btn-ghost">
-                Open trainer →
+                Open Practice →
               </Link>
             }
           />
@@ -499,8 +528,6 @@ export default function BrandDetailPage() {
           </ul>
         )}
       </section>
-
-      {msg ? <p className="msg-ok">{msg}</p> : null}
     </main>
   );
 }

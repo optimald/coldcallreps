@@ -39,7 +39,7 @@ export async function assertCanApplyToCampaign(opts: {
   const minScore = opts.campaign.minScore ?? DEFAULT_CAMPAIGN_MIN_SCORE;
   const minSessions = opts.campaign.minPracticeSessions ?? DEFAULT_MIN_PRACTICE_SESSIONS;
   const requireCert = opts.campaign.requireCertification !== false;
-  const href = practiceHref(opts.campaign) || `/trainer?brandId=${opts.campaign.brandId}`;
+  const href = practiceHref(opts.campaign) || `/practice?brandId=${opts.campaign.brandId}`;
 
   const [sessions, cert] = await Promise.all([
     prisma.trainerSession.findMany({
@@ -68,7 +68,7 @@ export async function assertCanApplyToCampaign(opts: {
     return {
       ok: false,
       code: 'PRACTICE_REQUIRED',
-      error: `Complete at least ${minSessions} AI trainer session${minSessions === 1 ? '' : 's'} on this brand pack before applying.`,
+      error: `Complete at least ${minSessions} practice session${minSessions === 1 ? '' : 's'} on this brand pack before applying.`,
       status: 403,
       practiceHref: href,
       bestScore,
@@ -84,7 +84,7 @@ export async function assertCanApplyToCampaign(opts: {
     return {
       ok: false,
       code: 'SCORE_REQUIRED',
-      error: `Score at least ${minScore} on a trainer session for this brand (best: ${bestScore ?? 'none'}).`,
+      error: `Score at least ${minScore} on a practice session for this brand (best: ${bestScore ?? 'none'}).`,
       status: 403,
       practiceHref: href,
       bestScore,
@@ -100,7 +100,7 @@ export async function assertCanApplyToCampaign(opts: {
     return {
       ok: false,
       code: 'CERTIFICATION_REQUIRED',
-      error: 'Earn brand certification in the trainer (usually score ≥80) before applying.',
+      error: 'Earn brand certification in Practice (usually score ≥80) before applying.',
       status: 403,
       practiceHref: href,
       bestScore,

@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import BrandLogo from '@/components/BrandLogo';
+import { useRouter } from 'next/navigation';
 import CheatSheetPanel, { type CheatSheetSection } from '@/components/CheatSheetPanel';
+import FloatingCallWidget, { type CallDisposition } from '@/components/FloatingCallWidget';
+import CallWrapUpPanel from '@/components/CallWrapUpPanel';
 import { useTwilioCall } from '@/hooks/useTwilioCall';
+import { parseHooks as parseHooksPayload } from '@/lib/prospect-intel';
 
 export type OutboundProspect = {
   id: string;
@@ -78,20 +81,8 @@ function LockIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-function formatDuration(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 function parseHooks(hooksJSON?: string | null): string[] {
-  if (!hooksJSON) return [];
-  try {
-    const parsed = JSON.parse(hooksJSON);
-    return Array.isArray(parsed) ? parsed.map(String).slice(0, 4) : [];
-  } catch {
-    return [];
-  }
+  return parseHooksPayload(hooksJSON).slice(0, 4);
 }
 
 export default function OutboundDialer({
@@ -113,11 +104,17 @@ export default function OutboundDialer({
   const [manualNumber, setManualNumber] = useState('');
   const [activeProspectId, setActiveProspectId] = useState<string | null>(null);
   const [wrapNotes, setWrapNotes] = useState('');
+  const [wrapDisposition, setWrapDisposition] = useState<CallDisposition | null>(null);
+  const [wrapSaving, setWrapSaving] = useState(false);
   const [lastEnded, setLastEnded] = useState<{ duration: number; callLogId: string | null } | null>(
     null
   );
+  const router = useRouter();
   const [cheatOpen, setCheatOpen] = useState(false);
   const [cheatSections, setCheatSections] = useState<CheatSheetSection[]>([]);
+  const [cheatProductUrl, setCheatProductUrl] = useState<string | undefined>();
+  const [cheatTrainingImages, setCheatTrainingImages] = useState<string[]>([]);
+  const [cheatTrainingVideoUrl, setCheatTrainingVideoUrl] = useState<string | undefined>();
   const [cheatLoading, setCheatLoading] = useState(false);
 
   const withPhone = useMemo(
@@ -160,29 +157,63 @@ export default function OutboundDialer({
   } = useTwilioCall({
     onCallEnded: (duration, callLogId) => {
       setLastEnded({ duration, callLogId });
-      setActiveProspectId(null);
     },
   });
+
+  useEffect(() => {
+    if (!lastEnded) return;
+    setWrapNotes('');
+  }, [lastEnded?.callLogId, lastEnded?.duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function startCall(phone: string, prospectId?: string) {
     if (!hasAcceptedCampaign) return;
     setLastEnded(null);
     setWrapNotes('');
+    setWrapDisposition(null);
     setActiveProspectId(prospectId || null);
     if (prospectId) setSelectedId(prospectId);
     await makeCall(phone, prospectId, undefined, campaignId || undefined);
   }
 
-  async function saveWrap(outcome: string) {
-    if (!lastEnded?.callLogId && !currentCallLogId) return;
-    const id = lastEnded?.callLogId || currentCallLogId;
-    await fetch('/api/calls/outbound', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callLogId: id, outcome, notes: wrapNotes, status: 'completed' }),
-    });
+  async function saveOutboundWrap() {
+    if (!wrapDisposition) return;
+    if (!lastEnded?.callLogId && !currentCallLogId) {
+      setLastEnded(null);
+      setActiveProspectId(null);
+      return;
+    }
+    setWrapSaving(true);
+    try {
+      const id = lastEnded?.callLogId || currentCallLogId;
+      await fetch('/api/calls/outbound', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callLogId: id,
+          outcome: wrapDisposition,
+          notes: wrapNotes,
+          status: 'completed',
+        }),
+      });
+      setLastEnded(null);
+      setWrapNotes('');
+      setWrapDisposition(null);
+      setActiveProspectId(null);
+    } finally {
+      setWrapSaving(false);
+    }
+  }
+
+  function skipOutboundWrap() {
     setLastEnded(null);
     setWrapNotes('');
+    setWrapDisposition(null);
+    setActiveProspectId(null);
+  }
+
+  function openLeadRecord() {
+    if (!selected) return;
+    router.push(`/leads/${selected.id}?from=cold_calls`);
   }
 
   const openCheatSheet = useCallback(async () => {
@@ -201,8 +232,45 @@ export default function OutboundDialer({
       });
       const data = await res.json();
       setCheatSections(data.sections || []);
+      let productUrl = typeof data.productUrl === 'string' ? data.productUrl : undefined;
+      let trainingImages = Array.isArray(data.trainingImages)
+        ? data.trainingImages.map(String)
+        : [];
+      let trainingVideoUrl =
+        typeof data.trainingVideoUrl === 'string' ? data.trainingVideoUrl : undefined;
+
+      if (
+        primaryGig?.playbookId &&
+        (!productUrl || !trainingImages.length || !trainingVideoUrl)
+      ) {
+        try {
+          const pbRes = await fetch(`/api/playbooks/${primaryGig.playbookId}`);
+          if (pbRes.ok) {
+            const pbData = await pbRes.json();
+            const content = JSON.parse(pbData?.playbook?.contentJSON || '{}');
+            if (!productUrl && typeof content.productUrl === 'string') {
+              productUrl = content.productUrl;
+            }
+            if (!trainingImages.length && Array.isArray(content.trainingImages)) {
+              trainingImages = content.trainingImages.map(String);
+            }
+            if (!trainingVideoUrl && typeof content.trainingVideoUrl === 'string') {
+              trainingVideoUrl = content.trainingVideoUrl;
+            }
+          }
+        } catch {
+          /* ignore fallback errors */
+        }
+      }
+
+      setCheatProductUrl(productUrl);
+      setCheatTrainingImages(trainingImages);
+      setCheatTrainingVideoUrl(trainingVideoUrl);
     } catch {
       setCheatSections([]);
+      setCheatProductUrl(undefined);
+      setCheatTrainingImages([]);
+      setCheatTrainingVideoUrl(undefined);
     } finally {
       setCheatLoading(false);
     }
@@ -234,15 +302,15 @@ export default function OutboundDialer({
                 </span>
                 <p className="cc-desk__gate-title">Campaign dials locked</p>
                 <p className="cc-desk__gate-desc">
-                  Apply to a gig, then wait for the brand to accept you. Warm up on Trainer anytime —
+                  Apply to a brand deal, then wait for the brand to accept you. Warm up on Practice anytime —
                   this desk is for paid outbound only.
                 </p>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <Link href="/gigs" className="btn">
-                    Browse gigs
+                    Browse brand deals
                   </Link>
-                  <Link href="/trainer" className="btn-ghost">
-                    Trainer →
+                  <Link href="/practice" className="btn-ghost">
+                    Practice →
                   </Link>
                 </div>
                 {pendingApps.length > 0 && (
@@ -262,10 +330,10 @@ export default function OutboundDialer({
               <div className="cc-desk__gate">
                 <p className="cc-desk__gate-title">No campaign leads yet</p>
                 <p className="cc-desk__gate-desc">
-                  Your accepted gig has no dialable leads yet. Ask the brand to load contacts.
+                  Your accepted brand deal has no dialable leads yet. Ask the brand to load contacts.
                 </p>
                 <Link href="/gigs" className="btn-ghost">
-                  Browse gigs →
+                  Browse brand deals →
                 </Link>
               </div>
             ) : (
@@ -299,7 +367,7 @@ export default function OutboundDialer({
 
           <div className="cc-desk__col-foot">
             <Link href="/gigs" className="cc-desk__foot-link">
-              Browse gigs →
+              Browse brand deals →
             </Link>
           </div>
         </section>
@@ -320,7 +388,7 @@ export default function OutboundDialer({
           </div>
 
           <div className="cc-desk__col-body cc-desk__dialer-body">
-            {(incomingCall || (incomingFrom && isCallActive)) && (
+            {(incomingCall || (incomingFrom && isCallActive)) && !lastEnded && (
               <div className="cc-desk__live-bar" style={{ borderColor: 'var(--mint, var(--accent-2))' }}>
                 <div className="cc-desk__live-info">
                   <span className="cc-desk__live-dot" />
@@ -334,170 +402,114 @@ export default function OutboundDialer({
               </div>
             )}
 
-            {isCallActive && (
-              <div className="cc-desk__live-bar">
-                <div className="cc-desk__live-info">
-                  <span className="cc-desk__live-dot" />
-                  <div>
-                    <strong>On call</strong>
-                    <div className="muted" style={{ fontSize: '0.8rem' }}>
-                      To {callerNumber} · {formatDuration(callDuration)}
-                      {fromNumber ? (
-                        <>
-                          <br />
-                          CID {fromNumber}
-                          {matchedLocal ? ' · local presence' : ''}
-                          {dialBrandName ? ` · ${dialBrandName}` : ''}
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="cc-desk__live-actions">
-                  <button type="button" className="btn-ghost" onClick={toggleMute}>
-                    {isMuted ? 'Unmute' : 'Mute'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={endCall}
-                    style={{ background: 'var(--bad)', borderColor: 'var(--bad)' }}
-                  >
-                    Hang up
-                  </button>
-                </div>
-              </div>
-            )}
-
             {error && (
               <p className="cc-desk__error" role="alert">
                 {error}
               </p>
             )}
 
-            {hasAcceptedCampaign && (
-              <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 0.75rem' }}>
-                Caller ID uses the brand&apos;s local pool (never your personal number). Callbacks
-                route to you for 48 hours after you dial.
-              </p>
-            )}
+            {lastEnded ? (
+              <CallWrapUpPanel
+                companyName={selected?.companyName || 'Outbound call'}
+                durationSecs={lastEnded.duration}
+                notes={wrapNotes}
+                onNotesChange={setWrapNotes}
+                disposition={wrapDisposition}
+                onDisposition={setWrapDisposition}
+                onSave={() => void saveOutboundWrap()}
+                onSkip={skipOutboundWrap}
+                onEditLead={selected ? openLeadRecord : undefined}
+                saving={wrapSaving}
+                mode="outbound"
+              />
+            ) : (
+              <>
+                {hasAcceptedCampaign && (
+                  <p className="muted" style={{ fontSize: '0.8rem', margin: '0 0 0.75rem' }}>
+                    Caller ID uses the brand&apos;s local pool (never your personal number). Callbacks
+                    route to you for 48 hours after you dial.
+                  </p>
+                )}
 
-            {selected && hasAcceptedCampaign ? (
-              <div className="cc-desk__active-card">
-                {selected.brandName && (
-                  <div className="cc-desk__brand-row">
-                    <BrandLogo name={selected.brandName} slug={selected.brandSlug} size="sm" />
-                    <span className="muted" style={{ fontSize: '0.8rem' }}>
-                      {selected.brandName}
+                {selected && hasAcceptedCampaign && !isCallActive ? (
+                  <div className="cc-desk__start-strip">
+                    <button
+                      type="button"
+                      className="btn cc-desk__call-btn"
+                      disabled={!selected.phone}
+                      onClick={() => selected.phone && void startCall(selected.phone, selected.id)}
+                    >
+                      <PhoneIcon />
+                      Call
+                    </button>
+                  </div>
+                ) : !hasAcceptedCampaign ? (
+                  <div className="cc-desk__idle">
+                    <span className="cc-desk__gate-icon" aria-hidden>
+                      <LockIcon size={18} />
                     </span>
+                    <p className="cc-desk__gate-title">Waiting on brand accept</p>
+                    <p className="cc-desk__gate-desc">
+                      Warm up with AI voice on Practice, or browse brand deals to apply for paid dials.
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Link href="/practice" className="btn-ghost">
+                        Open Practice
+                      </Link>
+                      <Link href="/gigs" className="btn">
+                        Browse brand deals
+                      </Link>
+                    </div>
+                  </div>
+                ) : !selected ? (
+                  <div className="cc-desk__idle">
+                    <p className="cc-desk__gate-title">Select a lead</p>
+                    <p className="cc-desk__gate-desc">Pick someone from the queue to dial.</p>
+                  </div>
+                ) : null}
+
+                {canManualDial && !isCallActive && (
+                  <div className="cc-desk__manual">
+                    <label className="cc-desk__manual-label" htmlFor="cc-manual-dial">
+                      Manual dial (accepted campaigns)
+                    </label>
+                    <div className="cc-desk__manual-row">
+                      <input
+                        id="cc-manual-dial"
+                        type="tel"
+                        className="field"
+                        placeholder="Campaign number"
+                        value={manualNumber}
+                        onChange={(e) => setManualNumber(e.target.value)}
+                        disabled={isCallActive}
+                      />
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={isCallActive || !manualNumber.trim()}
+                        onClick={() => void startCall(manualNumber.trim())}
+                      >
+                        <PhoneIcon />
+                        Call
+                      </button>
+                    </div>
                   </div>
                 )}
-                <h2 className="cc-desk__active-name">{selected.companyName}</h2>
-                <p className="cc-desk__active-contact">
-                  {selected.ownerName || 'Contact'}
-                  {selected.ownerTitle ? ` · ${selected.ownerTitle}` : ''}
-                </p>
-                <p className="cc-desk__active-phone">{selected.phone || 'No phone'}</p>
-                <button
-                  type="button"
-                  className="btn cc-desk__call-btn"
-                  disabled={isCallActive || !selected.phone}
-                  onClick={() => selected.phone && void startCall(selected.phone, selected.id)}
-                >
-                  <PhoneIcon />
-                  Call
-                </button>
-              </div>
-            ) : !hasAcceptedCampaign ? (
-              <div className="cc-desk__idle">
-                <span className="cc-desk__gate-icon" aria-hidden>
-                  <LockIcon size={18} />
-                </span>
-                <p className="cc-desk__gate-title">Waiting on brand accept</p>
-                <p className="cc-desk__gate-desc">
-                  Warm up with AI voice on Trainer, or browse gigs to apply for paid dials.
-                </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    flexWrap: 'wrap',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Link href="/trainer" className="btn-ghost">
-                    Open Trainer
-                  </Link>
-                  <Link href="/gigs" className="btn">
-                    Browse gigs
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="cc-desk__idle">
-                <p className="cc-desk__gate-title">Select a lead</p>
-                <p className="cc-desk__gate-desc">Pick someone from the queue to dial.</p>
-              </div>
-            )}
 
-            {canManualDial && (
-              <div className="cc-desk__manual">
-                <label className="cc-desk__manual-label" htmlFor="cc-manual-dial">
-                  Manual dial (accepted campaigns)
-                </label>
-                <div className="cc-desk__manual-row">
-                  <input
-                    id="cc-manual-dial"
-                    type="tel"
-                    className="field"
-                    placeholder="Campaign number"
-                    value={manualNumber}
-                    onChange={(e) => setManualNumber(e.target.value)}
-                    disabled={isCallActive}
-                  />
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={isCallActive || !manualNumber.trim()}
-                    onClick={() => void startCall(manualNumber.trim())}
-                  >
-                    <PhoneIcon />
-                    Call
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {lastEnded && (
-              <div className="cc-desk__wrap">
-                <strong>Call ended · {formatDuration(lastEnded.duration)}</strong>
-                <textarea
-                  className="field"
-                  rows={2}
-                  placeholder="Notes (optional)"
-                  value={wrapNotes}
-                  onChange={(e) => setWrapNotes(e.target.value)}
-                />
-                <div className="cc-desk__wrap-actions">
-                  {['interested', 'callback', 'voicemail', 'not_interested', 'no_answer'].map((o) => (
-                    <button
-                      key={o}
-                      type="button"
-                      className="btn-ghost"
-                      onClick={() => void saveWrap(o)}
-                    >
-                      {o.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {configured === false && (
-              <p className="cc-desk__twilio-hint muted">
-                Voice needs Twilio env vars. Point the TwiML App Voice URL to{' '}
-                <code>/api/twilio/voice</code>.
-              </p>
+                {configured === false && (
+                  <p className="cc-desk__twilio-hint muted">
+                    Voice needs Twilio env vars. Point the TwiML App Voice URL to{' '}
+                    <code>/api/twilio/voice</code>.
+                  </p>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -506,6 +518,16 @@ export default function OutboundDialer({
         <section className="cc-desk__col cc-desk__context" aria-label="Lead context">
           <div className="cc-desk__col-head">
             <strong>Context</strong>
+            {selected && hasAcceptedCampaign ? (
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem' }}
+                onClick={openLeadRecord}
+              >
+                Open record
+              </button>
+            ) : null}
           </div>
           <div className="cc-desk__col-body">
             {selected && hasAcceptedCampaign ? (
@@ -579,15 +601,15 @@ export default function OutboundDialer({
                   <h4 className="cc-desk__ctx-label">Playbook</h4>
                   {primaryGig?.playbookId || primaryGig?.packId ? (
                     <p className="cc-desk__gate-desc" style={{ marginBottom: '0.65rem' }}>
-                      Talk track for {primaryGig.title}. Warm up in Trainer before paid dials.
+                      Talk track for {primaryGig.title}. Warm up in Practice before paid dials.
                     </p>
                   ) : (
                     <p className="cc-desk__gate-desc" style={{ marginBottom: '0.65rem' }}>
-                      Open cues for this lead, or warm up with AI voice on Trainer.
+                      Open cues for this lead, or warm up with AI voice on Practice.
                     </p>
                   )}
                   <button type="button" className="btn-ghost" onClick={() => void openCheatSheet()}>
-                    Open playbook cheat →
+                    Review playbook →
                   </button>
                 </div>
               </>
@@ -603,7 +625,7 @@ export default function OutboundDialer({
                 </p>
                 <p className="cc-desk__gate-desc">
                   {!hasAcceptedCampaign
-                    ? 'After a brand accepts your application, lead details and playbook cheats show here.'
+                    ? 'After a brand accepts your application, lead details and the playbook to review before dialing show here.'
                     : 'Select a queue row to see contact details, hooks, and playbook links.'}
                 </p>
                 {activeGigs.length > 0 && (
@@ -622,8 +644,8 @@ export default function OutboundDialer({
                   </ul>
                 )}
                 {!hasAcceptedCampaign && (
-                  <Link href="/trainer" className="btn-ghost" style={{ marginTop: '0.65rem' }}>
-                    Warm up on Trainer →
+                  <Link href="/practice" className="btn-ghost" style={{ marginTop: '0.65rem' }}>
+                    Warm up on Practice →
                   </Link>
                 )}
               </div>
@@ -632,11 +654,35 @@ export default function OutboundDialer({
         </section>
       </div>
 
+      <FloatingCallWidget
+        open={isCallActive && !lastEnded}
+        title={selected?.companyName || callerNumber || 'Outbound call'}
+        subtitle={
+          fromNumber
+            ? `CID ${fromNumber}${matchedLocal ? ' · local' : ''}${dialBrandName ? ` · ${dialBrandName}` : ''}`
+            : callerNumber || undefined
+        }
+        statusLabel={incomingCall || incomingFrom ? 'Inbound / on call' : 'On call'}
+        durationSecs={callDuration}
+        onEnd={endCall}
+        endLabel="Hang up"
+        muted={isMuted}
+        onToggleMute={toggleMute}
+        dispositions
+        onQuickDisposition={(id) => {
+          setWrapDisposition(id);
+          endCall();
+        }}
+      />
+
       <CheatSheetPanel
         open={cheatOpen}
         onClose={() => setCheatOpen(false)}
         sections={cheatSections}
         loading={cheatLoading}
+        productUrl={cheatProductUrl}
+        trainingImages={cheatTrainingImages}
+        trainingVideoUrl={cheatTrainingVideoUrl}
       />
     </>
   );

@@ -102,16 +102,59 @@ export class TrainerSession extends DurableObject<Env> {
   private pendingBossGreeting = false;
   private pendingSilenceResponse = false;
   private sessionDifficulty = 'medium';
-  private hintMode = false;
   private prospectSpeaking = false;
   private audioStreamForResponse: string | null = null;
   private activeResponseId: string | null = null;
   private cancelledResponseIds = new Set<string>();
+  private audioChunksSent = 0;
+  private audioPcmBytesSent = 0;
+  private greetingBargeInTimer: ReturnType<typeof setTimeout> | null = null;
   private phase = 'prospect';
   private scenario: Scenario | null = null;
 
   private readonly SILENCE_PROMPT_MS = 9000;
   private readonly MAX_SILENCE_PROMPTS = 2;
+
+  private pcmMsFromBytes(bytes: number) {
+    return Math.round((bytes / 2 / 24000) * 1000);
+  }
+
+  private base64DecodedBytes(b64: string) {
+    if (!b64) return 0;
+    const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor((b64.length * 3) / 4) - pad);
+  }
+
+  private openGreetingBargeIn(pcmMs: number) {
+    if (this.greetingComplete || !this.xaiWs || !this.browserWs) return;
+    const holdMs = Math.max(2800, Math.min(9000, (pcmMs || 0) + 600));
+    console.log(
+      `[Trainer Realtime] greeting audio committed — holding barge-in ${holdMs}ms (pcmMs=${pcmMs || 0})`
+    );
+    if (this.greetingBargeInTimer) clearTimeout(this.greetingBargeInTimer);
+    this.greetingBargeInTimer = setTimeout(() => {
+      this.greetingBargeInTimer = null;
+      if (this.greetingComplete || this.endingCall || !this.xaiWs || !this.browserWs) return;
+      this.greetingComplete = true;
+      console.log('[Trainer Realtime] greeting barge-in open');
+      try {
+        this.xaiWs.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      } catch {
+        /* ignore */
+      }
+      sendJson(this.browserWs, { type: 'gatekeeper.ready' });
+      try {
+        this.xaiWs.send(
+          JSON.stringify({
+            type: 'session.update',
+            session: { tools: [TRANSFER_TOOL] },
+          })
+        );
+      } catch {
+        /* ignore */
+      }
+    }, holdMs);
+  }
 
   async fetch(request: Request): Promise<Response> {
     const upgrade = request.headers.get('Upgrade');
@@ -505,10 +548,10 @@ export class TrainerSession extends DurableObject<Env> {
       return;
     }
 
-    // Align with prompt + TRANSFER_TOOL: ≥3 gatekeeper exchanges and ≥2 user turns.
-    // Hint mode softens to 2 GK / 1 user (matches scenario-prompt HINT MODE).
-    const minGatekeeperResponses = this.hintMode ? 2 : 3;
-    const minUserTurns = this.hintMode ? 1 : 2;
+    // Align with prompt + TRANSFER_TOOL. Easy softens to 2 GK / 1 user turn.
+    const easy = this.sessionDifficulty === 'easy';
+    const minGatekeeperResponses = easy ? 2 : 3;
+    const minUserTurns = easy ? 1 : 2;
     if (
       this.gatekeeperResponseCount < minGatekeeperResponses ||
       this.userTurnCount < minUserTurns
@@ -557,6 +600,10 @@ export class TrainerSession extends DurableObject<Env> {
 
   private cleanup() {
     this.clearSilenceTimer();
+    if (this.greetingBargeInTimer) {
+      clearTimeout(this.greetingBargeInTimer);
+      this.greetingBargeInTimer = null;
+    }
     try {
       if (this.xaiWs?.readyState === WebSocket.OPEN) this.xaiWs.close();
     } catch {
@@ -659,7 +706,8 @@ export class TrainerSession extends DurableObject<Env> {
               item: {
                 type: 'force_message',
                 role: 'assistant',
-                interruptible: true,
+                // Opening IVR line must finish — barge-in was cutting "Thank you…" mid-word
+                interruptible: false,
                 content: [{ type: 'output_text', text: greetingText }],
               },
             })
@@ -698,9 +746,11 @@ export class TrainerSession extends DurableObject<Env> {
         ((event.response as { id?: string } | undefined)?.id) ||
         this.activeResponseId;
       if (rid && this.cancelledResponseIds.has(rid)) return;
-      if (this.audioStreamForResponse === 'audio') return;
+      // Prefer output_audio; never lock it out after a legacy audio.delta
       this.audioStreamForResponse = 'output_audio';
-      sendJson(this.browserWs, { type: 'audio', audio: event.delta });
+      this.audioChunksSent += 1;
+      this.audioPcmBytesSent += this.base64DecodedBytes(event.delta as string);
+      sendJson(this.browserWs, { type: 'audio', audio: event.delta as string });
     }
 
     if (type === 'response.audio.delta' && event.delta) {
@@ -709,12 +759,20 @@ export class TrainerSession extends DurableObject<Env> {
         ((event.response as { id?: string } | undefined)?.id) ||
         this.activeResponseId;
       if (rid && this.cancelledResponseIds.has(rid)) return;
-      if (this.audioStreamForResponse) return;
+      if (this.audioStreamForResponse === 'output_audio') return;
       this.audioStreamForResponse = 'audio';
-      sendJson(this.browserWs, { type: 'audio', audio: event.delta });
+      this.audioChunksSent += 1;
+      this.audioPcmBytesSent += this.base64DecodedBytes(event.delta as string);
+      sendJson(this.browserWs, { type: 'audio', audio: event.delta as string });
     }
 
     if (type === 'input_audio_buffer.speech_started') {
+      // Ignore barge-in until greeting audio has had time to finish playing.
+      if (!this.greetingComplete) {
+        console.log('[Trainer Realtime] speech_started ignored (greeting still playing)');
+        return;
+      }
+      console.log('[Trainer Realtime] speech_started → interrupt');
       this.clearSilenceTimer();
       this.silencePromptCount = 0;
       this.pendingSilenceResponse = false;
@@ -742,6 +800,8 @@ export class TrainerSession extends DurableObject<Env> {
     if (type === 'response.created') {
       this.prospectSpeaking = true;
       this.audioStreamForResponse = null;
+      this.audioChunksSent = 0;
+      this.audioPcmBytesSent = 0;
       this.activeResponseId =
         ((event.response as { id?: string } | undefined)?.id) || null;
       sendJson(this.browserWs, { type: 'prospect.speaking' });
@@ -752,22 +812,24 @@ export class TrainerSession extends DurableObject<Env> {
       const doneId =
         ((event.response as { id?: string } | undefined)?.id) ||
         this.activeResponseId;
+      const pcmMs = this.pcmMsFromBytes(this.audioPcmBytesSent);
+      console.log(
+        `[Trainer Realtime] response.done chunks=${this.audioChunksSent} pcmMs=${pcmMs} stream=${this.audioStreamForResponse || 'none'} status=${(event.response as { status?: string } | undefined)?.status || '?'}`
+      );
       if (doneId) this.cancelledResponseIds.delete(doneId);
       this.activeResponseId = null;
       this.prospectSpeaking = false;
-      sendJson(this.browserWs, { type: 'prospect.done' });
+      sendJson(this.browserWs, { type: 'prospect.done', pcmMs });
       if (this.pendingTransfer) {
         this.completeTransfer();
       }
-      if (isTwoStage && this.phase === 'gatekeeper' && !this.greetingComplete) {
-        this.greetingComplete = true;
-        sendJson(this.browserWs, { type: 'gatekeeper.ready' });
-        this.xaiWs.send(
-          JSON.stringify({
-            type: 'session.update',
-            session: { tools: [TRANSFER_TOOL] },
-          })
-        );
+      if (
+        isTwoStage &&
+        this.phase === 'gatekeeper' &&
+        !this.greetingComplete &&
+        !this.greetingBargeInTimer
+      ) {
+        this.openGreetingBargeIn(pcmMs);
       }
       if (
         this.greetingComplete &&
@@ -810,10 +872,15 @@ export class TrainerSession extends DurableObject<Env> {
 
     if (type === 'error') {
       const err = event.error as { message?: string } | undefined;
+      const errMsg = err?.message || 'xAI realtime error';
+      if (/cancellation failed|no active response/i.test(errMsg)) {
+        console.log('[Trainer Realtime] ignoring benign cancel error:', errMsg);
+        return;
+      }
       console.error('[Trainer Realtime] xAI error:', JSON.stringify(err));
       sendJson(this.browserWs, {
         type: 'error',
-        message: err?.message || 'xAI realtime error',
+        message: errMsg,
       });
     }
   }
@@ -856,7 +923,6 @@ export class TrainerSession extends DurableObject<Env> {
     const prospectId = msg.prospectId;
     const difficulty = (msg.difficulty as string) || 'medium';
     const focus = (msg.focus as string) || 'standard';
-    const hintMode = !!msg.hintMode;
     const voice = msg.voice as string | undefined;
     const msgGatekeeperVoice = msg.gatekeeperVoice as string | undefined;
     const msgBossVoice = msg.bossVoice as string | undefined;
@@ -870,7 +936,6 @@ export class TrainerSession extends DurableObject<Env> {
       | Record<string, unknown>
       | undefined;
     this.sessionDifficulty = difficulty;
-    this.hintMode = hintMode;
 
     try {
       // Minutes hard-stop: require a signed gate token verified against the Next.js app
@@ -918,7 +983,6 @@ export class TrainerSession extends DurableObject<Env> {
           prospectId: prospectId || leadId,
           difficulty,
           focus,
-          hintMode,
           prospectOverride,
           brandId,
           packId,

@@ -129,11 +129,11 @@ export async function POST(req: Request) {
       trustedPackId = null;
     }
 
-    const minutesUsed = Math.max(1, Math.ceil(Number(duration || 0) / 60));
+    const requestedMinutes = Math.max(1, Math.ceil(Number(duration || 0) / 60));
     const balance = await getMinuteBalance(profile);
-    // Hold already reserved 1 min — need (minutesUsed - 1) more available, or full if no hold
-    const needExtra = holdId ? Math.max(0, minutesUsed - 1) : minutesUsed;
-    if (balance.available < needExtra && !holdId) {
+    // Hold already reserved 1 min. Charge what we can so long calls still save.
+    const spendable = balance.available + (holdId ? 1 : 0);
+    if (spendable < 1) {
       return NextResponse.json(
         {
           error: 'Not enough practice minutes. Upgrade, buy a pack, or ask your team manager.',
@@ -143,16 +143,8 @@ export async function POST(req: Request) {
         { status: 402 }
       );
     }
-    if (holdId && needExtra > 0 && balance.available < needExtra) {
-      return NextResponse.json(
-        {
-          error: 'Not enough practice minutes for this call length.',
-          minutesRemaining: balance.available,
-          source: balance.source,
-        },
-        { status: 402 }
-      );
-    }
+    const minutesUsed = Math.min(requestedMinutes, spendable);
+    const minutesShortfall = requestedMinutes > minutesUsed;
 
     function extractJsonObject(text: string): string {
       const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -366,6 +358,8 @@ export async function POST(req: Request) {
       sessionId: savedSession.id,
       pointsEarned,
       minutesUsed,
+      minutesRequested: requestedMinutes,
+      minutesShortfall,
       minutesRemaining: deducted.remaining,
       minuteSource: deducted.source,
       badge: newBadge,
@@ -376,6 +370,9 @@ export async function POST(req: Request) {
       bountiesCleared: awards.bountiesCleared,
       bountyCreditsEarned: awards.bountyCreditsEarned,
       tournamentUpdates: awards.tournamentUpdates,
+      notice: minutesShortfall
+        ? `Call ran longer than your remaining minutes — scored and charged ${minutesUsed} of ${requestedMinutes} min.`
+        : undefined,
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

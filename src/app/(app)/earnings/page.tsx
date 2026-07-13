@@ -115,7 +115,7 @@ export default function EarningsPage() {
             setConnect(d.connect);
             setMsg(
               d.connect.ready
-                ? 'Payouts connected — brands can pay you for completed gigs.'
+                ? 'Payouts connected — brands can pay you for completed brand deals.'
                 : 'Connect onboarding saved. Finish any remaining Stripe steps if status is still incomplete.'
             );
           }
@@ -156,10 +156,10 @@ export default function EarningsPage() {
       <PageHeader
         eyebrow="Earn"
         title="Earnings"
-        description="Gig payouts from brand campaigns. Connect Stripe once, then track pending and paid results here. Practice-minute plans stay on Billing."
+        description="Brand deal payouts from campaigns. Connect Stripe once, then track pending and paid results here. Practice-minute plans stay on Billing."
         actions={
           <Link href="/gigs" className="btn-ghost">
-            Browse gigs →
+            Browse brand deals →
           </Link>
         }
       />
@@ -242,10 +242,10 @@ export default function EarningsPage() {
             {payouts.length === 0 ? (
               <EmptyState
                 title="No payouts yet"
-                description="Apply to gigs, get activated, and deliver results. When a brand pays an approved application, it shows up here."
+                description="Apply to brand deals, get activated, and deliver results. When a brand pays an approved application, it shows up here."
                 action={
                   <Link href="/gigs" className="btn" style={{ marginTop: '1rem' }}>
-                    Find a gig
+                    Find a brand deal
                   </Link>
                 }
               />

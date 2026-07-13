@@ -127,7 +127,19 @@ model Prospect {
   hooksJSON      String? // JSON string[] marketing hooks from scraper
   notes          String?    
   status         String      @default("new") // new | warming | dialing | done
-  enrichmentStatus String   @default("none") // none | done | failed
+  /** Legacy single-shot: none | pending | done | failed. Prefer phase statuses below. */
+  enrichmentStatus String   @default("none")
+  /** Phase 1 Maps scrape: not_started | queued | in_progress | completed | failed | skipped */
+  scrapeStatus     String   @default("not_started")
+  /** Phase 2 phone/web scan: not_started | queued | in_progress | completed | failed | skipped */
+  webScanStatus    String   @default("not_started")
+  qualifyPhase1    Boolean?
+  qualifyPhase2    Boolean?
+  qualifyPhase3    Boolean?
+  /** True when P1–P3 clear — visible to SDR dialer queue. */
+  outreachReady    Boolean  @default(false)
+  /** Cal.com / Calendly URL found during webscan (prospect-side booking). */
+  bookingUrlFound  String?
   imageUrl       String?
   imageR2Key     String?
   source         String      @default("manual") // manual | maps | url | import | training
@@ -148,10 +160,11 @@ model Prospect {
   @@index([brandId, status])
   @@index([campaignId])
   @@index([brandId, campaignId])
+  @@index([brandId, outreachReady])
   @@index([callbackLockedByUserId, callbackLockedUntil])
 }
 
-/** Manual browser→PSTN call log (no autodialer / AI outbound). */
+/** Browser→PSTN call log + post-call AI audit fields. */
 model CallLog {
   id               String       @id @default(cuid())
   userId           String
@@ -164,13 +177,18 @@ model CallLog {
   brandPhoneNumberId String?
   brandPhoneNumber BrandPhoneNumber? @relation(fields: [brandPhoneNumberId], references: [id], onDelete: SetNull)
   direction        String       @default("outbound") // outbound | inbound
-  status           String       @default("initiated") // initiated | ringing | in-progress | completed | failed | no_answer
+  status           String       @default("initiated") // initiated | ringing | in-progress | completed | failed | no_answer | APPOINTMENT_SET | CONNECTED | NO_ANSWER | REJECTED
   duration         Int? // seconds
   toNumber         String?
   fromNumber       String?
   telephonyCallSid String?
-  outcome          String? // interested | callback | not_interested | voicemail | no_answer | other
+  outcome          String? // interested | callback | not_interested | voicemail | no_answer | appointment_set | other
   notes            String?
+  recordingUrl     String?
+  transcript       String?
+  isAudited        Boolean      @default(false)
+  aiAuditResult    String? // JSON audit payload
+  needsManualReview Boolean     @default(false)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -179,6 +197,8 @@ model CallLog {
   @@index([telephonyCallSid])
   @@index([brandId])
   @@index([brandPhoneNumberId])
+  @@index([campaignId, status])
+  @@index([needsManualReview, createdAt])
 }
 
 model TrainerSession {
@@ -199,6 +219,9 @@ model TrainerSession {
   categoryScores String   
   duration       Int       @default(0)
   pointsEarned   Int       @default(0)
+  /** Post-call wrap disposition: interested | callback | not_interested | voicemail | no_answer */
+  outcome        String?
+  wrapNotes      String?
   coachLogJSON    String?  
   integrityFlags  String? // JSON IntegrityFlag[]
   clientRequestId String? // idempotency key from client
@@ -212,6 +235,7 @@ model TrainerSession {
   @@index([focusArea, overallScore])
   @@index([overallScore])
   @@index([brandId])
+  @@index([prospectId, createdAt])
 }
 
 /** Soft-reserve practice minutes so concurrent starts can't overdraw. */
@@ -440,6 +464,7 @@ model Brand {
   callLogs        CallLog[]
   wallet          BrandWallet?
   productHuntImports ProductHuntImport[]
+  pipelineJobs    PipelineJob[]
 
   @@index([slug])
   @@index([twilioPhoneE164])
@@ -717,6 +742,11 @@ model Campaign {
   /** Capital locked from BrandWallet while campaign is OPEN. */
   escrowLockedCents Int             @default(0)
   maxAwards        Int?
+  /** Founder's Cal.com / Calendly booking URL for SDR embed. */
+  bookingLink      String?
+  /** Scout parameters for the 3-phase pipeline. */
+  targetVertical   String?
+  targetLocation   String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -724,12 +754,34 @@ model Campaign {
   prospects    Prospect[]
   payouts      CampaignPayout[]
   appointmentClaims AppointmentClaim[]
+  pipelineJobs PipelineJob[]
 
   @@index([brandId, status])
   @@index([status, createdAt])
   @@index([createdByUserId])
   @@index([packId])
   @@index([playbookId])
+}
+
+/** Scout / enrich job run — Pipeline tab history. */
+model PipelineJob {
+  id           String    @id @default(cuid())
+  brandId      String
+  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaignId   String?
+  campaign     Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  query        String
+  location     String
+  status       String    @default("queued") // queued | running | completed | failed
+  savedCount   Int       @default(0)
+  readyCount   Int       @default(0)
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@index([brandId, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([brandId, status])
 }
 
 enum CampaignPayoutStatus {

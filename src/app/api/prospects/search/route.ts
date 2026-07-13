@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
+import { canManageBrandLeads } from '@/lib/brand-leads';
 import { searchMapsProspects } from '@/lib/maps/rapidapi';
 import { prisma } from '@/lib/prisma';
 
@@ -13,10 +14,30 @@ export async function POST(req: Request) {
       maxResults = 8,
       save = true,
       noWebsiteOnly = false,
+      brandId: rawBrandId,
+      campaignId: rawCampaignId,
     } = body;
 
     if (!query || !location) {
       return NextResponse.json({ error: 'query and location required' }, { status: 400 });
+    }
+
+    const brandId = rawBrandId ? String(rawBrandId) : null;
+    const campaignId = rawCampaignId ? String(rawCampaignId) : null;
+
+    if (brandId) {
+      if (!(await canManageBrandLeads(profile, brandId))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      if (campaignId) {
+        const campaign = await prisma.campaign.findFirst({
+          where: { id: campaignId, brandId },
+          select: { id: true },
+        });
+        if (!campaign) {
+          return NextResponse.json({ error: 'Campaign not found for brand' }, { status: 400 });
+        }
+      }
     }
 
     const results = await searchMapsProspects(
@@ -41,6 +62,11 @@ export async function POST(req: Request) {
             reviewCount: r.reviewCount,
             mapsPlaceId: r.placeId,
             source: 'maps',
+            scrapeStatus: 'completed',
+            qualifyPhase1: Boolean(r.companyName && r.phone),
+            webScanStatus: r.website ? 'queued' : 'skipped',
+            enrichmentStatus: 'none',
+            outreachReady: false,
             hooksJSON: JSON.stringify(
               [
                 r.website
@@ -52,11 +78,14 @@ export async function POST(req: Request) {
                 r.phone ? `Phone: ${r.phone}` : null,
               ].filter(Boolean)
             ),
+            ...(brandId ? { brandId, campaignId: campaignId || null } : {}),
           };
 
           if (r.placeId) {
             const existing = await prisma.prospect.findFirst({
-              where: { userId: profile.id, mapsPlaceId: r.placeId },
+              where: brandId
+                ? { brandId, mapsPlaceId: r.placeId }
+                : { userId: profile.id, brandId: null, mapsPlaceId: r.placeId },
             });
             if (existing) {
               return prisma.prospect.update({
@@ -83,6 +112,8 @@ export async function POST(req: Request) {
       saved,
       noWebsiteOnly: Boolean(noWebsiteOnly),
       noWebsiteCount: results.filter((r) => !r.hasWebsite).length,
+      brandId,
+      campaignId,
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
@@ -98,10 +129,27 @@ export async function GET(req: Request) {
     const profile = await requireUser();
     const { searchParams } = new URL(req.url);
     const noWebsiteOnly = searchParams.get('noWebsite') === '1';
+    const brandId = searchParams.get('brandId')?.trim();
+
+    if (brandId) {
+      if (!(await canManageBrandLeads(profile, brandId))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const prospects = await prisma.prospect.findMany({
+        where: {
+          brandId,
+          ...(noWebsiteOnly ? { OR: [{ website: null }, { website: '' }] } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      return NextResponse.json({ prospects });
+    }
 
     const prospects = await prisma.prospect.findMany({
       where: {
         userId: profile.id,
+        brandId: null,
         ...(noWebsiteOnly ? { OR: [{ website: null }, { website: '' }] } : {}),
       },
       orderBy: { createdAt: 'desc' },

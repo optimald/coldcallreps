@@ -43,20 +43,24 @@ export default function SettingsPage() {
   const alreadyReferred = Boolean(me.referredByCode || referral.referredByCode);
 
   useEffect(() => {
-    fetch('/api/referrals')
-      .then(async (r) => {
-        if (!r.ok) throw new Error('Could not load referrals.');
-        return r.json();
-      })
-      .then(setReferral)
-      .catch((e) => setLoadError(e.message || 'Could not load settings.'));
     fetch('/api/me')
       .then(async (r) => {
         if (!r.ok) throw new Error('Could not load profile.');
         return r.json();
       })
-      .then((d) => d && setMe(d))
-      .catch((e) => setLoadError(e.message || 'Could not load profile.'));
+      .then((d) => {
+        if (!d) return;
+        setMe(d);
+        const r = d.platformRole || 'REP';
+        if (r === 'BRAND' || r === 'RECRUITER') return;
+        return fetch('/api/referrals')
+          .then(async (res) => {
+            if (!res.ok) throw new Error('Could not load referrals.');
+            return res.json();
+          })
+          .then(setReferral);
+      })
+      .catch((e) => setLoadError(e.message || 'Could not load settings.'));
   }, []);
 
   function flash(text: string, tone: 'ok' | 'err' = 'ok') {
@@ -88,7 +92,7 @@ export default function SettingsPage() {
     if (res.ok) {
       setMe((m) => ({ ...m, platformRole: data.platformRole }));
       window.location.href =
-        data.redirectTo || (platformRole === 'BRAND' ? '/campaigns' : '/dashboard');
+        data.redirectTo || (platformRole === 'BRAND' ? '/brands' : '/dashboard');
       return;
     }
     if (res.status === 402 && data.requiredPlan) {
@@ -199,7 +203,7 @@ export default function SettingsPage() {
         title="Settings"
         description={
           isBrand
-            ? 'Billing, role, referrals, and privacy.'
+            ? 'Billing, desk mode, and privacy.'
             : 'Billing, role, referrals, digest, and privacy.'
         }
       />
@@ -209,7 +213,7 @@ export default function SettingsPage() {
         title="Billing"
         description={
           isBrand
-            ? 'Brand accounts are free. Practice minutes still apply if you train.'
+            ? 'Campaign escrow and invoices live on Billing. Desk mode and privacy below.'
             : 'Manage plan and practice minutes.'
         }
       >
@@ -298,6 +302,7 @@ export default function SettingsPage() {
         </div>
       </Panel>
 
+      {!isBrand ? (
       <Panel
         title="Referrals"
         description={`Share your link — you and your friend each get ${rewardLabel}.`}
@@ -421,6 +426,7 @@ export default function SettingsPage() {
           </p>
         )}
       </Panel>
+      ) : null}
 
       {isRepFacing && (
         <Panel
@@ -439,8 +445,8 @@ export default function SettingsPage() {
               <SoftLink href="/playbooks">Playbooks →</SoftLink>
             </>
           )}
-          {isBrand && <SoftLink href="/campaigns">Campaigns →</SoftLink>}
           {isBrand && <SoftLink href="/leads">Leads →</SoftLink>}
+          {isBrand && <SoftLink href="/brands">Brands →</SoftLink>}
           <SoftLink href="/developers">Developer API →</SoftLink>
           {role === 'SUPERADMIN' && <SoftLink href="/admin">Superadmin console →</SoftLink>}
         </div>

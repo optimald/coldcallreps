@@ -80,7 +80,7 @@ export function onboardingPathFor(mode: SwitchableMode): string {
 }
 
 export function homeForMode(mode: SwitchableMode): string {
-  return mode === 'REP' ? '/dashboard' : '/campaigns';
+  return mode === 'REP' ? '/dashboard' : '/brands';
 }
 
 export function isRepOnboarded(

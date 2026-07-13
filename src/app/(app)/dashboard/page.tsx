@@ -136,11 +136,11 @@ export default async function DashboardPage() {
           title={`Hey ${greetingName}`}
           description={
             rep?.slug
-              ? `/${rep.slug} · train, take gigs, deliver outbound.`
+              ? `/${rep.slug} · train, take brand deals, deliver outbound.`
               : 'Train with AI, prove your skill, get paid on campaigns.'
           }
           actions={
-            <Link href="/trainer" className="btn">
+            <Link href="/practice" className="btn">
               Practice
             </Link>
           }
@@ -196,7 +196,7 @@ export default async function DashboardPage() {
                 <p className="panel__desc">Last {sessions.length || 12} practice sessions</p>
               </div>
               <div className="panel__actions">
-                <Link href="/trainer" className="btn-ghost btn--sm">
+                <Link href="/practice" className="btn-ghost btn--sm">
                   New session
                 </Link>
               </div>
@@ -212,10 +212,10 @@ export default async function DashboardPage() {
             <div className="panel__head">
               <div>
                 <h2 className="panel__title">Recent calls</h2>
-                <p className="panel__desc">Latest trainer runs — open any scorecard</p>
+                <p className="panel__desc">Latest practice runs — open any scorecard</p>
               </div>
               <div className="panel__actions">
-                <Link href="/trainer" className="btn-ghost btn--sm">
+                <Link href="/practice" className="btn-ghost btn--sm">
                   Practice
                 </Link>
               </div>
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
                 title="No warm-ups yet"
                 description="Run a few AI scenarios before your first campaign dial."
                 action={
-                  <Link href="/trainer" className="btn" style={{ marginTop: '0.75rem' }}>
+                  <Link href="/practice" className="btn" style={{ marginTop: '0.75rem' }}>
                     Start practice
                   </Link>
                 }
@@ -284,22 +284,22 @@ export default async function DashboardPage() {
         title={`Hey ${greetingName}`}
         description={
           isBrand
-            ? 'Campaign-centric home — post gigs, review SDRs, track leads.'
+            ? 'Brand home — desk, campaigns, leads, and SDR roster under each brand.'
             : isManager
               ? 'Desk overview — roster, academy, and team campaigns.'
               : 'Ops overview — marketplace + practice signal.'
         }
         actions={
           isBrand ? (
-            <Link href="/campaigns" className="btn">
-              Campaigns
+            <Link href="/brands" className="btn">
+              Brands
             </Link>
           ) : isManager ? (
             <Link href="/team" className="btn">
               Team roster
             </Link>
           ) : (
-            <Link href="/trainer" className="btn">
+            <Link href="/practice" className="btn">
               Practice
             </Link>
           )
@@ -442,9 +442,9 @@ export default async function DashboardPage() {
       {(isManager || isAdmin) && (
         <Panel
           title="Recent sessions"
-          description="Your latest trainer runs — open any scorecard to review."
+          description="Your latest practice runs — open any scorecard to review."
           actions={
-            <Link href="/trainer" className="btn-ghost">
+            <Link href="/practice" className="btn-ghost">
               New session
             </Link>
           }
@@ -454,7 +454,7 @@ export default async function DashboardPage() {
               title="No warm-ups yet"
               description="Run a few AI scenarios before your first campaign dial."
               action={
-                <Link href="/trainer" className="btn" style={{ marginTop: '1rem' }}>
+                <Link href="/practice" className="btn" style={{ marginTop: '1rem' }}>
                   Start practice
                 </Link>
               }
