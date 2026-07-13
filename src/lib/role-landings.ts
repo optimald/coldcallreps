@@ -30,7 +30,10 @@ export interface RoleLanding {
   stepsHeadline: string;
   steps: { n: string; title: string; body: string }[];
   pricingHeadline: string;
-  pricingNote: string;
+  /** Dense summary above cards — omit when cards already cover the info. */
+  pricingNote?: string;
+  /** Optional escrow/take-rate line for brand pricing. */
+  escrowNote?: string;
   planHref: string;
   pricingCards?: RolePricingCard[];
 }
@@ -90,7 +93,6 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       },
     ],
     pricingHeadline: 'Practice plans for SDRs',
-    pricingNote: `Free (${TRIAL_MINUTES} min) · Starter $${PLAN.STARTER.price}/mo (${PLAN.STARTER.minutes} min) · Pro $${PLAN.PRO.price}/mo (${PLAN.PRO.minutes} min) · Brand deals are free for reps · Stripe Connect when you’re ready to get paid`,
     planHref: '/sign-up?role=REP',
     pricingCards: [
       {
@@ -107,7 +109,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       {
         label: 'Pro',
         price: `$${PLAN.PRO.price}/mo`,
-        detail: `${PLAN.PRO.minutes} min / mo · recording storage`,
+        detail: `${PLAN.PRO.minutes} practice minutes / mo · recording storage`,
       },
     ],
   },
@@ -134,7 +136,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       },
       {
         title: 'Meetings on Your Calendar',
-        body: 'Booked calls land directly in your calendar + pushed to Close.com.',
+        body: 'Booked calls land directly in your calendar — synced via Google Calendar and HubSpot.',
       },
       {
         title: 'Pay Only for Results',
@@ -165,7 +167,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       },
     ],
     pricingHeadline: 'Lead generation + results-based campaigns',
-    pricingNote: `Free includes ${BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo. Brand Lead Plan $${BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo for ${BRAND_LEAD_PLAN.LEAD_MONTHLY.allotment.toLocaleString()} · Annual $${BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr (20% off). Packs from $${LEAD_PACKS[0].priceUsd}. CSV import unlimited. Campaign escrow: pay SDRs only when goals are met (~20% platform fee).`,
+    escrowNote: 'Campaign escrow: pay SDRs only when goals are met · ~20% platform fee',
     planHref: '/sign-up?role=BRAND',
     pricingCards: [
       {
