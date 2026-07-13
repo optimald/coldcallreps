@@ -6,7 +6,7 @@ import {
   parseMeetingAtFromParams,
 } from '@/lib/booking-attribution';
 import { auditAppointmentClaim } from '@/lib/appointment-audit';
-import { dispatchPipelineTask, auditCallTask } from '@/trigger/tasks';
+import { dispatchPipelineTask, runAuditCallInline, AUDIT_CALL_TASK_ID } from '@/trigger/tasks';
 
 type Ctx = { params: Promise<{ token: string }> };
 
@@ -176,9 +176,11 @@ export async function POST(req: Request, ctx: Ctx) {
         })
         .catch(() => null);
 
-      void dispatchPipelineTask('audit-call-task', () =>
-        auditCallTask({ callLogId: claim.callLogId! })
-      );
+      void dispatchPipelineTask(
+        AUDIT_CALL_TASK_ID,
+        () => runAuditCallInline({ callLogId: claim.callLogId! }),
+        { payload: { callLogId: claim.callLogId! }, wait: false }
+      ).catch((e) => console.error('[bookings] audit dispatch failed', e));
     }
 
     if (claim.prospectId) {

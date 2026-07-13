@@ -209,7 +209,7 @@ export default function BrandPipelineClient({
           geo: location,
           maxResults,
           noWebsiteOnly,
-          async: false,
+          async: true,
         }),
       });
       const data = await res.json();

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
-import { dispatchPipelineTask, scoutCampaignTask } from '@/trigger/tasks';
+import { dispatchPipelineTask, runScoutCampaignInline } from '@/trigger/tasks';
+import { SCOUT_CAMPAIGN_TASK_ID } from '@/trigger/tasks';
 
 /**
  * POST /api/scrape/campaign
@@ -66,21 +67,33 @@ export async function POST(req: Request) {
       noWebsiteOnly,
     };
 
-    // Fire-and-forget for large batches when async=true
-    if (body.async === true) {
-      void dispatchPipelineTask('scout-campaign-task', () => scoutCampaignTask(payload)).catch(
-        (e) => console.error('[scrape/campaign] background failed', e)
+    // Prefer background when Trigger is configured or caller asks for async.
+    const preferAsync = body.async === true || Boolean(process.env.TRIGGER_SECRET_KEY?.trim());
+
+    if (preferAsync) {
+      const queued = await dispatchPipelineTask(
+        SCOUT_CAMPAIGN_TASK_ID,
+        () => runScoutCampaignInline(payload),
+        { payload, wait: false }
       );
       return NextResponse.json({
         ok: true,
         queued: true,
+        mode: queued.mode,
+        runId: queued.mode === 'trigger' ? queued.id : undefined,
         message: 'Scouting started — Match Progress will update as leads condition.',
       });
     }
 
-    const { mode, result } = await dispatchPipelineTask('scout-campaign-task', () =>
-      scoutCampaignTask(payload)
+    const { mode, result } = await dispatchPipelineTask(
+      SCOUT_CAMPAIGN_TASK_ID,
+      () => runScoutCampaignInline(payload),
+      { payload, wait: true }
     );
+
+    if (!result) {
+      return NextResponse.json({ error: 'Scout returned no result' }, { status: 500 });
+    }
 
     return NextResponse.json({
       ok: true,

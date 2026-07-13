@@ -34,7 +34,9 @@
     "seed:dispatchnode": "npx tsx src/lib/seed-dispatchnode.ts",
     "deploy:voice": "npm run deploy --prefix workers/trainer-realtime",
     "postinstall": "prisma generate",
-    "deploy:clips": "npm run deploy --prefix workers/clips-r2"
+    "deploy:clips": "npm run deploy --prefix workers/clips-r2",
+    "trigger:dev": "npx trigger.dev@latest dev",
+    "trigger:deploy": "npx trigger.dev@latest deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1084.0",
@@ -44,6 +46,7 @@
     "@optimald/uilensai": "^1.3.28",
     "@prisma/adapter-libsql": "6.19.3",
     "@prisma/client": "^6.5.0",
+    "@trigger.dev/sdk": "^4.5.3",
     "@twilio/voice-sdk": "^2.18.3",
     "cheerio": "^1.0.0",
     "clsx": "^2.1.1",
@@ -57,12 +60,14 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@trigger.dev/build": "^4.5.3",
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@types/twilio": "^3.19.2",
     "@types/ws": "^8.18.1",
     "prisma": "^6.5.0",
+    "trigger.dev": "^4.5.3",
     "typescript": "^5.8.2"
   }
 }

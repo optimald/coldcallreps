@@ -20,12 +20,12 @@ import {
   type DemoLead,
 } from '@/lib/demo/brand-demo-data';
 import {
-  getGrade,
-  healthTone,
-  parseIntel,
-  scoreTone,
-  signalTone,
-} from '@/lib/prospect-intel';
+  DeskToolbar,
+  DeskToolbarSearch,
+  DeskToolbarSelect,
+} from '@/components/ui/DeskChrome';
+import BrandLeadsPhaseTable from '@/components/BrandLeadsPhaseTable';
+import { parseIntel, scoreTone } from '@/lib/prospect-intel';
 
 type BrandOpt = { id: string; name: string; slug: string | null };
 type CampaignOpt = {
@@ -59,7 +59,10 @@ type Lead = {
   bookingUrlFound?: string | null;
   reviewRating?: number | null;
   reviewCount?: number | null;
+  mapsPlaceId?: string | null;
   notes?: string | null;
+  attemptCount?: number;
+  callCount?: number;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -106,6 +109,15 @@ const SOURCE_FILTER_OPTIONS = [
   { value: 'manual', label: 'Manual' },
 ];
 
+const PHASE_FILTER_OPTIONS = [
+  { value: '', label: 'All phases' },
+  { value: 'raw', label: 'Raw — pending P1' },
+  { value: 'p1', label: 'Phase 1 — scraped' },
+  { value: 'p2', label: 'Phase 2 — scanned' },
+  { value: 'p3', label: 'Phase 3 — enriched' },
+  { value: 'ready', label: 'Dial-ready' },
+];
+
 function domainOf(website?: string | null) {
   if (!website) return null;
   return website.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 28);
@@ -113,6 +125,36 @@ function domainOf(website?: string | null) {
 
 function locationOf(lead: { city?: string | null; state?: string | null }) {
   return [lead.city, lead.state].filter(Boolean).join(', ') || null;
+}
+
+/** Trojan-style P1–P3 qualification dots (P4/P5 frozen). */
+function PhaseDots({
+  lead,
+}: {
+  lead: {
+    qualifyPhase1?: boolean | null;
+    qualifyPhase2?: boolean | null;
+    qualifyPhase3?: boolean | null;
+  };
+}) {
+  const phases = [lead.qualifyPhase1, lead.qualifyPhase2, lead.qualifyPhase3];
+  return (
+    <div className="brand-leads__phases" aria-label="Pipeline phases 1–3">
+      {phases.map((p, i) => {
+        const pending = p == null && (i === 0 || phases[i - 1] === true);
+        const tone = p === true ? 'ok' : p === false ? 'bad' : pending ? 'pending' : 'idle';
+        return (
+          <span
+            key={i}
+            className={`brand-leads__phase-dot brand-leads__phase-dot--${tone}`}
+            title={`Phase ${i + 1}${p === true ? ' passed' : p === false ? ' failed' : pending ? ' pending' : ''}`}
+          >
+            {p === true ? '✓' : p === false ? '×' : pending ? '·' : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function formatTs(iso?: string | null) {
@@ -186,6 +228,7 @@ export default function BrandLeadsClient({
     () => searchParams.get('source') || ''
   );
   const [matchFilter, setMatchFilter] = useState('');
+  const [phaseFilter, setPhaseFilter] = useState('');
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -243,14 +286,15 @@ export default function BrandLeadsClient({
     }));
   }, [isLive, campaigns, brandId, brandKey]);
 
-  // Brand leads must be enrolled in a campaign — default enroll target
+  // Sync enroll goal from campaign filter; allow empty = All goals
   useEffect(() => {
-    if (assignCampaignId && brandCampaigns.some((c) => c.id === assignCampaignId)) return;
-    const fromFilter = campaignFilter && brandCampaigns.some((c) => c.id === campaignFilter)
-      ? campaignFilter
-      : '';
-    const next = fromFilter || brandCampaigns[0]?.id || '';
-    if (next) setAssignCampaignId(next);
+    if (campaignFilter && brandCampaigns.some((c) => c.id === campaignFilter)) {
+      setAssignCampaignId(campaignFilter);
+      return;
+    }
+    if (assignCampaignId && !brandCampaigns.some((c) => c.id === assignCampaignId)) {
+      setAssignCampaignId('');
+    }
   }, [brandCampaigns, campaignFilter, assignCampaignId]);
 
   const campaignTitle = useCallback(
@@ -396,6 +440,21 @@ export default function BrandLeadsClient({
         if (matchFilter === 'dialing' && state !== 'dialing') return false;
         if (matchFilter === 'booked' && state !== 'booked') return false;
       }
+      if (phaseFilter) {
+        const p1 = l.qualifyPhase1;
+        const p2 = l.qualifyPhase2;
+        const p3 = l.qualifyPhase3;
+        if (phaseFilter === 'raw' && p1 != null) return false;
+        if (phaseFilter === 'p1' && !(p1 === true && p2 == null)) return false;
+        if (phaseFilter === 'p2' && !(p2 === true && p3 == null)) return false;
+        if (phaseFilter === 'p3' && p3 !== true) return false;
+        if (
+          phaseFilter === 'ready' &&
+          !(p3 === true && l.outreachReady)
+        ) {
+          return false;
+        }
+      }
       if (searchDebounced) {
         const q = searchDebounced.toLowerCase();
         return (
@@ -408,7 +467,7 @@ export default function BrandLeadsClient({
       }
       return true;
     });
-  }, [pool, matchFilter, campaignFilter, searchDebounced, sourceFilter]);
+  }, [pool, matchFilter, phaseFilter, campaignFilter, searchDebounced, sourceFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
@@ -416,7 +475,7 @@ export default function BrandLeadsClient({
 
   useEffect(() => {
     setPage(1);
-  }, [campaignFilter, matchFilter, searchDebounced, pageSize, sourceFilter]);
+  }, [campaignFilter, matchFilter, phaseFilter, searchDebounced, pageSize, sourceFilter]);
 
   // Auto-refresh live leads (no manual Refresh button)
   useEffect(() => {
@@ -748,27 +807,22 @@ export default function BrandLeadsClient({
           <strong>{phaseStats.audited}</strong> Dial-ready
         </span>
       </div>
-      <div className="brand-leads__toolbar">
-        <div className="brand-leads__search">
-          <input
-            className="field"
-            type="search"
-            placeholder="Search…"
+
+      <div className="brand-leads__chrome">
+        <DeskToolbar>
+          <DeskToolbarSearch
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search leads"
+            onChange={setSearch}
+            placeholder="Search company, owner, phone…"
+            label="Search leads"
           />
-        </div>
-        <div className="brand-leads__filter-controls">
-          <select
-            className="field"
+          <DeskToolbarSelect
             value={campaignFilter}
-            onChange={(e) => {
-              const v = e.target.value;
+            onChange={(v) => {
               setCampaignFilter(v);
               writeLeadFilters({ campaignId: v });
             }}
-            aria-label="Filter by campaign"
+            label="Campaign"
           >
             <option value="">All campaigns</option>
             {brandCampaigns.map((c) => (
@@ -776,87 +830,76 @@ export default function BrandLeadsClient({
                 {c.title}
               </option>
             ))}
-          </select>
-          <select
-            className="field"
+          </DeskToolbarSelect>
+          <DeskToolbarSelect
             value={sourceFilter}
-            onChange={(e) => {
-              const v = e.target.value;
+            onChange={(v) => {
               setSourceFilter(v);
               writeLeadFilters({ source: v });
             }}
-            aria-label="Filter by source"
+            label="Source"
           >
             {SOURCE_FILTER_OPTIONS.map((o) => (
               <option key={o.value || 'all'} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
-          <select
-            className="field"
-            value={matchFilter}
-            onChange={(e) => setMatchFilter(e.target.value)}
-            aria-label="Filter by match status"
-          >
+          </DeskToolbarSelect>
+          <DeskToolbarSelect value={phaseFilter} onChange={setPhaseFilter} label="Phase">
+            {PHASE_FILTER_OPTIONS.map((o) => (
+              <option key={o.value || 'all'} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </DeskToolbarSelect>
+          <DeskToolbarSelect value={matchFilter} onChange={setMatchFilter} label="Status">
             {MATCH_FILTER_OPTIONS.map((o) => (
               <option key={o.value || 'all'} value={o.value}>
                 {o.label}
               </option>
             ))}
-          </select>
-          <select
-            className="field brand-leads__page-size"
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-            aria-label="Rows per page"
+          </DeskToolbarSelect>
+          <DeskToolbarSelect
+            value={String(pageSize)}
+            onChange={(v) => setPageSize(Number(v))}
+            label="Rows per page"
           >
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={100000}>All</option>
-          </select>
-        </div>
+          </DeskToolbarSelect>
+        </DeskToolbar>
+
         <div className="brand-leads__actions">
           {brandKey ? (
-            <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn btn-primary btn-sm">
+            <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn-ghost btn-sm">
               Generate leads
             </Link>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => setAddOpen(true)}
-          >
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setAddOpen(true)}>
             New lead
           </button>
-          <label className="brand-leads__enroll-select field-label">
-            <span className="sr-only">Enroll new/import leads in</span>
-            <select
-              className="field field-sm"
+          <div className="brand-leads__goal">
+            <DeskToolbarSelect
               value={assignCampaignId}
-              onChange={(e) => setAssignCampaignId(e.target.value)}
-              aria-label="Enroll new leads in campaign"
-              title="Campaign for New lead / Import"
+              onChange={setAssignCampaignId}
+              label="Goal for new / import"
             >
-              {!assignCampaignId ? (
-                <option value="" disabled>
-                  Campaign…
-                </option>
-              ) : null}
+              <option value="">All goals</option>
               {brandCampaigns.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
                 </option>
               ))}
-            </select>
-          </label>
+            </DeskToolbarSelect>
+          </div>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="btn-ghost btn-sm"
             onClick={() => {
               if (!assignCampaignId) {
-                setMsg('Pick a campaign before importing — leads must be enrolled');
+                setMsg('Pick a goal before importing — leads must be enrolled');
                 return;
               }
               fileRef.current?.click();
@@ -865,8 +908,13 @@ export default function BrandLeadsClient({
             Import
           </button>
           {brandKey ? (
-            <Link href={`/brands/${brandKey}/campaigns`} className="btn btn-ghost btn-sm">
+            <Link href={`/brands/${brandKey}/campaigns`} className="btn-ghost btn-sm">
               Campaigns
+            </Link>
+          ) : null}
+          {brandKey ? (
+            <Link href={`/brands/${brandKey}/leads/audit`} className="btn-ghost btn-sm">
+              Audit log
             </Link>
           ) : null}
         </div>
@@ -952,7 +1000,7 @@ export default function BrandLeadsClient({
             {isLive && pool.length === 0 ? (
               <div className="brand-leads__actions" style={{ marginLeft: 0 }}>
                 {brandKey ? (
-                  <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn btn-primary">
+                  <Link href={`/brands/${brandKey}/pipeline?find=1`} className="btn-ghost btn-sm">
                     Generate leads
                   </Link>
                 ) : null}
@@ -967,6 +1015,8 @@ export default function BrandLeadsClient({
                 onClick={() => {
                   setCampaignFilter('');
                   setMatchFilter('');
+                  setPhaseFilter('');
+                  setSourceFilter('');
                   setSearch('');
                 }}
               >
@@ -1006,6 +1056,7 @@ export default function BrandLeadsClient({
                         </span>
                       </div>
                       <div className="brand-leads__card-foot">
+                        <PhaseDots lead={l} />
                         <span className={matchChipClass(state)}>{matchLabel(state)}</span>
                         <span className="muted small">{campaignTitle(l.campaignId)}</span>
                       </div>
@@ -1014,212 +1065,23 @@ export default function BrandLeadsClient({
                 );
               })}
             </ul>
-            <div className="brand-leads__table-wrap">
-            <table className="brand-leads__table brand-leads__table--intel">
-              <thead>
-                <tr className="brand-leads__row brand-leads__row--head">
-                  {isLive ? (
-                    <th className="brand-leads__th-check brand-leads__col--check">
-                      <input
-                        type="checkbox"
-                        checked={allPageSelected}
-                        ref={(el) => {
-                          if (el) el.indeterminate = somePageSelected && !allPageSelected;
-                        }}
-                        onChange={toggleSelectAll}
-                        aria-label="Select page"
-                      />
-                    </th>
-                  ) : null}
-                  <th className="brand-leads__col--company">Name</th>
-                  <th className="brand-leads__col--score">Trojan</th>
-                  <th className="brand-leads__col--health">Health</th>
-                  <th className="brand-leads__col--webevo">Site</th>
-                  <th className="brand-leads__col--location">Location</th>
-                  <th className="brand-leads__col--year">© Year</th>
-                  <th className="brand-leads__col--reviews">Reviews</th>
-                  <th className="brand-leads__col--last-review">Last review</th>
-                  <th className="brand-leads__col--cms">CMS</th>
-                  <th className="brand-leads__col--signals">Signals</th>
-                  <th className="brand-leads__col--dm">Owner</th>
-                  <th className="brand-leads__col--phone">Phone</th>
-                  <th className="brand-leads__col--calls">Calls</th>
-                  <th className="brand-leads__col--match-status">Status</th>
-                  <th className="brand-leads__col--campaign">Campaign</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map((l) => {
-                  const live = l as Lead;
-                  const loc = locationOf(l);
-                  const state = matchStateOf(l);
-                  const title =
-                    'ownerTitle' in l && l.ownerTitle ? String(l.ownerTitle) : null;
-                  const intel = parseIntel(l.hooksJSON);
-                  const score = intel?.score ?? null;
-                  const health = intel?.health ?? null;
-                  const webEvo = intel?.webEvoScore ?? null;
-                  const gradeInfo = webEvo != null ? getGrade(webEvo) : null;
-                  const callCount =
-                    'callCount' in l && typeof l.callCount === 'number'
-                      ? l.callCount
-                      : 'attemptCount' in l && typeof l.attemptCount === 'number'
-                        ? l.attemptCount
-                        : 0;
-                  const lastReview = intel?.lastReviewAt
-                    ? (() => {
-                        const days = Math.round(
-                          (Date.now() - new Date(intel.lastReviewAt!).getTime()) / 86400000
-                        );
-                        if (days < 30) return `${days}d ago`;
-                        if (days < 365) return `${Math.round(days / 30)}mo ago`;
-                        return `${Math.round(days / 365)}y ago`;
-                      })()
-                    : null;
-                  const domain = domainOf(l.website);
-                  return (
-                    <tr
-                      key={l.id}
-                      className={`brand-leads__tr brand-leads__row${selected.has(l.id) ? ' is-selected' : ''}`}
-                      onClick={() => openDetail(l)}
-                    >
-                      {isLive ? (
-                        <td
-                          className="brand-leads__td-check brand-leads__col--check"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected.has(l.id)}
-                            onChange={() => toggleSelect(l.id)}
-                            aria-label={`Select ${l.companyName}`}
-                          />
-                        </td>
-                      ) : null}
-                      <td className="brand-leads__col--company">
-                        <div className="brand-leads__name-cell">
-                          <span className="brand-leads__avatar" aria-hidden>
-                            {l.companyName.charAt(0).toUpperCase()}
-                          </span>
-                          <div className="brand-leads__name-meta">
-                            <span className="brand-leads__name">{l.companyName}</span>
-                            <span className="brand-leads__sub muted">{domain || '—'}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className={`brand-leads__col--score brand-leads__score brand-leads__score--${scoreTone(score)}`}>
-                        {score != null ? Math.round(score) : '—'}
-                      </td>
-                      <td className={`brand-leads__col--health brand-leads__health brand-leads__health--${healthTone(health)}`}>
-                        {health != null ? Math.round(health) : '—'}
-                      </td>
-                      <td
-                        className={`brand-leads__col--webevo brand-leads__webevo brand-leads__webevo--${
-                          webEvo != null && webEvo >= 70
-                            ? 'ok'
-                            : webEvo != null && webEvo >= 45
-                              ? 'mid'
-                              : webEvo != null
-                                ? 'bad'
-                                : 'warn'
-                        }`}
-                      >
-                        {gradeInfo && gradeInfo.grade !== '—' ? (
-                          <>
-                            <span className="brand-leads__webevo-grade">{gradeInfo.grade}</span>{' '}
-                            <span className="brand-leads__webevo-score">{Math.round(webEvo!)}</span>
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="brand-leads__col--location muted small">{loc || '—'}</td>
-                      <td className="brand-leads__col--year">{intel?.copyrightYear || '—'}</td>
-                      <td className="brand-leads__col--reviews">
-                        {l.reviewRating != null ? (
-                          <>
-                            {l.reviewRating}★
-                            {l.reviewCount != null ? (
-                              <span className="muted"> ({l.reviewCount})</span>
-                            ) : null}
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="brand-leads__col--last-review muted small">{lastReview || '—'}</td>
-                      <td className="brand-leads__col--cms muted small">{intel?.cms || '—'}</td>
-                      <td className="brand-leads__col--signals">
-                        <div className="brand-leads__signals">
-                          {(intel?.signals || []).slice(0, 4).map((s) => (
-                            <span
-                              key={s}
-                              className={`brand-leads__signal brand-leads__signal--${signalTone(s)}`}
-                            >
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="brand-leads__col--dm">
-                        <div className="brand-leads__dm">
-                          <span className="brand-leads__dm-name">{l.ownerName || '—'}</span>
-                          {title ? <span className="brand-leads__dm-title muted">{title}</span> : null}
-                        </div>
-                      </td>
-                      <td className="brand-leads__col--phone brand-leads__phone">
-                        {l.phone || <span className="muted">—</span>}
-                      </td>
-                      <td className="brand-leads__col--calls">
-                        {brandKey ? (
-                          <Link
-                            href={`/brands/${brandKey}/leads/${l.id}`}
-                            className="soft-link"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Call log"
-                          >
-                            {callCount}
-                          </Link>
-                        ) : (
-                          callCount
-                        )}
-                      </td>
-                      <td className="brand-leads__col--match-status">
-                        <span className={matchChipClass(state)}>{matchLabel(state)}</span>
-                      </td>
-                      <td
-                        className="brand-leads__col--campaign"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {isLive ? (
-                          <select
-                            className="field field-sm brand-leads__campaign-select"
-                            value={live.campaignId || ''}
-                            onChange={(e) => void assignLead(l.id, e.target.value)}
-                            aria-label="Assign campaign"
-                            required
-                          >
-                            {!live.campaignId ? (
-                              <option value="" disabled>
-                                Select campaign…
-                              </option>
-                            ) : null}
-                            {brandCampaigns.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.title}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="muted small">{campaignTitle(l.campaignId)}</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+            <BrandLeadsPhaseTable
+              leads={paged}
+              isLive={isLive}
+              brandKey={brandKey}
+              brandCampaigns={brandCampaigns}
+              selected={selected}
+              allPageSelected={allPageSelected}
+              somePageSelected={somePageSelected}
+              onToggleSelectAll={toggleSelectAll}
+              onToggleSelect={toggleSelect}
+              onOpenDetail={openDetail}
+              onAssignLead={(id, campaignId) => void assignLead(id, campaignId)}
+              campaignTitle={campaignTitle}
+              matchChipClass={matchChipClass}
+              matchLabel={matchLabel}
+              matchStateOf={(lead) => matchStateOf(lead)}
+            />
           </>
         )}
 
@@ -1519,18 +1381,13 @@ export default function BrandLeadsClient({
           </label>
           {isLive ? (
             <label className="field-label">
-              Campaign
+              Goal
               <select
                 className="field"
                 value={assignCampaignId}
                 onChange={(e) => setAssignCampaignId(e.target.value)}
-                required
               >
-                {!assignCampaignId ? (
-                  <option value="" disabled>
-                    Select campaign…
-                  </option>
-                ) : null}
+                <option value="">All goals</option>
                 {brandCampaigns.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}

@@ -47,6 +47,7 @@ export const PROSPECT_LIST_SELECT = {
   outreachReady: true,
   bookingUrlFound: true,
   source: true,
+  mapsPlaceId: true,
   attemptCount: true,
   nextCallAt: true,
   lastDisposition: true,

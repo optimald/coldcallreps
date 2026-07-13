@@ -66,8 +66,44 @@ export type ProspectIntel = {
   /** Google Business Profile-ish */
   googleCategory?: string | null;
   googlePhone?: string | null;
+  googleEmail?: string | null;
+  googlePlaceId?: string | null;
   googleMapsUrl?: string | null;
   openingHours?: string | null;
+
+  /* ── Phase 2 webscan (Trojan WebScanView) ── */
+  quickHealth?: number | null;
+  seoScore?: number | null;
+  opportunity?: number | null;
+  metaTitle?: string | null;
+  metaDesc?: string | null;
+  h1?: string | null;
+  h1Count?: number | null;
+  h2Count?: number | null;
+  headingScore?: number | null;
+  wordCount?: number | null;
+  imgCount?: number | null;
+  imgMissingAlt?: number | null;
+  canonicalValid?: boolean | null;
+  robots?: string | null;
+  hasOg?: boolean | null;
+  localKw?: boolean | null;
+  loadSec?: number | null;
+  dnsEmail?: string | null;
+  spf?: 'pass' | 'fail' | null;
+  dmarc?: string | null;
+  dkim?: boolean | null;
+  dnsSec?: number | null;
+  gsc?: boolean | null;
+  saasTools?: string | null;
+  dnsCdn?: string | null;
+  webPhone?: string | null;
+  webEmail?: string | null;
+
+  /* ── Phase 3 enrichment extras ── */
+  generalEmail?: string | null;
+  businessPhone?: string | null;
+  services?: string | null;
 };
 
 export type HooksPayloadV2 = {

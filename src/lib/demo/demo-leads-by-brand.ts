@@ -3,6 +3,7 @@
  */
 
 import { serializeHooksPayload, type ProspectIntel } from '@/lib/prospect-intel';
+import { buildDemoPhaseScan } from '@/lib/phase-intel';
 import {
   CANONICAL_DEMO_BRANDS,
   resolveDemoBrandKey,
@@ -25,6 +26,7 @@ export type DemoLeadRow = {
   reviewRating?: number | null;
   reviewCount?: number | null;
   enrichmentStatus?: string | null;
+  mapsPlaceId?: string | null;
   scrapeStatus?: string | null;
   webScanStatus?: string | null;
   qualifyPhase1?: boolean | null;
@@ -192,10 +194,25 @@ function buildPoolLeads(
     const ready = i % 5 !== 4;
     const daysAgo = i % 14;
     const created = new Date(Date.now() - daysAgo * 86400_000).toISOString();
+    const scan = buildDemoPhaseScan(i, `+1555${String(1000000 + n).slice(0, 7)}`);
     const intel: ProspectIntel = {
       score: 62 + (i % 28),
       health: 55 + (i % 35),
+      webEvoScore: 42 + (i % 48),
+      copyrightYear: 2018 + (i % 7),
+      cms: ['Webflow', 'WordPress', 'HubSpot CMS', 'Next.js'][i % 4],
+      lastReviewAt: new Date(Date.now() - ((i % 80) + 3) * 86400000).toISOString(),
+      https: true,
+      mobile: i % 5 !== 0,
+      bookingSystem: ready && i % 3 === 0 ? 'Calendly' : null,
+      latitude: 30.27 + (i % 20) * 0.01,
+      longitude: -97.74 - (i % 15) * 0.01,
+      address: `${100 + i} Congress Ave`,
+      googleCategory: ['Software Company', 'Business Consultant', 'Marketing Agency'][i % 3],
+      googlePhone: `+1555${String(1000000 + n).slice(0, 7)}`,
+      googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=Austin+TX`,
       signals: hooks,
+      ...scan,
     };
     out.push({
       id: `demo-lead-${brandSlug}-${n}`,
@@ -215,6 +232,7 @@ function buildPoolLeads(
       enrichmentStatus: ready ? 'done' : i % 3 === 0 ? 'pending' : 'none',
       scrapeStatus: 'completed',
       webScanStatus: ready ? 'completed' : 'in_progress',
+      mapsPlaceId: scan.googlePlaceId || `ChIJdemo${n}`,
       qualifyPhase1: true,
       qualifyPhase2: ready || i % 2 === 0,
       qualifyPhase3: ready,
@@ -238,7 +256,7 @@ const CACHE = new Map<string, DemoLeadRow[]>();
 /** ~45 dial-ready-heavy leads per brand. */
 export function buildDemoLeadsForBrand(brandKey: string, count = 45): DemoLeadRow[] {
   const slug = resolveDemoBrandKey(brandKey);
-  const cached = CACHE.get(`${slug}:${count}`);
+  const cached = CACHE.get(`${slug}:${count}:phases`);
   if (cached) return cached;
 
   const brand = CANONICAL_DEMO_BRANDS.find((b) => b.slug === slug)!;
@@ -246,7 +264,7 @@ export function buildDemoLeadsForBrand(brandKey: string, count = 45): DemoLeadRo
   const offset =
     brand.vertical === 'saas' ? 0 : brand.vertical === 'insurance' ? 100 : 200;
   const leads = buildPoolLeads(pool, slug, count, offset);
-  CACHE.set(`${slug}:${count}`, leads);
+  CACHE.set(`${slug}:${count}:phases`, leads);
   return leads;
 }
 

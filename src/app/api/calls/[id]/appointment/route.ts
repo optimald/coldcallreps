@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
-import { dispatchPipelineTask, auditCallTask } from '@/trigger/tasks';
+import { dispatchPipelineTask, runAuditCallInline, AUDIT_CALL_TASK_ID } from '@/trigger/tasks';
 
 /**
  * POST /api/calls/[id]/appointment
@@ -61,8 +61,10 @@ export async function POST(
       });
     }
 
-    const { mode, result } = await dispatchPipelineTask('audit-call-task', () =>
-      auditCallTask({ callLogId })
+    const { mode, result } = await dispatchPipelineTask(
+      AUDIT_CALL_TASK_ID,
+      () => runAuditCallInline({ callLogId }),
+      { payload: { callLogId }, wait: true }
     );
 
     return NextResponse.json({ ok: true, mode, audit: result });
