@@ -190,11 +190,13 @@ export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
     const activeMode = roleMode.activeMode;
     const repDone = roleMode.modes.REP.onboarded;
     const brandDone = roleMode.modes.BRAND.onboarded;
+    // New accounts: chooser only. Brand desk without a brand: creation form.
+    // Never force the legacy Accept-SDR page.
     const needsOnboardingPath =
       !repDone && !brandDone
         ? '/onboarding'
-        : activeMode && roleMode.modes[activeMode] && !roleMode.modes[activeMode].onboarded
-          ? roleMode.modes[activeMode].onboardingPath
+        : activeMode === 'BRAND' && !brandDone
+          ? '/onboarding/brand'
           : null;
 
     return {

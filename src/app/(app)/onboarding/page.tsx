@@ -3,17 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BrandMark from '@/components/BrandMark';
-import {
-  SIGNUP_HOME_KEY,
-  SIGNUP_PATHS,
-  SIGNUP_ROLE_KEY,
-  type SignupPath,
-} from '@/lib/signup-paths';
-import { onboardingPathFor, type SwitchableMode } from '@/lib/role-mode';
+import { SIGNUP_HOME_KEY, SIGNUP_PATHS, SIGNUP_ROLE_KEY, type SignupPath } from '@/lib/signup-paths';
 
 /**
  * Post-signup account type chooser — SDR vs Brand.
- * Deep-linked ?role= preferences skip this via GrowthBootstrap.
+ * SDR unlocks immediately; Brand continues to brand creation.
  */
 export default function OnboardingChoosePage() {
   const router = useRouter();
@@ -44,8 +38,28 @@ export default function OnboardingChoosePage() {
       /* ignore */
     }
 
-    const mode = path.role as SwitchableMode;
-    window.location.href = onboardingPathFor(mode);
+    if (path.role === 'BRAND') {
+      window.location.href = '/onboarding/brand';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/onboarding/rep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accept: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || 'Could not unlock SDR');
+        setBusy(null);
+        return;
+      }
+      window.location.href = data.redirectTo || '/dashboard';
+    } catch {
+      setMsg('Could not unlock SDR. Try again.');
+      setBusy(null);
+    }
   }
 
   return (
@@ -57,7 +71,7 @@ export default function OnboardingChoosePage() {
         <header className="signup-chooser__head">
           <h1 className="signup-chooser__title">How will you use ColdCallReps?</h1>
           <p className="signup-chooser__sub">
-            Pick your account type — you can unlock the other desk later in Settings.
+            Pick your account type — you can unlock the other desk later from the sidebar.
           </p>
         </header>
         <div className="signup-chooser__grid">

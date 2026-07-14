@@ -76,7 +76,8 @@ export function modeFromRole(role: AppRole | string | null | undefined): Switcha
 }
 
 export function onboardingPathFor(mode: SwitchableMode): string {
-  return mode === 'REP' ? '/onboarding/rep' : '/onboarding/brand';
+  // SDR unlocks from the chooser (or auto on desk switch). Brand still needs creation.
+  return mode === 'REP' ? '/onboarding' : '/onboarding/brand';
 }
 
 export function homeForMode(mode: SwitchableMode): string {
@@ -175,9 +176,7 @@ export function needsOnboardingRedirect(
   const brandDone = state.modes.BRAND.onboarded;
   // New accounts pick SDR vs Brand after signup.
   if (!repDone && !brandDone) return '/onboarding';
-  if (!state.activeMode) return null;
-  const mode = state.modes[state.activeMode];
-  if (!mode.onboarded) return mode.onboardingPath;
+  if (state.activeMode === 'BRAND' && !brandDone) return '/onboarding/brand';
   return null;
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { SignUp } from '@clerk/nextjs';
 import ClerkAuthShell from '@/components/ClerkAuthShell';
 import BrandMark from '@/components/BrandMark';
@@ -19,6 +19,11 @@ const PLANS = ['STARTER', 'PRO', 'TEAM'] as const;
  */
 export default function SignUpClient() {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const isClerkHandshake =
+    Boolean(pathname?.includes('sso-callback')) ||
+    Boolean(pathname?.includes('verify-email-address')) ||
+    Boolean(pathname?.includes('continue'));
 
   useEffect(() => {
     const ref = searchParams.get('ref');
@@ -40,6 +45,11 @@ export default function SignUpClient() {
       /* ignore */
     }
   }, [searchParams]);
+
+  // OAuth / verify routes briefly mount this page — don't flash signup chrome.
+  if (isClerkHandshake) {
+    return <SignUp />;
+  }
 
   return (
     <ClerkAuthShell mode="sign-up">

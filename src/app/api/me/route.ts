@@ -144,7 +144,7 @@ export async function GET(req: Request) {
 
 /**
  * Switch active platform role / desk mode.
- * First-time switches that lack onboarding return 409 ONBOARDING_REQUIRED.
+ * Brand without a company → 409 + /onboarding/brand. SDR unlocks immediately.
  */
 export async function PATCH(req: Request) {
   try {
@@ -181,30 +181,33 @@ export async function PATCH(req: Request) {
     }
 
     const switchMode = modeFromRole(requested);
+    const { prisma } = await import('@/lib/prisma');
     if (switchMode) {
       let onboarded = isModeOnboarded(switchMode, profile);
       // Owning a brand counts as Brand onboarded (legacy accounts / skipped flag).
       if (!onboarded && switchMode === 'BRAND') {
-        const { prisma } = await import('@/lib/prisma');
         const owned = await prisma.brand.count({
           where: { ownerId: profile.id },
         });
         if (owned > 0) onboarded = true;
       }
+      // SDR has no setup page — unlock immediately on desk switch.
+      if (!onboarded && switchMode === 'REP') {
+        onboarded = true;
+      }
       if (!onboarded) {
         return NextResponse.json(
           {
-            error: `Complete ${switchMode === 'REP' ? 'SDR' : 'Brand'} onboarding to unlock this mode.`,
+            error: 'Create your brand to unlock Brand mode.',
             code: 'ONBOARDING_REQUIRED',
-            onboardingPath: onboardingPathFor(switchMode),
-            mode: switchMode,
+            onboardingPath: onboardingPathFor('BRAND'),
+            mode: 'BRAND',
           },
           { status: 409 }
         );
       }
     }
 
-    const { prisma } = await import('@/lib/prisma');
     const roleMode = buildRoleModeState(profile);
     const nextUnlocked = new Set(roleMode.unlockedRoles.map(String));
     if (requested === 'BRAND') nextUnlocked.add('BRAND');
@@ -219,8 +222,20 @@ export async function PATCH(req: Request) {
         ...(requested === 'BRAND'
           ? { brandOnboardedAt: profile.brandOnboardedAt || new Date() }
           : {}),
+        // Stamp SDR onboarded when switching into the desk (no accept page).
+        ...(requested === 'REP'
+          ? { repOnboardedAt: profile.repOnboardedAt || new Date() }
+          : {}),
       },
     });
+
+    if (requested === 'REP') {
+      const { ensureRepProfile } = await import('@/lib/profile-slug');
+      await ensureRepProfile({
+        userId: profile.id,
+        displayName: updated.displayName,
+      });
+    }
 
     const nextMode = modeFromRole(updated.platformRole);
     return NextResponse.json({

@@ -641,12 +641,16 @@ export default function AppShell({
     setMenuOpen(false);
     try {
       const modeStatus = roleMode?.modes?.[target];
-      // Brand owners may lack brandOnboardedAt (legacy). Let the API decide —
-      // it heals ownership. Only short-circuit when we know onboarding is required
-      // and there is no owned brand that would unlock Brand mode.
+      // Brand needs creation when not onboarded (unless they already own a brand).
+      // SDR unlocks via PATCH — no accept page.
       const brandOwnerBypass =
         target === 'BRAND' && ownedBrands.length > 0;
-      if (modeStatus && !modeStatus.onboarded && !brandOwnerBypass) {
+      if (
+        target === 'BRAND' &&
+        modeStatus &&
+        !modeStatus.onboarded &&
+        !brandOwnerBypass
+      ) {
         window.location.href = modeStatus.onboardingPath;
         return;
       }

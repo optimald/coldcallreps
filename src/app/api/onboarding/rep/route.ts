@@ -10,12 +10,8 @@ import {
 
 /**
  * POST /api/onboarding/rep
- * Accept SDR role + complete simple profile (name, avatar, headline/resume basics).
- * Body: {
- *   accept?: boolean,
- *   displayName?, avatarUrl?, headline?, bio?, hiringBio?, openToWork?,
- *   startConnect?: boolean  // optional — caller still hits /api/billing/connect for URL
- * }
+ * Unlock SDR desk from the account-type chooser (no profile wizard).
+ * Body: { accept: true, displayName?, avatarUrl?, headline?, bio?, hiringBio?, openToWork? }
  */
 export async function POST(req: Request) {
   try {
@@ -25,7 +21,7 @@ export async function POST(req: Request) {
     if (body.accept !== true && !profile.repOnboardedAt) {
       return NextResponse.json(
         {
-          error: 'Accept adding the SDR role to continue.',
+          error: 'Choose SDR on the account type screen to continue.',
           code: 'ACCEPT_REQUIRED',
         },
         { status: 400 }
@@ -35,7 +31,7 @@ export async function POST(req: Request) {
     const displayName =
       body.displayName != null
         ? String(body.displayName).trim().slice(0, 80)
-        : profile.displayName;
+        : profile.displayName || 'Rep';
     if (!displayName) {
       return NextResponse.json({ error: 'Display name is required' }, { status: 400 });
     }

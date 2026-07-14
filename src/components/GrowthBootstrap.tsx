@@ -7,7 +7,6 @@ import {
   SIGNUP_ROLE_KEY,
   pathForRole,
 } from '@/lib/signup-paths';
-import { onboardingPathFor, type SwitchableMode } from '@/lib/role-mode';
 
 const REF_KEY = 'ccr_ref';
 const PLAN_KEY = 'ccr_plan';
@@ -52,11 +51,9 @@ export default function GrowthBootstrap() {
     void (async () => {
       let storedRef: string | null = null;
       let storedPlan: string | null = null;
-      let storedRole: string | null = null;
       try {
         storedRef = sessionStorage.getItem(REF_KEY);
         storedPlan = sessionStorage.getItem(PLAN_KEY);
-        storedRole = sessionStorage.getItem(SIGNUP_ROLE_KEY);
       } catch {
         /* ignore */
       }
@@ -79,23 +76,7 @@ export default function GrowthBootstrap() {
         }
       }
 
-      const mapped = pathForRole(storedRole);
-
-      // Deep-linked role preference → skip chooser, go straight to that onboarding.
-      if (
-        mapped &&
-        (!pathname.startsWith('/onboarding') || pathname === '/onboarding')
-      ) {
-        const mode = mapped.role as SwitchableMode;
-        try {
-          sessionStorage.removeItem(SIGNUP_ROLE_KEY);
-          sessionStorage.removeItem(SIGNUP_HOME_KEY);
-        } catch {
-          /* ignore */
-        }
-        router.replace(onboardingPathFor(mode));
-        return;
-      }
+      // Soft ?role= preference is stored only — account type is chosen at /onboarding.
 
       if (storedPlan && (PLANS as readonly string[]).includes(storedPlan as (typeof PLANS)[number])) {
         try {
