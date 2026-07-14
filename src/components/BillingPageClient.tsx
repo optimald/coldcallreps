@@ -1257,7 +1257,7 @@ export default function BillingPageClient() {
         open={fundOpen}
         onClose={() => setFundOpen(false)}
         title="Fund a brand wallet"
-        description="Pick which brand receives the prepaid escrow (~20% platform fee on verified results)."
+        description="Pick which brand receives the prepaid escrow (20% platform fee on payouts, capped)."
       >
         <label className="billing-ledger-filters__field" style={{ marginBottom: '0.75rem' }}>
           <span>Brand to fund</span>

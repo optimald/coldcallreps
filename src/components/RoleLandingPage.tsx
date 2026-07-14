@@ -198,8 +198,8 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
         <section className="lp-ath-proofbar" aria-label="Platform proof">
           <div className="lp-ath-proofbar__grid">
             <div>
-              <strong>~20%</strong>
-              <span>Platform fee on results</span>
+              <strong>20%</strong>
+              <span>Fee capped ($30 / outcome)</span>
             </div>
             <div>
               <strong>Escrow</strong>

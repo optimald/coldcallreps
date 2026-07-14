@@ -39,6 +39,8 @@ type CampaignRow = {
   qualifiedPayoutLabel?: string | null;
   goalLabel: string;
   goalType?: string;
+  earningsModel?: string;
+  earningsModelLabel?: string;
   applicationCount?: number;
   bookingLink?: string | null;
   escrowLabel?: string | null;
@@ -456,7 +458,11 @@ export default function BrandCampaignsPage() {
                 ? Math.min(100, Math.round((spent / funded) * 100))
                 : null;
             const goalNoun =
-              c.goalType === 'QUALIFIED_LEAD' ? 'Qualified' : 'Booked';
+              c.earningsModel === 'PER_QUALIFIED_LEAD' || c.goalType === 'QUALIFIED_LEAD'
+                ? 'Qualified'
+                : c.earningsModel === 'TIERED_ACCELERATOR'
+                  ? 'Accelerator'
+                  : 'Booked';
 
             return (
               <article
@@ -476,7 +482,7 @@ export default function BrandCampaignsPage() {
                       </span>
                     </div>
                     <p className="camp-row__meta">
-                      {c.goalLabel}
+                      {c.earningsModelLabel || c.goalLabel}
                       {c.dateRangeLabel ? ` · ${c.dateRangeLabel}` : ''}
                       {c.playbookTitle || c.playbookId ? (
                         <>

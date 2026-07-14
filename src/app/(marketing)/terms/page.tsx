@@ -100,7 +100,8 @@ export default function TermsPage() {
       <p style={body}>
         Brands fund campaign payouts. Approved results may be paid to eligible reps via Stripe
         Connect (or similar). ColdCallReps may retain a platform fee (approximately 20% on
-        marketplace payouts unless otherwise stated for a campaign). Payout timing, verification,
+        marketplace payouts, subject to published fee caps on the Pricing page, unless otherwise
+        stated for a campaign). Payout timing, verification,
         clawbacks for invalid or fraudulent results, and Connect onboarding requirements are
         controlled by campaign rules and Stripe’s terms. We are not a bank or employer of reps by
         default.

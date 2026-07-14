@@ -830,6 +830,13 @@ enum CampaignGoalType {
   BOTH
 }
 
+/** How SDRs earn on verified outcomes for this campaign. */
+enum CampaignEarningsModel {
+  PER_BOOKED_MEETING
+  PER_QUALIFIED_LEAD
+  TIERED_ACCELERATOR
+}
+
 enum CampaignStatus {
   DRAFT
   OPEN
@@ -857,13 +864,27 @@ model Campaign {
   description      String          
   icpText          String?         
   goalType         CampaignGoalType @default(BOOKED_MEETING)
+  /** SDR earnings model — maps to goalType for dial/booking rules. */
+  earningsModel    CampaignEarningsModel @default(PER_BOOKED_MEETING)
   /** Meeting / primary outcome bounty (brand charged per verified result). */
   payoutCents      Int
   /** Optional qualified-lead bounty when goalType is BOTH (or secondary path). */
   qualifiedPayoutCents Int?
+  /** Tiered accelerator: wins per rate step (e.g. 5). */
+  acceleratorStepSize Int?
+  /** Tiered accelerator: first step rate (cents). */
+  acceleratorTier1Cents Int?
+  /** Tiered accelerator: second step rate (cents). */
+  acceleratorTier2Cents Int?
+  /** Tiered accelerator: third+ step rate (cents). */
+  acceleratorTier3Cents Int?
+  /** Optional base pay amount per cadence period, per ACTIVE SDR. */
+  basePayCents     Int?
+  /** WEEKLY | BIWEEKLY | MONTHLY — null when basePayCents is null. */
+  basePayCadence   String?
   /** Productized tier: TIER1 | TIER2 | TIER3 */
   pricingTier      String           @default("TIER2")
-  platformFeeBps   Int              @default(2000) // 20% platform fee
+  platformFeeBps   Int              @default(2000) // 20% platform fee (capped in code)
   status           CampaignStatus   @default(DRAFT)
   minScore         Int?             @default(80)
   requireCertification Boolean      @default(true)
@@ -950,7 +971,7 @@ model CampaignApplication {
   createdAt  DateTime                   @default(now())
   updatedAt  DateTime                   @updatedAt
 
-  payout CampaignPayout?
+  payouts CampaignPayout[]
   appointmentClaims AppointmentClaim[]
 
   @@unique([campaignId, userId])
@@ -1031,6 +1052,8 @@ model AppointmentClaim {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  payout CampaignPayout?
+
   @@index([campaignId, status])
   @@index([applicationId])
   @@index([repUserId, createdAt])
@@ -1062,13 +1085,20 @@ model CampaignPayout {
   id                      String               @id @default(cuid())
   campaignId              String
   campaign                Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  applicationId           String               @unique
+  applicationId           String
   application             CampaignApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  /** One payout per verified claim (multiple wins per application). */
+  claimId                 String?              @unique
+  claim                   AppointmentClaim?    @relation(fields: [claimId], references: [id], onDelete: SetNull)
   brandUserId             String
   brandUser               UserProfile          @relation("PayoutBrand", fields: [brandUserId], references: [id], onDelete: Cascade)
   repUserId               String
   repUser                 UserProfile          @relation("PayoutRep", fields: [repUserId], references: [id], onDelete: Cascade)
-  /** Amount brand is charged (campaign.payoutCents). */
+  /** OUTCOME = claim bounty; BASE = cadence retainer. */
+  kind                    String               @default("OUTCOME")
+  /** Cadence period key for BASE payouts (e.g. 2026-W28, 2026-07-07, 2026-07). */
+  periodKey               String?
+  /** Amount brand is charged for this outcome. */
   grossCents              Int
   platformFeeCents        Int
   /** Amount transferred to the SDR (gross − fee). */
@@ -1091,6 +1121,8 @@ model CampaignPayout {
   paidAt                  DateTime?
 
   @@index([campaignId, status])
+  @@index([applicationId, status])
+  @@index([applicationId, kind, periodKey])
   @@index([repUserId, status])
   @@index([brandUserId, createdAt])
   @@index([status, createdAt])

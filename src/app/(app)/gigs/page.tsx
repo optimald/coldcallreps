@@ -11,6 +11,7 @@ type Campaign = {
   description: string;
   payoutLabel: string;
   goalLabel: string;
+  earningsModelLabel?: string;
   minScore?: number | null;
   requireCertification?: boolean;
   brand?: { name: string; slug: string; logoUrl?: string | null };
@@ -236,8 +237,10 @@ export default function GigsPage() {
                           <div className="gig-card__hero">
                             <p className="gig-card__payout">{c.payoutLabel}</p>
                             <p className="gig-card__brand">{brandName}</p>
-                            {c.goalLabel && (
-                              <span className="gig-card__outcome">{c.goalLabel}</span>
+                            {(c.earningsModelLabel || c.goalLabel) && (
+                              <span className="gig-card__outcome">
+                                {c.earningsModelLabel || c.goalLabel}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -333,7 +336,8 @@ export default function GigsPage() {
                               </span>
                             </strong>
                             <div className="session-row__meta">
-                              {a.campaign.goalLabel} · {statusLabel(a.status)}
+                              {a.campaign.earningsModelLabel || a.campaign.goalLabel} ·{' '}
+                              {statusLabel(a.status)}
                               {a.payout?.status === 'PAID'
                                 ? ' · Paid'
                                 : a.payout?.status === 'PENDING'

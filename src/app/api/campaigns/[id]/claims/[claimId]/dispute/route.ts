@@ -59,12 +59,29 @@ export async function POST(req: Request, ctx: Ctx) {
         );
       }
 
-      let payout = await prisma.campaignPayout.findUnique({
-        where: { applicationId: claim.applicationId },
+      let payout = await prisma.campaignPayout.findFirst({
+        where: {
+          OR: [{ claimId: claim.id }, { applicationId: claim.applicationId, claimId: null }],
+        },
+        orderBy: { createdAt: 'desc' },
       });
       if (!payout) {
-        const { calcPayoutSplit } = await import('@/lib/campaigns');
-        const split = calcPayoutSplit(campaign.payoutCents, campaign.platformFeeBps);
+        const { calcPayoutSplit, resolveClaimPayoutCents } = await import('@/lib/campaigns');
+        const { PLATFORM_FEE_CAP_CENTS } = await import('@/lib/platform-fees');
+        const priorPaidCount = await prisma.campaignPayout.count({
+          where: {
+            campaignId,
+            repUserId: claim.repUserId,
+            status: 'PAID',
+            kind: 'OUTCOME',
+          },
+        });
+        const grossCents = resolveClaimPayoutCents(campaign, priorPaidCount);
+        const split = calcPayoutSplit(
+          grossCents,
+          campaign.platformFeeBps,
+          PLATFORM_FEE_CAP_CENTS
+        );
         const brandOwnerId = campaign.brand.ownerId;
         if (!brandOwnerId) {
           return NextResponse.json({ error: 'Brand has no owner' }, { status: 400 });
@@ -73,6 +90,7 @@ export async function POST(req: Request, ctx: Ctx) {
           data: {
             campaignId,
             applicationId: claim.applicationId,
+            claimId: claim.id,
             brandUserId: brandOwnerId,
             repUserId: claim.repUserId,
             grossCents: split.grossCents,

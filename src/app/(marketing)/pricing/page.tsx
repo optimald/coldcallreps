@@ -6,6 +6,10 @@ import {
   REFERRAL_REWARD_LABEL,
   TRIAL_MINUTES,
 } from '@/lib/product';
+import {
+  PLATFORM_FEE_EXAMPLES,
+  PLATFORM_FEE_SUMMARY,
+} from '@/lib/platform-fees';
 
 const REP_CARDS = [
   {
@@ -59,7 +63,8 @@ const BRAND_CARDS = [
     features: [
       ...LEAD_PACKS.map((p) => `${p.credits.toLocaleString()} credits · $${p.priceUsd}`),
       '12-month shelf life · burn after allotment = 0',
-      'Campaign escrow separate (~20% platform fee on payouts)',
+      'Campaign escrow separate (outcomes + optional base pay)',
+      PLATFORM_FEE_SUMMARY,
     ],
   },
 ];
@@ -177,8 +182,8 @@ export default function PricingPage() {
       </h1>
       <p style={{ color: 'var(--muted)', marginBottom: '2.5rem', maxWidth: 720 }}>
         SDRs buy practice minutes. Brands buy enriched lead credits for Generate Leads (imports stay
-        free) and fund campaign escrow to pay reps for results (~20% platform fee). Refer a friend —
-        you both get {REFERRAL_REWARD_LABEL}.
+        free) and fund campaign escrow to pay reps for outcomes and optional base pay (weekly,
+        bi-weekly, or monthly). Refer a friend — you both get {REFERRAL_REWARD_LABEL}.
       </p>
 
       <h2
@@ -228,6 +233,34 @@ export default function PricingPage() {
           <PlanCard key={plan.key} plan={plan} />
         ))}
       </div>
+
+      <section
+        style={{
+          marginTop: '3rem',
+          padding: '1.5rem 0',
+          borderTop: '1px solid var(--border, rgba(0,0,0,0.08))',
+          maxWidth: 720,
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.35rem',
+            marginBottom: '0.75rem',
+          }}
+        >
+          Campaign payout fees
+        </h2>
+        <p style={{ color: 'var(--muted)', marginBottom: '0.75rem' }}>{PLATFORM_FEE_SUMMARY}</p>
+        <ul style={{ color: 'var(--muted)', margin: '0 0 0.75rem', paddingLeft: '1.2rem' }}>
+          <li>20% platform fee on SDR payouts</li>
+          <li>Capped at $30 per outcome payout</li>
+          <li>Base pay fee caps: $40/wk · $75/bi-weekly · $150/mo (~$150/mo max on base)</li>
+        </ul>
+        <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>
+          {PLATFORM_FEE_EXAMPLES}
+        </p>
+      </section>
 
       <p style={{ color: 'var(--muted)', marginTop: '2.5rem', fontSize: '0.9rem' }}>
         <Link href="/for/reps" className="soft-link">

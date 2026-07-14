@@ -133,3 +133,53 @@ export async function releaseEscrowOutcome(opts: {
     return { released: amount, alreadyReleased: false as const };
   });
 }
+
+/** Release base-pay amount from campaign escrow. Idempotent per applicationId + periodKey. */
+export async function releaseEscrowBase(opts: {
+  brandId: string;
+  campaignId: string;
+  amountCents: number;
+  applicationId: string;
+  periodKey: string;
+}) {
+  const amount = Math.max(0, Math.round(opts.amountCents));
+  const idempotencyNote = `BASE:${opts.applicationId}:${opts.periodKey}`;
+
+  return prisma.$transaction(async (tx) => {
+    const prior = await tx.walletLedger.findFirst({
+      where: {
+        campaignId: opts.campaignId,
+        type: 'ESCROW_RELEASE',
+        note: idempotencyNote,
+      },
+      select: { id: true },
+    });
+    if (prior) {
+      return { released: 0, alreadyReleased: true as const };
+    }
+
+    const campaign = await tx.campaign.findUnique({ where: { id: opts.campaignId } });
+    if (!campaign) throw new Error('Campaign not found');
+    if (campaign.escrowLockedCents < amount) {
+      throw new Error('Insufficient escrow locked on campaign for base pay');
+    }
+    await tx.campaign.update({
+      where: { id: opts.campaignId },
+      data: { escrowLockedCents: { decrement: amount } },
+    });
+    const wallet = await tx.brandWallet.findUnique({ where: { brandId: opts.brandId } });
+    if (wallet) {
+      await tx.walletLedger.create({
+        data: {
+          walletId: wallet.id,
+          type: 'ESCROW_RELEASE',
+          amountCents: -amount,
+          balanceAfter: wallet.balanceCents,
+          campaignId: opts.campaignId,
+          note: idempotencyNote,
+        },
+      });
+    }
+    return { released: amount, alreadyReleased: false as const };
+  });
+}

@@ -1,10 +1,29 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Modal from '@/components/ui/Modal';
+import {
+  EARNINGS_MODEL_BLURBS,
+  EARNINGS_MODEL_RANGES,
+  type BudgetMode,
+} from '@/lib/campaigns';
 
 type PackOpt = { id: string; name: string };
 type PlaybookOpt = { id: string; title: string };
+type EarningsModel = 'PER_BOOKED_MEETING' | 'PER_QUALIFIED_LEAD' | 'TIERED_ACCELERATOR';
+type BaseCadence = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+
+const BASE_PLACEHOLDERS: Record<BaseCadence, string> = {
+  WEEKLY: '500',
+  BIWEEKLY: '1000',
+  MONTHLY: '1500',
+};
+
+const BASE_RANGE_HINT: Record<BaseCadence, string> = {
+  WEEKLY: 'Recommended $250 – $750 / week.',
+  BIWEEKLY: 'Recommended $500 – $1,500 / bi-week.',
+  MONTHLY: 'Recommended $1,000 – $3,000 / month.',
+};
 
 export default function CreateCampaignModal({
   open,
@@ -32,11 +51,17 @@ export default function CreateCampaignModal({
   const [meetingDuration, setMeetingDuration] = useState('15');
   const [targetVertical, setTargetVertical] = useState('');
   const [targetLocation, setTargetLocation] = useState('');
-  const [payoutDollars, setPayoutDollars] = useState('40');
-  const [qualifiedPayoutDollars, setQualifiedPayoutDollars] = useState('25');
-  const [goalType, setGoalType] = useState('BOOKED_MEETING');
+  const [payoutDollars, setPayoutDollars] = useState('75');
+  const [earningsModel, setEarningsModel] = useState<EarningsModel>('PER_BOOKED_MEETING');
+  const [acceleratorStepSize, setAcceleratorStepSize] = useState('5');
+  const [tier1Dollars, setTier1Dollars] = useState('50');
+  const [tier2Dollars, setTier2Dollars] = useState('75');
+  const [tier3Dollars, setTier3Dollars] = useState('100');
+  const [baseEnabled, setBaseEnabled] = useState(false);
+  const [baseCadence, setBaseCadence] = useState<BaseCadence>('MONTHLY');
+  const [baseDollars, setBaseDollars] = useState('1500');
   const [status, setStatus] = useState('OPEN');
-  const [budgetMode, setBudgetMode] = useState('OVERALL');
+  const [budgetMode, setBudgetMode] = useState<BudgetMode | string>('OVERALL');
   const [budgetDollars, setBudgetDollars] = useState('400');
   const [dailyBudgetDollars, setDailyBudgetDollars] = useState('100');
   const [startsAt, setStartsAt] = useState(() => new Date().toISOString().slice(0, 10));
@@ -48,6 +73,11 @@ export default function CreateCampaignModal({
   const [playbooks, setPlaybooks] = useState<PlaybookOpt[]>(playbooksProp || []);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+
+  const wantsMeeting =
+    earningsModel === 'PER_BOOKED_MEETING' || earningsModel === 'TIERED_ACCELERATOR';
+
+  const earningsHint = useMemo(() => EARNINGS_MODEL_BLURBS[earningsModel], [earningsModel]);
 
   useEffect(() => {
     if (packsProp) setPacks(packsProp);
@@ -87,6 +117,19 @@ export default function CreateCampaignModal({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (earningsModel === 'PER_BOOKED_MEETING') {
+      setPayoutDollars(String(EARNINGS_MODEL_RANGES.PER_BOOKED_MEETING.suggestedCents / 100));
+    } else if (earningsModel === 'PER_QUALIFIED_LEAD') {
+      setPayoutDollars(String(EARNINGS_MODEL_RANGES.PER_QUALIFIED_LEAD.suggestedCents / 100));
+    }
+  }, [earningsModel]);
+
+  useEffect(() => {
+    if (!baseEnabled) return;
+    setBaseDollars(BASE_PLACEHOLDERS[baseCadence]);
+  }, [baseCadence, baseEnabled]);
+
   async function create() {
     if (!brandId || !title.trim() || !description.trim()) {
       setMsg('Title and description are required.');
@@ -96,7 +139,6 @@ export default function CreateCampaignModal({
       setMsg('Pick a playbook — every campaign needs a talk track for practice and live coach.');
       return;
     }
-    const wantsMeeting = goalType === 'BOOKED_MEETING' || goalType === 'BOTH';
     if (wantsMeeting && !bookingLink.trim()) {
       setMsg('Meeting campaigns need a Cal.com / Calendly / Google Appointment link.');
       return;
@@ -109,14 +151,37 @@ export default function CreateCampaignModal({
       setMsg('Set a daily budget when using daily mode.');
       return;
     }
+    if (earningsModel === 'TIERED_ACCELERATOR') {
+      if (!acceleratorStepSize || Number(acceleratorStepSize) < 1) {
+        setMsg('Set an accelerator step size (wins per rate tier).');
+        return;
+      }
+      if (
+        !tier1Dollars ||
+        !tier2Dollars ||
+        !tier3Dollars ||
+        Number(tier1Dollars) <= 0 ||
+        Number(tier2Dollars) <= 0 ||
+        Number(tier3Dollars) <= 0
+      ) {
+        setMsg('Set all three accelerator tier rates.');
+        return;
+      }
+    } else if (!payoutDollars || Number(payoutDollars) <= 0) {
+      setMsg('Set a payout amount.');
+      return;
+    }
+    if (baseEnabled && (!baseDollars || Number(baseDollars) <= 0)) {
+      setMsg('Set a base pay amount, or turn base pay off.');
+      return;
+    }
     setBusy(true);
     setMsg('');
     try {
-      const payoutCents = Math.round(Number(payoutDollars) * 100);
-      const qualifiedPayoutCents =
-        goalType === 'BOTH' || goalType === 'QUALIFIED_LEAD'
-          ? Math.round(Number(qualifiedPayoutDollars || payoutDollars) * 100)
-          : undefined;
+      const payoutCents =
+        earningsModel === 'TIERED_ACCELERATOR'
+          ? Math.round(Number(tier1Dollars) * 100)
+          : Math.round(Number(payoutDollars) * 100);
       const budgetCents = budgetDollars
         ? Math.round(Number(budgetDollars) * 100)
         : undefined;
@@ -136,10 +201,22 @@ export default function CreateCampaignModal({
           meetingDurationMinutes: wantsMeeting ? Math.round(Number(meetingDuration)) : undefined,
           targetVertical: targetVertical.trim() || undefined,
           targetLocation: targetLocation.trim() || undefined,
+          earningsModel,
           payoutCents,
-          qualifiedPayoutCents:
-            goalType === 'BOTH' ? qualifiedPayoutCents : goalType === 'QUALIFIED_LEAD' ? payoutCents : undefined,
-          goalType,
+          ...(earningsModel === 'TIERED_ACCELERATOR'
+            ? {
+                acceleratorStepSize: Math.round(Number(acceleratorStepSize)),
+                acceleratorTier1Cents: Math.round(Number(tier1Dollars) * 100),
+                acceleratorTier2Cents: Math.round(Number(tier2Dollars) * 100),
+                acceleratorTier3Cents: Math.round(Number(tier3Dollars) * 100),
+              }
+            : {}),
+          ...(baseEnabled
+            ? {
+                basePayCents: Math.round(Number(baseDollars) * 100),
+                basePayCadence: baseCadence,
+              }
+            : {}),
           status,
           budgetMode,
           budgetCents,
@@ -180,6 +257,15 @@ export default function CreateCampaignModal({
       setTargetLocation('');
       setPackId('');
       setPlaybookId('');
+      setEarningsModel('PER_BOOKED_MEETING');
+      setPayoutDollars('75');
+      setAcceleratorStepSize('5');
+      setTier1Dollars('50');
+      setTier2Dollars('75');
+      setTier3Dollars('100');
+      setBaseEnabled(false);
+      setBaseCadence('MONTHLY');
+      setBaseDollars('1500');
       onClose();
       onCreated?.(campaignId);
     } finally {
@@ -206,7 +292,7 @@ export default function CreateCampaignModal({
             className="field"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. $30 qualified leads"
+            placeholder="e.g. $75 booked meetings"
             autoFocus
           />
         </label>
@@ -250,58 +336,108 @@ export default function CreateCampaignModal({
             />
           </label>
         </div>
+
         <label className="field-label">
-          Booking link (Cal.com / Calendly / Google Appointment)
-          <input
+          SDR earnings
+          <select
             className="field"
-            value={bookingLink}
-            onChange={(e) => setBookingLink(e.target.value)}
-            placeholder="https://cal.com/you/intro"
-            required={goalType === 'BOOKED_MEETING' || goalType === 'BOTH'}
-          />
+            value={earningsModel}
+            onChange={(e) => setEarningsModel(e.target.value as EarningsModel)}
+          >
+            <option value="PER_BOOKED_MEETING">Per booked meeting (default)</option>
+            <option value="PER_QUALIFIED_LEAD">Per qualified lead</option>
+            <option value="TIERED_ACCELERATOR">Tiered / accelerator</option>
+          </select>
         </label>
+        <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+          {earningsHint}
+        </p>
+
+        {wantsMeeting ? (
+          <label className="field-label">
+            Booking link (Cal.com / Calendly / Google Appointment)
+            <input
+              className="field"
+              value={bookingLink}
+              onChange={(e) => setBookingLink(e.target.value)}
+              placeholder="https://cal.com/you/intro"
+              required
+            />
+          </label>
+        ) : null}
+
         <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
-          <label className="field-label" style={{ flex: '0 1 140px', maxWidth: 160 }}>
-            Meeting min
-            <input
-              className="field"
-              value={meetingDuration}
-              onChange={(e) => setMeetingDuration(e.target.value)}
-              placeholder="15"
-              inputMode="numeric"
-              disabled={goalType === 'QUALIFIED_LEAD'}
-            />
-          </label>
-          <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
-            {goalType === 'BOTH' ? 'Meeting $' : 'Payout ($)'}
-            <input
-              className="field"
-              value={payoutDollars}
-              onChange={(e) => setPayoutDollars(e.target.value)}
-              placeholder="40"
-              inputMode="decimal"
-            />
-          </label>
-          {goalType === 'BOTH' ? (
-            <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
-              Qualified $
+          {wantsMeeting ? (
+            <label className="field-label" style={{ flex: '0 1 140px', maxWidth: 160 }}>
+              Meeting min
               <input
                 className="field"
-                value={qualifiedPayoutDollars}
-                onChange={(e) => setQualifiedPayoutDollars(e.target.value)}
-                placeholder="25"
-                inputMode="decimal"
+                value={meetingDuration}
+                onChange={(e) => setMeetingDuration(e.target.value)}
+                placeholder="15"
+                inputMode="numeric"
               />
             </label>
           ) : null}
-          <label className="field-label" style={{ flex: '1 1 160px' }}>
-            Outcome
-            <select className="field" value={goalType} onChange={(e) => setGoalType(e.target.value)}>
-              <option value="QUALIFIED_LEAD">Qualified lead</option>
-              <option value="BOOKED_MEETING">Booked meeting</option>
-              <option value="BOTH">Both (meeting pays more)</option>
-            </select>
-          </label>
+
+          {earningsModel === 'TIERED_ACCELERATOR' ? (
+            <>
+              <label className="field-label" style={{ flex: '0 1 100px', maxWidth: 120 }}>
+                Step size
+                <input
+                  className="field"
+                  value={acceleratorStepSize}
+                  onChange={(e) => setAcceleratorStepSize(e.target.value)}
+                  placeholder="5"
+                  inputMode="numeric"
+                />
+              </label>
+              <label className="field-label" style={{ flex: '0 1 100px', maxWidth: 120 }}>
+                Tier 1 $
+                <input
+                  className="field"
+                  value={tier1Dollars}
+                  onChange={(e) => setTier1Dollars(e.target.value)}
+                  placeholder="50"
+                  inputMode="decimal"
+                />
+              </label>
+              <label className="field-label" style={{ flex: '0 1 100px', maxWidth: 120 }}>
+                Tier 2 $
+                <input
+                  className="field"
+                  value={tier2Dollars}
+                  onChange={(e) => setTier2Dollars(e.target.value)}
+                  placeholder="75"
+                  inputMode="decimal"
+                />
+              </label>
+              <label className="field-label" style={{ flex: '0 1 100px', maxWidth: 120 }}>
+                Tier 3 $
+                <input
+                  className="field"
+                  value={tier3Dollars}
+                  onChange={(e) => setTier3Dollars(e.target.value)}
+                  placeholder="100"
+                  inputMode="decimal"
+                />
+              </label>
+            </>
+          ) : (
+            <label className="field-label" style={{ flex: '0 1 120px', maxWidth: 140 }}>
+              Payout ($)
+              <input
+                className="field"
+                value={payoutDollars}
+                onChange={(e) => setPayoutDollars(e.target.value)}
+                placeholder={
+                  earningsModel === 'PER_QUALIFIED_LEAD' ? '40' : '75'
+                }
+                inputMode="decimal"
+              />
+            </label>
+          )}
+
           <label className="field-label" style={{ flex: '1 1 120px' }}>
             Activate
             <select className="field" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -310,6 +446,57 @@ export default function CreateCampaignModal({
             </select>
           </label>
         </div>
+
+        {earningsModel === 'TIERED_ACCELERATOR' ? (
+          <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+            First {acceleratorStepSize || '5'} wins pay Tier 1, next {acceleratorStepSize || '5'} pay
+            Tier 2, then Tier 3+.
+          </p>
+        ) : null}
+
+        <label
+          className="field-label"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexDirection: 'row' }}
+        >
+          <input
+            type="checkbox"
+            checked={baseEnabled}
+            onChange={(e) => setBaseEnabled(e.target.checked)}
+          />
+          Add base pay (on top of outcome pay)
+        </label>
+        {baseEnabled ? (
+          <>
+            <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0 }}>
+              <label className="field-label" style={{ flex: '1 1 140px' }}>
+                Base cadence
+                <select
+                  className="field"
+                  value={baseCadence}
+                  onChange={(e) => setBaseCadence(e.target.value as BaseCadence)}
+                >
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="BIWEEKLY">Bi-weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </label>
+              <label className="field-label" style={{ flex: '0 1 140px', maxWidth: 160 }}>
+                Base $ / period
+                <input
+                  className="field"
+                  value={baseDollars}
+                  onChange={(e) => setBaseDollars(e.target.value)}
+                  placeholder={BASE_PLACEHOLDERS[baseCadence]}
+                  inputMode="decimal"
+                />
+              </label>
+            </div>
+            <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>
+              Paid to each active SDR each period. {BASE_RANGE_HINT[baseCadence]}
+            </p>
+          </>
+        ) : null}
+
         <div className="search-row" style={{ flexWrap: 'wrap', marginBottom: 0, gap: '0.65rem' }}>
           <label className="field-label" style={{ flex: '0 1 140px' }}>
             Start date

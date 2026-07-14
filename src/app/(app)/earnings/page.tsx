@@ -190,7 +190,7 @@ export default function EarningsPage() {
 
           <Panel
             title="Stripe Connect"
-            description="Brands pay approved campaign results via destination charges (~20% platform fee). Your net lands in Stripe Express."
+            description="Brands pay approved outcomes and optional base via Connect (20% fee, capped). Your net lands in Stripe Express."
             actions={
               connect?.detailsSubmitted ? (
                 <button

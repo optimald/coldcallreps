@@ -11,6 +11,7 @@ type CampaignRow = {
   status: string;
   payoutLabel: string;
   goalLabel: string;
+  earningsModelLabel?: string;
   brand?: { id: string; name: string; slug: string };
   applicationCount?: number;
 };
@@ -28,8 +29,8 @@ export default function CampaignsPageClient() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [icpText, setIcpText] = useState('');
-  const [payoutDollars, setPayoutDollars] = useState('30');
-  const [goalType, setGoalType] = useState('QUALIFIED_LEAD');
+  const [payoutDollars, setPayoutDollars] = useState('40');
+  const [earningsModel, setEarningsModel] = useState('PER_QUALIFIED_LEAD');
   const [status, setStatus] = useState('OPEN');
   const [packId, setPackId] = useState('');
   const [playbookId, setPlaybookId] = useState('');
@@ -110,7 +111,7 @@ export default function CampaignsPageClient() {
         description,
         icpText: icpText || undefined,
         payoutCents,
-        goalType,
+        earningsModel,
         status,
         packId: packId || undefined,
         playbookId: playbookId || undefined,
@@ -134,7 +135,7 @@ export default function CampaignsPageClient() {
       <PageHeader
         eyebrow="Marketplace"
         title="Campaigns"
-        description="Post paid outcome campaigns for SDRs — qualified leads or booked meetings. You pay per approved result (~20% platform fee); SDRs receive the rest after they connect payouts."
+        description="Post paid outcome campaigns for SDRs — with optional weekly, bi-weekly, or monthly base. 20% platform fee (capped); SDRs receive the rest after they connect payouts."
         actions={
           <Link href="/gigs" className="btn-ghost">
             Preview brand deals board →
@@ -192,7 +193,7 @@ export default function CampaignsPageClient() {
                   <Link key={c.id} href={href} className="card-tile">
                     <h2 className="card-tile__title">{c.title}</h2>
                     <p className="card-tile__meta">
-                      {c.payoutLabel} / {c.goalLabel?.toLowerCase() || 'result'} · {c.status}
+                      {c.payoutLabel} / {(c.earningsModelLabel || c.goalLabel)?.toLowerCase() || 'result'} · {c.status}
                       {c.applicationCount != null ? ` · ${c.applicationCount} applicants` : ''}
                     </p>
                     <p className="card-tile__meta">
@@ -239,11 +240,11 @@ export default function CampaignsPageClient() {
                 />
                 <select
                   className="field"
-                  value={goalType}
-                  onChange={(e) => setGoalType(e.target.value)}
+                  value={earningsModel}
+                  onChange={(e) => setEarningsModel(e.target.value)}
                 >
-                  <option value="QUALIFIED_LEAD">Qualified lead</option>
-                  <option value="BOOKED_MEETING">Booked meeting</option>
+                  <option value="PER_QUALIFIED_LEAD">Per qualified lead</option>
+                  <option value="PER_BOOKED_MEETING">Per booked meeting</option>
                 </select>
                 <select className="field" value={status} onChange={(e) => setStatus(e.target.value)}>
                   <option value="DRAFT">Draft</option>

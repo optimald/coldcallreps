@@ -15,12 +15,14 @@ import {
 } from '@/lib/pipeline/orchestrator';
 import { runAuditCallTask, type AuditCallPayload } from '@/lib/pipeline/audit-call';
 import { prisma } from '@/lib/prisma';
+import { BASE_PAY_TASK_ID, basePayDailyTask } from '@/trigger/base-pay-task';
 
 export const SCRAPER_TASK_ID = 'scraper-task';
 export const WEBSCAN_TASK_ID = 'webscan-task';
 export const ENRICHER_TASK_ID = 'enricher-task';
 export const AUDIT_CALL_TASK_ID = 'audit-call-task';
 export const SCOUT_CAMPAIGN_TASK_ID = 'scout-campaign-task';
+export { BASE_PAY_TASK_ID, basePayDailyTask };
 
 /** Frozen / quarantine — do not schedule. */
 export const QUARANTINED_TASK_IDS = [

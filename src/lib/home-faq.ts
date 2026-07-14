@@ -68,7 +68,7 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
   {
     question: 'How do brand payouts work?',
     answer:
-      'Brands pay per verified result via Stripe Connect. ColdCallReps keeps about 20% as the platform fee; the rest goes to the rep. Founders fund campaigns — reps finish Connect under Billing or Earnings before payouts can land.',
+      'Brands pay verified outcomes and optional base pay (weekly, bi-weekly, or monthly) via Stripe Connect. ColdCallReps keeps 20% as the platform fee, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base — the rest goes to the rep. Founders fund campaigns; reps finish Connect under Billing or Earnings before payouts can land.',
     links: [
       { href: '/for/brands', label: 'For brands' },
       { href: '/pricing', label: 'Pricing' },

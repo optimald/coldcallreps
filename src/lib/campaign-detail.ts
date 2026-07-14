@@ -1,7 +1,7 @@
 import type { UserProfile } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
-import { serializeCampaign } from '@/lib/campaigns';
+import { primaryPayout, serializeCampaign } from '@/lib/campaigns';
 import { shouldAutoDeactivate } from '@/lib/campaign-schedule';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { matchProgressOf } from '@/lib/brand-lead-match';
@@ -115,7 +115,7 @@ export async function loadCampaignDetailBundle(
                 repProfile: { select: { slug: true, verified: true } },
               },
             },
-            payout: true,
+            payouts: true,
           },
         })
       : Promise.resolve([]),
@@ -209,20 +209,22 @@ export async function loadCampaignDetailBundle(
   return {
     campaign: serialized as CampaignDetailBundle['campaign'],
     canManage: manage,
-    applications: applications.map((a) => ({
+    applications: applications.map((a) => {
+      const payout = primaryPayout(a.payouts);
+      return {
       id: a.id,
       status: a.status,
       message: a.message,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
-      payout: a.payout
+      payout: payout
         ? {
-            id: a.payout.id,
-            status: a.payout.status,
-            grossCents: a.payout.grossCents,
-            netCents: a.payout.netCents,
-            platformFeeCents: a.payout.platformFeeCents,
-            paidAt: a.payout.paidAt,
+            id: payout.id,
+            status: payout.status,
+            grossCents: payout.grossCents,
+            netCents: payout.netCents,
+            platformFeeCents: payout.platformFeeCents,
+            paidAt: payout.paidAt,
           }
         : null,
       applicant: {
@@ -237,7 +239,8 @@ export async function loadCampaignDetailBundle(
         ),
         repProfile: a.user.repProfile,
       },
-    })),
+    };
+    }),
     progress: leads.length ? progress : emptyProgress(),
     campaignJobs,
     calendarConnected: Boolean(ownerConn?.accessTokenEnc),

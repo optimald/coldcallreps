@@ -187,7 +187,7 @@ export default function OnboardingBrandClient() {
             />
             <span style={{ fontSize: '0.95rem', color: 'var(--ink)', lineHeight: 1.45 }}>
               I want to add the Brand / Founder role to my account. Live campaigns need a funded
-              escrow wallet (~20% platform fee on payouts).
+              escrow wallet (20% platform fee on payouts, capped — see Pricing).
             </span>
           </label>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

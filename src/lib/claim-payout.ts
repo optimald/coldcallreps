@@ -2,13 +2,14 @@ import 'server-only';
 
 import { prisma } from '@/lib/prisma';
 import { releaseEscrowOutcome } from '@/lib/escrow';
-import { calcPayoutSplit } from '@/lib/campaigns';
+import { calcPayoutSplit, resolveClaimPayoutCents } from '@/lib/campaigns';
+import { PLATFORM_FEE_CAP_CENTS } from '@/lib/platform-fees';
 import { getStripe } from '@/lib/stripe';
 
 /**
  * Release escrow + attempt Connect transfer for a PASSED appointment claim.
  * Idempotent when already PAID or escrow already released for this claimId.
- * One paid payout per application — blocks multi-claim escrow drain.
+ * One paid payout per claim — multiple wins per application allowed.
  */
 export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
   ok: true;
@@ -27,11 +28,19 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
         select: {
           id: true,
           payoutCents: true,
+          qualifiedPayoutCents: true,
           platformFeeBps: true,
           brandId: true,
+          earningsModel: true,
+          goalType: true,
+          acceleratorStepSize: true,
+          acceleratorTier1Cents: true,
+          acceleratorTier2Cents: true,
+          acceleratorTier3Cents: true,
           brand: { select: { ownerId: true } },
         },
       },
+      payout: true,
     },
   });
   const claim = claimed;
@@ -50,30 +59,46 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
     };
   }
 
-  // One successful payout per campaign application
-  const existingPaid = await prisma.campaignPayout.findFirst({
-    where: { applicationId: claim.applicationId, status: 'PAID' },
-    select: { id: true },
-  });
-  if (existingPaid) {
+  // One successful payout per claim
+  if (claim.payout?.status === 'PAID') {
+    return { ok: true, claimStatus: 'PAID', payoutStatus: 'PAID' };
+  }
+  if (
+    claim.payout &&
+    (claim.payout.status === 'HELD' ||
+      claim.payout.status === 'DISPUTED' ||
+      claim.payout.status === 'CANCELED')
+  ) {
     return {
       ok: false,
-      error: 'This application already has a paid payout',
-      code: 'ALREADY_PAID',
+      error: `Payout is ${claim.payout.status} — ops must release before transfer`,
+      code: 'PAYOUT_HELD',
       status: 409,
     };
   }
 
+  const priorPaidCount = await prisma.campaignPayout.count({
+    where: {
+      campaignId: claim.campaignId,
+      repUserId: claim.repUserId,
+      status: 'PAID',
+      kind: 'OUTCOME',
+      ...(claim.payout ? { NOT: { id: claim.payout.id } } : {}),
+    },
+  });
+
+  const grossCents = resolveClaimPayoutCents(claim.campaign, priorPaidCount);
   const split = calcPayoutSplit(
-    claim.campaign.payoutCents,
-    claim.campaign.platformFeeBps
+    grossCents,
+    claim.campaign.platformFeeBps,
+    PLATFORM_FEE_CAP_CENTS
   );
 
   try {
     await releaseEscrowOutcome({
       brandId: claim.campaign.brandId,
       campaignId: claim.campaignId,
-      amountCents: claim.campaign.payoutCents,
+      amountCents: grossCents,
       claimId: claim.id,
     });
   } catch (e: unknown) {
@@ -86,14 +111,13 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
     return { ok: false, error: 'Brand has no owner', code: 'NO_OWNER', status: 400 };
   }
 
-  let payout = await prisma.campaignPayout.findUnique({
-    where: { applicationId: claim.applicationId },
-  });
+  let payout = claim.payout;
   if (!payout) {
     payout = await prisma.campaignPayout.create({
       data: {
         campaignId: claim.campaignId,
         applicationId: claim.applicationId,
+        claimId: claim.id,
         brandUserId: brandOwnerId,
         repUserId: claim.repUserId,
         grossCents: split.grossCents,
@@ -103,19 +127,19 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
         status: 'PENDING',
       },
     });
-  }
-
-  if (payout.status === 'PAID') {
-    return { ok: true, claimStatus: claim.status, payoutStatus: 'PAID' };
-  }
-
-  if (payout.status === 'HELD' || payout.status === 'DISPUTED' || payout.status === 'CANCELED') {
-    return {
-      ok: false,
-      error: `Payout is ${payout.status} — ops must release before transfer`,
-      code: 'PAYOUT_HELD',
-      status: 409,
-    };
+  } else {
+    payout = await prisma.campaignPayout.update({
+      where: { id: payout.id },
+      data: {
+        claimId: claim.id,
+        grossCents: split.grossCents,
+        platformFeeCents: split.platformFeeCents,
+        netCents: split.netCents,
+        platformFeeBps: split.platformFeeBps,
+        status: 'PENDING',
+        failureReason: null,
+      },
+    });
   }
 
   // Block payouts to suspended/banned reps
@@ -152,6 +176,8 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
           campaignId: claim.campaignId,
           claimId: claim.id,
           applicationId: claim.applicationId,
+          priorPaidCount: String(priorPaidCount),
+          grossCents: String(split.grossCents),
         },
       });
       await prisma.campaignPayout.update({

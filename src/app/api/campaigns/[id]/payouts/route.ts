@@ -4,12 +4,15 @@ import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import {
   calcPayoutSplit,
+  formatEarningsPayoutLabel,
   formatPayout,
   isCampaignDialEligible,
   practiceHref,
+  resolveClaimPayoutCents,
   serializePayout,
 } from '@/lib/campaigns';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
+import { PLATFORM_FEE_CAP_CENTS, PLATFORM_FEE_SUMMARY } from '@/lib/platform-fees';
 import { appBaseUrl, getStripe } from '@/lib/stripe';
 
 /**
@@ -46,19 +49,27 @@ export async function GET(
       },
     });
 
-    const split = calcPayoutSplit(campaign.payoutCents, campaign.platformFeeBps);
+    const baselineCents = resolveClaimPayoutCents(campaign, 0);
+    const split = calcPayoutSplit(
+      baselineCents,
+      campaign.platformFeeBps,
+      PLATFORM_FEE_CAP_CENTS
+    );
 
     return NextResponse.json({
       canManage: manage,
+      feePolicy: PLATFORM_FEE_SUMMARY,
       payoutPerResult: {
         ...split,
         grossLabel: formatPayout(split.grossCents),
         netLabel: formatPayout(split.netCents),
         feeLabel: formatPayout(split.platformFeeCents),
+        earningsLabel: formatEarningsPayoutLabel(campaign),
       },
       payouts: payouts.map((p) => ({
         ...serializePayout(p),
         applicationId: p.applicationId,
+        claimId: p.claimId,
         applicant: p.application.user
           ? { id: p.application.user.id, displayName: p.application.user.displayName }
           : null,
@@ -75,9 +86,9 @@ export async function GET(
 
 /**
  * POST — brand starts a Connect destination-charge Checkout for an approved application.
- * Body: { applicationId }
+ * Body: { applicationId, claimId? }
  *
- * Brand pays campaign.payoutCents; ~platformFeeBps stays with the platform;
+ * Brand pays the resolved earnings-model rate; ~platformFeeBps stays with the platform;
  * SDR Connect account receives the remainder via transfer_data.destination.
  */
 export async function POST(
@@ -98,6 +109,7 @@ export async function POST(
 
     const body = await req.json().catch(() => ({}));
     const applicationId = String(body.applicationId || '').trim();
+    const claimId = body.claimId ? String(body.claimId).trim() : '';
     if (!applicationId) {
       return NextResponse.json({ error: 'applicationId required' }, { status: 400 });
     }
@@ -114,7 +126,7 @@ export async function POST(
             stripeConnectPayoutsEnabled: true,
           },
         },
-        payout: true,
+        payouts: true,
       },
     });
     if (!app) return NextResponse.json({ error: 'Application not found' }, { status: 404 });
@@ -129,11 +141,34 @@ export async function POST(
       );
     }
 
-    if (app.payout?.status === 'PAID') {
-      return NextResponse.json(
-        { error: 'This application was already paid.', payout: serializePayout(app.payout) },
-        { status: 409 }
-      );
+    let claim: { id: string; status: string; payout: { id: string; status: string } | null } | null =
+      null;
+    if (claimId) {
+      claim = await prisma.appointmentClaim.findFirst({
+        where: { id: claimId, campaignId: id, applicationId: app.id },
+        select: {
+          id: true,
+          status: true,
+          payout: { select: { id: true, status: true } },
+        },
+      });
+      if (!claim) {
+        return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
+      }
+      if (claim.payout?.status === 'PAID') {
+        return NextResponse.json(
+          { error: 'This claim was already paid.', code: 'ALREADY_PAID' },
+          { status: 409 }
+        );
+      }
+    } else {
+      // Legacy: block only when every prior payout is PAID and no unpaid claim is targeted.
+      const hasUnpaidPending = app.payouts.some((p) => p.status === 'PENDING');
+      const allPaid =
+        app.payouts.length > 0 && app.payouts.every((p) => p.status === 'PAID');
+      if (allPaid && !hasUnpaidPending) {
+        // Still allow another payout for additional wins (accelerator / multi-claim).
+      }
     }
 
     const rep = app.user;
@@ -148,14 +183,24 @@ export async function POST(
       );
     }
 
-    if (campaign.payoutCents < 50) {
+    const priorPaidCount = await prisma.campaignPayout.count({
+      where: {
+        campaignId: id,
+        repUserId: rep.id,
+        status: 'PAID',
+        kind: 'OUTCOME',
+      },
+    });
+    const grossCents = resolveClaimPayoutCents(campaign, priorPaidCount);
+
+    if (grossCents < 50) {
       return NextResponse.json(
         { error: 'Payout must be at least $0.50 for Stripe Checkout.' },
         { status: 400 }
       );
     }
 
-    const split = calcPayoutSplit(campaign.payoutCents, campaign.platformFeeBps);
+    const split = calcPayoutSplit(grossCents, campaign.platformFeeBps, PLATFORM_FEE_CAP_CENTS);
     if (split.netCents < 1) {
       return NextResponse.json({ error: 'Net payout after fee is too small.' }, { status: 400 });
     }
@@ -197,11 +242,16 @@ export async function POST(
       }
     }
 
-    let payout = app.payout
+    const existingForClaim = claim?.payout
+      ? await prisma.campaignPayout.findUnique({ where: { id: claim.payout.id } })
+      : null;
+
+    let payout = existingForClaim
       ? await prisma.campaignPayout.update({
-          where: { id: app.payout.id },
+          where: { id: existingForClaim.id },
           data: {
             status: 'PENDING',
+            claimId: claim?.id ?? existingForClaim.claimId,
             grossCents: split.grossCents,
             platformFeeCents: split.platformFeeCents,
             netCents: split.netCents,
@@ -214,6 +264,7 @@ export async function POST(
           data: {
             campaignId: id,
             applicationId: app.id,
+            claimId: claim?.id ?? null,
             brandUserId: profile.id,
             repUserId: rep.id,
             grossCents: split.grossCents,

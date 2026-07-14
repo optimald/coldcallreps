@@ -1,17 +1,30 @@
 import type {
   Campaign,
   CampaignApplicationStatus,
+  CampaignEarningsModel,
   CampaignGoalType,
   CampaignStatus,
   ProductPack,
   Playbook,
   Brand,
 } from '@prisma/client';
+import {
+  cadenceShortSuffix,
+  isBasePayCadence,
+  PLATFORM_FEE_BPS,
+  PLATFORM_FEE_CAP_CENTS,
+  type BasePayCadence,
+} from '@/lib/platform-fees';
 
 export const CAMPAIGN_GOAL_TYPES: CampaignGoalType[] = [
   'QUALIFIED_LEAD',
   'BOOKED_MEETING',
   'BOTH',
+];
+export const CAMPAIGN_EARNINGS_MODELS: CampaignEarningsModel[] = [
+  'PER_BOOKED_MEETING',
+  'PER_QUALIFIED_LEAD',
+  'TIERED_ACCELERATOR',
 ];
 export const CAMPAIGN_STATUSES: CampaignStatus[] = ['DRAFT', 'OPEN', 'PAUSED', 'CLOSED'];
 export const APPLICATION_STATUSES: CampaignApplicationStatus[] = [
@@ -32,8 +45,189 @@ export const GOAL_LABELS: Record<CampaignGoalType, string> = {
   BOTH: 'Qualified lead + meeting',
 };
 
+export const EARNINGS_MODEL_LABELS: Record<CampaignEarningsModel, string> = {
+  PER_BOOKED_MEETING: 'Per booked meeting',
+  PER_QUALIFIED_LEAD: 'Per qualified lead',
+  TIERED_ACCELERATOR: 'Tiered / accelerator',
+};
+
+export const EARNINGS_MODEL_BLURBS: Record<CampaignEarningsModel, string> = {
+  PER_BOOKED_MEETING: 'Paid when a meeting is scheduled. Recommended $40 – $150.',
+  PER_QUALIFIED_LEAD: 'Lighter qualification (no meeting). Recommended $25 – $80.',
+  TIERED_ACCELERATOR: 'Rate increases with volume. Recommended $50 → $75 → $100+.',
+};
+
+/** Soft recommended ranges for create UI (cents). */
+export const EARNINGS_MODEL_RANGES: Record<
+  CampaignEarningsModel,
+  { minCents: number; maxCents: number; suggestedCents: number }
+> = {
+  PER_BOOKED_MEETING: { minCents: 4000, maxCents: 15000, suggestedCents: 7500 },
+  PER_QUALIFIED_LEAD: { minCents: 2500, maxCents: 8000, suggestedCents: 4000 },
+  TIERED_ACCELERATOR: { minCents: 2500, maxCents: 25000, suggestedCents: 5000 },
+};
+
+/** Hard API clamps so nonsense values never hit Stripe/escrow. */
+export const EARNINGS_PAYOUT_ABS_MIN_CENTS = 500; // $5
+export const EARNINGS_PAYOUT_ABS_MAX_CENTS = 50000; // $500
+
 export function isCampaignGoalType(v: unknown): v is CampaignGoalType {
   return typeof v === 'string' && (CAMPAIGN_GOAL_TYPES as string[]).includes(v);
+}
+
+export function isCampaignEarningsModel(v: unknown): v is CampaignEarningsModel {
+  return typeof v === 'string' && (CAMPAIGN_EARNINGS_MODELS as string[]).includes(v);
+}
+
+export function goalTypeForEarningsModel(model: CampaignEarningsModel): CampaignGoalType {
+  if (model === 'PER_QUALIFIED_LEAD') return 'QUALIFIED_LEAD';
+  return 'BOOKED_MEETING';
+}
+
+export function earningsModelFromGoalType(
+  goalType: CampaignGoalType | string | null | undefined
+): CampaignEarningsModel {
+  if (goalType === 'QUALIFIED_LEAD') return 'PER_QUALIFIED_LEAD';
+  return 'PER_BOOKED_MEETING';
+}
+
+export function clampPayoutCents(cents: number): number {
+  return Math.min(
+    EARNINGS_PAYOUT_ABS_MAX_CENTS,
+    Math.max(EARNINGS_PAYOUT_ABS_MIN_CENTS, Math.round(cents))
+  );
+}
+
+export type AcceleratorSchedule = {
+  stepSize: number;
+  tier1Cents: number;
+  tier2Cents: number;
+  tier3Cents: number;
+};
+
+export function normalizeAcceleratorSchedule(input: {
+  stepSize?: number | null;
+  tier1Cents?: number | null;
+  tier2Cents?: number | null;
+  tier3Cents?: number | null;
+}): AcceleratorSchedule {
+  const stepSize = Math.max(1, Math.min(100, Math.round(input.stepSize || 5)));
+  const tier1Cents = clampPayoutCents(input.tier1Cents ?? 5000);
+  const tier2Cents = clampPayoutCents(input.tier2Cents ?? 7500);
+  const tier3Cents = clampPayoutCents(input.tier3Cents ?? 10000);
+  return { stepSize, tier1Cents, tier2Cents, tier3Cents };
+}
+
+/**
+ * Resolve gross payout for the next verified claim.
+ * `priorPaidCount` = PAID claims/payouts already completed for this rep on the campaign.
+ */
+export function resolveClaimPayoutCents(
+  campaign: {
+    earningsModel?: CampaignEarningsModel | string | null;
+    goalType?: CampaignGoalType | string | null;
+    payoutCents: number;
+    qualifiedPayoutCents?: number | null;
+    acceleratorStepSize?: number | null;
+    acceleratorTier1Cents?: number | null;
+    acceleratorTier2Cents?: number | null;
+    acceleratorTier3Cents?: number | null;
+  },
+  priorPaidCount = 0
+): number {
+  const model =
+    (isCampaignEarningsModel(campaign.earningsModel) && campaign.earningsModel) ||
+    earningsModelFromGoalType(campaign.goalType);
+
+  if (model === 'TIERED_ACCELERATOR') {
+    const schedule = normalizeAcceleratorSchedule({
+      stepSize: campaign.acceleratorStepSize,
+      tier1Cents: campaign.acceleratorTier1Cents ?? campaign.payoutCents,
+      tier2Cents: campaign.acceleratorTier2Cents,
+      tier3Cents: campaign.acceleratorTier3Cents,
+    });
+    const prior = Math.max(0, Math.floor(priorPaidCount));
+    const tierIndex = Math.min(2, Math.floor(prior / schedule.stepSize));
+    if (tierIndex <= 0) return schedule.tier1Cents;
+    if (tierIndex === 1) return schedule.tier2Cents;
+    return schedule.tier3Cents;
+  }
+
+  if (model === 'PER_QUALIFIED_LEAD') {
+    return clampPayoutCents(
+      campaign.qualifiedPayoutCents != null && campaign.qualifiedPayoutCents > 0
+        ? campaign.qualifiedPayoutCents
+        : campaign.payoutCents
+    );
+  }
+
+  return clampPayoutCents(campaign.payoutCents);
+}
+
+export function formatAcceleratorLabel(schedule: AcceleratorSchedule): string {
+  return `${formatPayout(schedule.tier1Cents)} → ${formatPayout(schedule.tier2Cents)} → ${formatPayout(schedule.tier3Cents)} (every ${schedule.stepSize})`;
+}
+
+export function formatEarningsPayoutLabel(campaign: {
+  earningsModel?: CampaignEarningsModel | string | null;
+  goalType?: CampaignGoalType | string | null;
+  payoutCents: number;
+  qualifiedPayoutCents?: number | null;
+  acceleratorStepSize?: number | null;
+  acceleratorTier1Cents?: number | null;
+  acceleratorTier2Cents?: number | null;
+  acceleratorTier3Cents?: number | null;
+}): string {
+  const model =
+    (isCampaignEarningsModel(campaign.earningsModel) && campaign.earningsModel) ||
+    earningsModelFromGoalType(campaign.goalType);
+  if (model === 'TIERED_ACCELERATOR') {
+    return formatAcceleratorLabel(
+      normalizeAcceleratorSchedule({
+        stepSize: campaign.acceleratorStepSize,
+        tier1Cents: campaign.acceleratorTier1Cents ?? campaign.payoutCents,
+        tier2Cents: campaign.acceleratorTier2Cents,
+        tier3Cents: campaign.acceleratorTier3Cents,
+      })
+    );
+  }
+  if (model === 'PER_QUALIFIED_LEAD') {
+    const cents =
+      campaign.qualifiedPayoutCents != null && campaign.qualifiedPayoutCents > 0
+        ? campaign.qualifiedPayoutCents
+        : campaign.payoutCents;
+    return formatPayout(cents);
+  }
+  return formatPayout(campaign.payoutCents);
+}
+
+export function formatBasePayLabel(opts: {
+  basePayCents?: number | null;
+  basePayCadence?: string | null;
+}): string | null {
+  if (opts.basePayCents == null || opts.basePayCents <= 0) return null;
+  const cadence: BasePayCadence = isBasePayCadence(opts.basePayCadence)
+    ? opts.basePayCadence
+    : 'MONTHLY';
+  return `${formatBudgetCompact(opts.basePayCents)}${cadenceShortSuffix(cadence)} base`;
+}
+
+/** Combined marketplace line: "$1.5k/mo base + $75" */
+export function formatCompensationLabel(campaign: {
+  payoutCents: number;
+  earningsModel?: CampaignEarningsModel | string | null;
+  goalType?: CampaignGoalType | string | null;
+  qualifiedPayoutCents?: number | null;
+  acceleratorStepSize?: number | null;
+  acceleratorTier1Cents?: number | null;
+  acceleratorTier2Cents?: number | null;
+  acceleratorTier3Cents?: number | null;
+  basePayCents?: number | null;
+  basePayCadence?: string | null;
+}): string {
+  const outcome = formatEarningsPayoutLabel(campaign);
+  const base = formatBasePayLabel(campaign);
+  return base ? `${base} + ${outcome}` : outcome;
 }
 
 export function isCampaignStatus(v: unknown): v is CampaignStatus {
@@ -61,15 +255,24 @@ export function formatBudgetCompact(cents: number): string {
 }
 
 /**
- * Split a campaign outcome payment.
- * Brand pays `payoutCents`; platform keeps `platformFeeBps` (default 20%); SDR receives the rest.
+ * Split a campaign payment.
+ * Brand pays `payoutCents`; platform keeps `platformFeeBps` (default 20%), capped at `feeCapCents`.
  */
-export function calcPayoutSplit(payoutCents: number, platformFeeBps = 2000) {
+export function calcPayoutSplit(
+  payoutCents: number,
+  platformFeeBps: number = PLATFORM_FEE_BPS,
+  feeCapCents?: number | null
+) {
   const grossCents = Math.max(0, Math.round(payoutCents));
   const bps = Math.min(10000, Math.max(0, Math.round(platformFeeBps)));
-  const platformFeeCents = Math.round((grossCents * bps) / 10000);
+  const uncappedFee = Math.round((grossCents * bps) / 10000);
+  const cap =
+    feeCapCents == null
+      ? PLATFORM_FEE_CAP_CENTS
+      : Math.max(0, Math.round(feeCapCents));
+  const platformFeeCents = Math.min(uncappedFee, cap);
   const netCents = Math.max(0, grossCents - platformFeeCents);
-  return { grossCents, platformFeeCents, netCents, platformFeeBps: bps };
+  return { grossCents, platformFeeCents, netCents, platformFeeBps: bps, feeCapCents: cap };
 }
 
 export function serializePayout(p: {
@@ -93,6 +296,26 @@ export function serializePayout(p: {
     paidAt: p.paidAt,
     failureReason: p.failureReason || null,
   };
+}
+
+/** Prefer a PAID payout, else the most recently updated — for legacy single-payout UI. */
+export function primaryPayout<T extends { status: string; updatedAt?: Date | string | null; createdAt?: Date | string | null; paidAt?: Date | string | null }>(
+  payouts: T[] | null | undefined
+): T | null {
+  if (!payouts?.length) return null;
+  const paid = payouts.filter((p) => p.status === 'PAID');
+  if (paid.length) {
+    return [...paid].sort((a, b) => {
+      const at = new Date(a.paidAt || a.updatedAt || a.createdAt || 0).getTime();
+      const bt = new Date(b.paidAt || b.updatedAt || b.createdAt || 0).getTime();
+      return bt - at;
+    })[0];
+  }
+  return [...payouts].sort((a, b) => {
+    const at = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const bt = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return bt - at;
+  })[0];
 }
 
 export function practiceHref(campaign: {
@@ -305,8 +528,33 @@ export function serializeCampaign(c: CampaignWithRelations, now: Date = new Date
     icpText: c.icpText,
     goalType: c.goalType,
     goalLabel: GOAL_LABELS[c.goalType],
+    earningsModel:
+      (isCampaignEarningsModel((c as { earningsModel?: string }).earningsModel) &&
+        (c as { earningsModel: CampaignEarningsModel }).earningsModel) ||
+      earningsModelFromGoalType(c.goalType),
+    earningsModelLabel: (() => {
+      const model =
+        (isCampaignEarningsModel((c as { earningsModel?: string }).earningsModel) &&
+          (c as { earningsModel: CampaignEarningsModel }).earningsModel) ||
+        earningsModelFromGoalType(c.goalType);
+      return EARNINGS_MODEL_LABELS[model];
+    })(),
     payoutCents: c.payoutCents,
-    payoutLabel: formatPayout(c.payoutCents),
+    payoutLabel: formatCompensationLabel(c as Campaign),
+    outcomePayoutLabel: formatEarningsPayoutLabel(c as Campaign),
+    basePayCents: (c as { basePayCents?: number | null }).basePayCents ?? null,
+    basePayCadence: (c as { basePayCadence?: string | null }).basePayCadence ?? null,
+    basePayLabel: formatBasePayLabel({
+      basePayCents: (c as { basePayCents?: number | null }).basePayCents,
+      basePayCadence: (c as { basePayCadence?: string | null }).basePayCadence,
+    }),
+    acceleratorStepSize: (c as { acceleratorStepSize?: number | null }).acceleratorStepSize ?? null,
+    acceleratorTier1Cents:
+      (c as { acceleratorTier1Cents?: number | null }).acceleratorTier1Cents ?? null,
+    acceleratorTier2Cents:
+      (c as { acceleratorTier2Cents?: number | null }).acceleratorTier2Cents ?? null,
+    acceleratorTier3Cents:
+      (c as { acceleratorTier3Cents?: number | null }).acceleratorTier3Cents ?? null,
     pricingTier: (c as { pricingTier?: string }).pricingTier || null,
     platformFeeBps: c.platformFeeBps,
     status: c.status,

@@ -3,10 +3,15 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand, effectiveRole } from '@/lib/roles';
 import {
+  clampPayoutCents,
+  goalTypeForEarningsModel,
   isBudgetMode,
+  isCampaignEarningsModel,
   isCampaignGoalType,
   isCampaignStatus,
+  normalizeAcceleratorSchedule,
   parseOptionalDate,
+  primaryPayout,
   serializeCampaign,
 } from '@/lib/campaigns';
 import { loadCampaignSpendStats } from '@/lib/campaign-spend';
@@ -18,6 +23,7 @@ import {
   resolvePayoutCents,
 } from '@/lib/campaign-tiers';
 import { lockEscrowForCampaign } from '@/lib/escrow';
+import { isBasePayCadence, PLATFORM_FEE_BPS } from '@/lib/platform-fees';
 
 async function serializeWithSpend<T extends { id: string }>(
   campaigns: T[],
@@ -71,7 +77,7 @@ export async function GET(req: Request) {
         orderBy: { updatedAt: 'desc' },
         take: 50,
         include: {
-          payout: true,
+          payouts: true,
           campaign: {
             include: {
               brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
@@ -85,19 +91,20 @@ export async function GET(req: Request) {
       return NextResponse.json({
         applications: applications.map((a) => {
           const s = spend.get(a.campaign.id) || { spentCents: 0, spentTodayCents: 0 };
+          const payout = primaryPayout(a.payouts);
           return {
             id: a.id,
             status: a.status,
             message: a.message,
             createdAt: a.createdAt,
             updatedAt: a.updatedAt,
-            payout: a.payout
+            payout: payout
               ? {
-                  id: a.payout.id,
-                  status: a.payout.status,
-                  netCents: a.payout.netCents,
-                  grossCents: a.payout.grossCents,
-                  paidAt: a.payout.paidAt,
+                  id: payout.id,
+                  status: payout.status,
+                  netCents: payout.netCents,
+                  grossCents: payout.grossCents,
+                  paidAt: payout.paidAt,
                 }
               : null,
             campaign: serializeCampaign({
@@ -203,12 +210,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { tierId, payoutCents } = resolvePayoutCents({
-      tierId: body.pricingTier || body.tierId,
-      payoutCents: body.payoutCents != null ? Math.round(Number(body.payoutCents)) : null,
-    });
+    const earningsModel = isCampaignEarningsModel(body.earningsModel)
+      ? body.earningsModel
+      : body.goalType === 'QUALIFIED_LEAD'
+        ? 'PER_QUALIFIED_LEAD'
+        : body.goalType === 'BOTH'
+          ? 'PER_BOOKED_MEETING'
+          : 'PER_BOOKED_MEETING';
+    const goalType = isCampaignEarningsModel(body.earningsModel)
+      ? goalTypeForEarningsModel(earningsModel)
+      : isCampaignGoalType(body.goalType)
+        ? body.goalType
+        : 'BOOKED_MEETING';
 
-    const goalType = isCampaignGoalType(body.goalType) ? body.goalType : 'BOOKED_MEETING';
+    const accelerator =
+      earningsModel === 'TIERED_ACCELERATOR'
+        ? normalizeAcceleratorSchedule({
+            stepSize: body.acceleratorStepSize != null ? Number(body.acceleratorStepSize) : 5,
+            tier1Cents:
+              body.acceleratorTier1Cents != null
+                ? Math.round(Number(body.acceleratorTier1Cents))
+                : body.payoutCents != null
+                  ? Math.round(Number(body.payoutCents))
+                  : 5000,
+            tier2Cents:
+              body.acceleratorTier2Cents != null
+                ? Math.round(Number(body.acceleratorTier2Cents))
+                : 7500,
+            tier3Cents:
+              body.acceleratorTier3Cents != null
+                ? Math.round(Number(body.acceleratorTier3Cents))
+                : 10000,
+          })
+        : null;
+
+    const rawPayoutCents =
+      accelerator?.tier1Cents ??
+      (body.payoutCents != null ? Math.round(Number(body.payoutCents)) : null);
+
+    // Prefer soft clamp for earnings-model creates; keep productized tiers for legacy tierId-only creates.
+    const useProductizedTier =
+      !body.earningsModel && (body.pricingTier || body.tierId) && !accelerator;
+    const resolved = useProductizedTier
+      ? resolvePayoutCents({
+          tierId: body.pricingTier || body.tierId,
+          payoutCents: rawPayoutCents,
+        })
+      : {
+          tierId: resolvePayoutCents({
+            tierId: body.pricingTier || body.tierId,
+            payoutCents: rawPayoutCents,
+          }).tierId,
+          payoutCents: clampPayoutCents(rawPayoutCents ?? 7500),
+        };
+    const { tierId, payoutCents } = resolved;
+
     const status = isCampaignStatus(body.status) ? body.status : 'DRAFT';
     const wantsMeeting = goalType === 'BOOKED_MEETING' || goalType === 'BOTH';
     const bookingLink = body.bookingLink ? String(body.bookingLink).trim().slice(0, 500) : null;
@@ -217,9 +273,11 @@ export async function POST(req: Request) {
         ? Math.max(5, Math.min(180, Math.round(Number(body.meetingDurationMinutes))))
         : null;
     const qualifiedPayoutCents =
-      body.qualifiedPayoutCents != null
-        ? Math.max(0, Math.round(Number(body.qualifiedPayoutCents)))
-        : null;
+      earningsModel === 'PER_QUALIFIED_LEAD'
+        ? payoutCents
+        : body.qualifiedPayoutCents != null
+          ? Math.max(0, Math.round(Number(body.qualifiedPayoutCents)))
+          : null;
 
     if (wantsMeeting && !bookingLink) {
       return NextResponse.json(
@@ -282,10 +340,28 @@ export async function POST(req: Request) {
       body.maxAwards != null && body.maxAwards !== ''
         ? Math.max(1, Math.round(Number(body.maxAwards)))
         : 10;
+
+    let basePayCents: number | null = null;
+    let basePayCadence: string | null = null;
+    if (body.basePayCents != null && body.basePayCents !== '' && Number(body.basePayCents) > 0) {
+      const cadence = isBasePayCadence(body.basePayCadence)
+        ? body.basePayCadence
+        : 'MONTHLY';
+      const rawBase = Math.round(Number(body.basePayCents));
+      const minByCadence =
+        cadence === 'WEEKLY' ? 10000 : cadence === 'BIWEEKLY' ? 20000 : 50000;
+      const maxByCadence =
+        cadence === 'WEEKLY' ? 250000 : cadence === 'BIWEEKLY' ? 500000 : 1000000;
+      basePayCents = Math.min(maxByCadence, Math.max(minByCadence, rawBase));
+      basePayCadence = cadence;
+    }
+
+    const defaultBudget =
+      payoutCents * maxAwards + (basePayCents != null ? basePayCents * maxAwards : 0);
     const budgetCents =
       body.budgetCents != null && body.budgetCents !== ''
         ? Math.max(0, Math.round(Number(body.budgetCents)))
-        : payoutCents * maxAwards;
+        : defaultBudget;
     const budgetMode = isBudgetMode(body.budgetMode) ? body.budgetMode : 'OVERALL';
     const dailyBudgetCents =
       body.dailyBudgetCents != null && body.dailyBudgetCents !== ''
@@ -335,12 +411,15 @@ export async function POST(req: Request) {
         description: description.slice(0, 8000),
         icpText: body.icpText ? String(body.icpText).slice(0, 4000) : null,
         goalType,
+        earningsModel,
         payoutCents,
         pricingTier: tierId,
         platformFeeBps:
           typeof body.platformFeeBps === 'number'
             ? Math.min(10000, Math.max(0, Math.round(body.platformFeeBps)))
-            : 2000,
+            : PLATFORM_FEE_BPS,
+        basePayCents,
+        basePayCadence,
         status: status === 'OPEN' ? 'DRAFT' : status, // open after escrow lock
         minScore,
         requireCertification,
@@ -355,9 +434,15 @@ export async function POST(req: Request) {
         maxAwards,
         bookingLink,
         meetingDurationMinutes: wantsMeeting ? meetingDurationMinutes : null,
+        acceleratorStepSize: accelerator?.stepSize ?? null,
+        acceleratorTier1Cents: accelerator?.tier1Cents ?? null,
+        acceleratorTier2Cents: accelerator?.tier2Cents ?? null,
+        acceleratorTier3Cents: accelerator?.tier3Cents ?? null,
         qualifiedPayoutCents:
-          goalType === 'BOTH' || goalType === 'QUALIFIED_LEAD'
-            ? qualifiedPayoutCents ?? (goalType === 'QUALIFIED_LEAD' ? payoutCents : null)
+          earningsModel === 'PER_QUALIFIED_LEAD' ||
+          goalType === 'BOTH' ||
+          goalType === 'QUALIFIED_LEAD'
+            ? qualifiedPayoutCents ?? (goalType === 'QUALIFIED_LEAD' || earningsModel === 'PER_QUALIFIED_LEAD' ? payoutCents : null)
             : null,
         targetVertical: body.targetVertical
           ? String(body.targetVertical).trim().slice(0, 160)

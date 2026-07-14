@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
-import { isApplicationStatus, practiceHref } from '@/lib/campaigns';
+import { isApplicationStatus, practiceHref, primaryPayout } from '@/lib/campaigns';
 import type { CampaignApplicationStatus } from '@prisma/client';
 import {
   defaultAcceptMessage,
@@ -44,26 +44,28 @@ export async function GET(
             repProfile: { select: { slug: true, verified: true } },
           },
         },
-        payout: true,
+        payouts: true,
       },
     });
 
     return NextResponse.json({
-      applications: applications.map((a) => ({
+      applications: applications.map((a) => {
+        const payout = primaryPayout(a.payouts);
+        return {
         id: a.id,
         status: a.status,
         message: a.message,
         brandDecisionMessage: a.brandDecisionMessage,
         createdAt: a.createdAt,
         updatedAt: a.updatedAt,
-        payout: a.payout
+        payout: payout
           ? {
-              id: a.payout.id,
-              status: a.payout.status,
-              grossCents: a.payout.grossCents,
-              netCents: a.payout.netCents,
-              platformFeeCents: a.payout.platformFeeCents,
-              paidAt: a.payout.paidAt,
+              id: payout.id,
+              status: payout.status,
+              grossCents: payout.grossCents,
+              netCents: payout.netCents,
+              platformFeeCents: payout.platformFeeCents,
+              paidAt: payout.paidAt,
             }
           : null,
         applicant: {
@@ -77,7 +79,8 @@ export async function GET(
             a.user.stripeConnectAccountId && a.user.stripeConnectPayoutsEnabled
           ),
         },
-      })),
+      };
+      }),
       practiceHref: practiceHref(campaign),
       payoutPerResult: {
         payoutCents: campaign.payoutCents,

@@ -167,6 +167,7 @@ export default function BrandCampaignDetailClient({
   const [bookAppId, setBookAppId] = useState('');
   const [bookingBusy, setBookingBusy] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [basePayBusy, setBasePayBusy] = useState(false);
   const [claimNotes, setClaimNotes] = useState('');
   const [claimProspect, setClaimProspect] = useState('');
   const [claimBusy, setClaimBusy] = useState(false);
@@ -482,6 +483,41 @@ export default function BrandCampaignDetailClient({
     }
   }
 
+  async function payBaseNow() {
+    if (isDemo || isDemoEntityId(id)) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    setBasePayBusy(true);
+    setMsg('');
+    setErr('');
+    try {
+      const res = await fetch(`/api/campaigns/${id}/base-pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(data.error || 'Could not pay base');
+        return;
+      }
+      const paid = (data.results || []).filter((r: { status?: string }) => r.status === 'PAID').length;
+      const pending = (data.results || []).filter(
+        (r: { status?: string }) => r.status === 'PENDING'
+      ).length;
+      setMsg(
+        `Base pay for ${data.periodKey}: ${paid} paid` +
+          (pending ? `, ${pending} pending Connect` : '') +
+          '.'
+      );
+    } catch (e: any) {
+      setErr(e.message || 'Could not pay base');
+    } finally {
+      setBasePayBusy(false);
+    }
+  }
+
   async function saveConfig() {
     if (isDemo || isDemoEntityId(id)) {
       setMsg(DEMO_MSG);
@@ -735,7 +771,7 @@ export default function BrandCampaignDetailClient({
       <PageHeader
         eyebrow={campaign.brand?.name || 'Campaign'}
         title={campaign.title}
-        description={`${campaign.payoutLabel} per ${campaign.goalLabel?.toLowerCase() || 'result'} · ${campaign.dateRangeLabel || campaign.status}`}
+        description={`${campaign.payoutLabel} · ${campaign.earningsModelLabel || campaign.goalLabel?.toLowerCase() || 'result'} · ${campaign.dateRangeLabel || campaign.status}`}
         actions={
           campaign.practiceHref ? (
             <Link href={campaign.practiceHref} className="btn">
@@ -823,8 +859,11 @@ export default function BrandCampaignDetailClient({
 
             <dl className="brand-campaign__meta" style={{ marginTop: '1rem' }}>
               <div>
-                <dt>Payout / set</dt>
-                <dd>{campaign.payoutLabel}</dd>
+                <dt>SDR earnings</dt>
+                <dd>
+                  {campaign.payoutLabel}
+                  {campaign.earningsModelLabel ? ` · ${campaign.earningsModelLabel}` : ''}
+                </dd>
               </div>
               <div>
                 <dt>Schedule</dt>
@@ -1202,8 +1241,11 @@ export default function BrandCampaignDetailClient({
       {myApp && !canManage && (
         <Panel title="Your payout" description="Connect Stripe under Billing so brands can pay you when they approve a result.">
           <p className="muted" style={{ margin: 0 }}>
-            Campaign pays {campaign.payoutLabel} per {campaign.goalLabel?.toLowerCase() || 'result'} (~
-            {Math.round((campaign.platformFeeBps || 2000) / 100)}% platform fee). Manage Connect on{' '}
+            Campaign pays {campaign.payoutLabel}
+            {campaign.earningsModelLabel
+              ? ` (${campaign.earningsModelLabel})`
+              : ` per ${campaign.goalLabel?.toLowerCase() || 'result'}`}{' '}
+            (20% platform fee, capped — see Pricing). Manage Connect on{' '}
             <Link href="/billing" className="soft-link">
               Billing
             </Link>
@@ -1216,7 +1258,21 @@ export default function BrandCampaignDetailClient({
         <>
           <Panel
             title="Applicants"
-            description="Accept → Active to start work. When the outcome is delivered, pay the SDR (~20% platform fee). SDRs must finish payout setup under Billing."
+            description="Accept → Active to start work. Outcome payouts take 20% (capped at $30). SDRs must finish payout setup under Billing."
+            actions={
+              campaign.basePayCents ? (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={basePayBusy || campaign.status !== 'OPEN'}
+                  onClick={() => void payBaseNow()}
+                >
+                  {basePayBusy
+                    ? 'Paying base…'
+                    : `Pay base now${campaign.basePayLabel ? ` (${campaign.basePayLabel})` : ''}`}
+                </button>
+              ) : undefined
+            }
           >
             {applications.length === 0 ? (
               <EmptyState title="No applicants yet" description="Share the brand deals board with SDRs." />
