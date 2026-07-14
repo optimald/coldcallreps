@@ -49,7 +49,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     sub: 'Train on realistic gatekeeper and decision-maker calls with live AI voice coaching. Sharpen openers, objections, and transfers until your score proves you’re ready — then unlock paid brand campaigns.',
     primaryCta: { href: '/sign-up?role=REP', label: 'Start Free — Get Paid' },
     secondaryCta: { href: '/gigs', label: 'Browse Brand Deals' },
-    proof: '',
+    proof: 'Learn to be an expert sales development rep by putting in the reps.',
     outcomesHeadline: 'The AI coaching gym for serious SDRs',
     outcomes: [
       {
@@ -123,7 +123,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     sub: 'You’re busy building. Cold Call Reps trains SDRs with AI voice on your exact offer, gates quality, then matches them to your paid campaigns. You only pay for results.',
     primaryCta: { href: '/sign-up?role=BRAND', label: 'Post a Campaign' },
     secondaryCta: { href: '/gigs', label: 'See Open Brand Deals' },
-    proof: '',
+    proof: 'Hire sales reps who put in the reps.',
     outcomesHeadline: 'For founders who want booked meetings without the grind',
     outcomes: [
       {
@@ -167,7 +167,8 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       },
     ],
     pricingHeadline: 'Lead generation + results-based campaigns',
-    escrowNote: 'Campaign escrow: pay SDRs only when goals are met · ~20% platform fee',
+    escrowNote:
+      'Campaign escrow: outcomes + optional base · 20% fee capped at $30/outcome · $150/mo on base',
     planHref: '/sign-up?role=BRAND',
     pricingCards: [
       {

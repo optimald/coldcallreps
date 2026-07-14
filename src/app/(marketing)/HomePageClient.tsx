@@ -288,6 +288,15 @@ export default function HomePageClient() {
               Join as an SDR
             </Link>
           </motion.div>
+
+          <motion.p
+            className="lp-ath-proof lp-ath-proof--center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.22 }}
+          >
+            Cold calling reps who put in the reps to grow your business.
+          </motion.p>
         </div>
       </section>
 
@@ -434,8 +443,8 @@ export default function HomePageClient() {
       <section className="lp-ath-proofbar" aria-label="Platform proof">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>~20%</strong>
-            <span>Platform fee on results</span>
+            <strong>20%</strong>
+            <span>Fee capped ($30 / outcome)</span>
           </div>
           <div>
             <strong>Escrow</strong>

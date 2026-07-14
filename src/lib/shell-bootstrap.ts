@@ -188,10 +188,14 @@ export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
     }
 
     const activeMode = roleMode.activeMode;
+    const repDone = roleMode.modes.REP.onboarded;
+    const brandDone = roleMode.modes.BRAND.onboarded;
     const needsOnboardingPath =
-      activeMode && roleMode.modes[activeMode] && !roleMode.modes[activeMode].onboarded
-        ? roleMode.modes[activeMode].onboardingPath
-        : null;
+      !repDone && !brandDone
+        ? '/onboarding'
+        : activeMode && roleMode.modes[activeMode] && !roleMode.modes[activeMode].onboarded
+          ? roleMode.modes[activeMode].onboardingPath
+          : null;
 
     return {
       role,

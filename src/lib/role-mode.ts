@@ -157,7 +157,7 @@ export function buildRoleModeState(
   };
 }
 
-/** True when active switchable mode still needs onboarding. */
+/** True when the user still needs account-type / mode onboarding. */
 export function needsOnboardingRedirect(
   profile: Pick<
     UserProfile,
@@ -171,6 +171,10 @@ export function needsOnboardingRedirect(
 ): string | null {
   if (pathname.startsWith('/onboarding')) return null;
   const state = buildRoleModeState(profile);
+  const repDone = state.modes.REP.onboarded;
+  const brandDone = state.modes.BRAND.onboarded;
+  // New accounts pick SDR vs Brand after signup.
+  if (!repDone && !brandDone) return '/onboarding';
   if (!state.activeMode) return null;
   const mode = state.modes[state.activeMode];
   if (!mode.onboarded) return mode.onboardingPath;

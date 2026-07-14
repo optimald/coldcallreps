@@ -19,7 +19,7 @@ export const SIGNUP_PATHS: SignupPath[] = [
     id: 'sdr',
     title: 'SDR',
     sublabel: 'Sales Development Rep',
-    tagline: 'Train. Prove. Get paid.',
+    tagline: 'Learn to be an expert sales development rep by putting in the reps.',
     blurb:
       'Practice with AI voice, prove your skill, then take paid outbound campaigns. Brand deals are free for reps.',
     role: 'REP',
@@ -27,11 +27,11 @@ export const SIGNUP_PATHS: SignupPath[] = [
   },
   {
     id: 'brand',
-    title: 'Founder',
-    sublabel: 'Brand / campaign',
-    tagline: 'Post a campaign. Get dials.',
+    title: 'Brand',
+    sublabel: 'Campaigns & leads',
+    tagline: 'Hire sales reps who put in the reps.',
     blurb:
-      'Bootstrapped founders post outbound campaigns, review practice-backed reps, and pay for results (~20% platform fee).',
+      'Post outbound campaigns, review practice-backed reps, and pay for outcomes + optional base (20% fee, capped).',
     role: 'BRAND',
     home: '/dashboard',
   },
