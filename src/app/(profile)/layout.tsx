@@ -15,7 +15,6 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
             Dashboard
           </Link>
           <UserButton
-            afterSignOutUrl="/"
             appearance={{
               elements: {
                 avatarBox: { width: 28, height: 28 },

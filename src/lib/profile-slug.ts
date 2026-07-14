@@ -118,6 +118,14 @@ export async function uniqueTeamSlug(base: string, orgId: string): Promise<strin
   return `team-${orgId.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
 }
 
+function isUniqueConstraintError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const code = 'code' in err ? String((err as { code?: unknown }).code || '') : '';
+  if (code === 'P2002') return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /UNIQUE constraint failed|unique constraint/i.test(message);
+}
+
 /** Ensure every user has a public RepProfile + slug (LinkedIn-lite identity). */
 export async function ensureRepProfile(opts: {
   userId: string;
@@ -126,15 +134,34 @@ export async function ensureRepProfile(opts: {
   const existing = await prisma.repProfile.findUnique({ where: { userId: opts.userId } });
   if (existing) return existing;
 
-  const slug = await uniqueRepSlug(opts.displayName || opts.userId, opts.userId);
-  return prisma.repProfile.create({
-    data: {
-      userId: opts.userId,
-      slug,
-      bio: null,
-      skillsJSON: '[]',
-      clipUrlsJSON: '[]',
-      featuredClipIdsJSON: '[]',
-    },
-  });
+  // OAuth redirects (esp. Facebook) often hit /dashboard concurrently. Two creates
+  // can pick the same free slug; retry on UNIQUE and re-read by userId.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const base =
+      attempt === 0
+        ? opts.displayName || opts.userId
+        : `${slugify(opts.displayName || 'rep') || 'rep'}-${opts.userId.slice(-8)}-${attempt}-${Math.random().toString(36).slice(2, 6)}`;
+    const slug = await uniqueRepSlug(base, opts.userId);
+    try {
+      return await prisma.repProfile.create({
+        data: {
+          userId: opts.userId,
+          slug,
+          bio: null,
+          skillsJSON: '[]',
+          clipUrlsJSON: '[]',
+          featuredClipIdsJSON: '[]',
+        },
+      });
+    } catch (err) {
+      const again = await prisma.repProfile.findUnique({ where: { userId: opts.userId } });
+      if (again) return again;
+      if (!isUniqueConstraintError(err)) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error('Failed to provision RepProfile after unique-slug retries');
 }
