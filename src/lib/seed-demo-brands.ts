@@ -332,6 +332,7 @@ export async function seedDemoBrands() {
       contentJSON: JSON.stringify({ steps: demo.playbook.steps }),
       userId: null,
       orgId: null,
+      practiceAllowed: true,
     };
 
     const playbook = existingPlaybook

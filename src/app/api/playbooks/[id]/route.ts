@@ -8,7 +8,7 @@ import { sanitizePlaybookContent } from '@/lib/trainer/playbook-context';
 
 type ProfileAuth = Pick<UserProfile, 'id' | 'orgId' | 'plan' | 'platformRole' | 'email'>;
 
-/** Brand practice playbooks: manager, accepted SDR, or demo brand. */
+/** Brand practice: demo, practiceAllowed, manager, or accepted campaign SDR. */
 async function canAccess(profile: ProfileAuth, playbookId: string) {
   const playbook = await prisma.playbook.findFirst({
     where: {
@@ -23,6 +23,10 @@ async function canAccess(profile: ProfileAuth, playbookId: string) {
   });
   if (!playbook) return null;
   if (!playbook.brandId || !playbook.brand) return playbook;
+
+  if (playbook.brand.slug?.startsWith('demo-') || playbook.practiceAllowed) {
+    return playbook;
+  }
 
   const { assertTrainerBrandAccess } = await import('@/lib/trainer-brand-access');
   const access = await assertTrainerBrandAccess(profile, playbook.brandId);
@@ -90,11 +94,14 @@ export async function PATCH(
       body.content !== undefined
         ? JSON.stringify(sanitizePlaybookContent(body.content))
         : undefined;
+    const practiceAllowed =
+      typeof body.practiceAllowed === 'boolean' ? body.practiceAllowed : undefined;
     const playbook = await prisma.playbook.update({
       where: { id },
       data: {
         title: body.title ? String(body.title).slice(0, 160) : undefined,
         contentJSON,
+        ...(practiceAllowed !== undefined ? { practiceAllowed } : {}),
       },
       include: { brand: { select: { id: true, name: true, slug: true } } },
     });

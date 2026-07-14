@@ -381,12 +381,14 @@ export default function TrainerView() {
   const selectedPack = brandPacks.find((p) => `${p.brandId}:${p.packId}` === packKey);
   const selectedBrandId = selectedPack?.brandId || null;
 
-  const filteredPlaybooks = playbooks.filter((p) =>
-    selectedBrandId ? p.brandId === selectedBrandId : !p.brandId
-  );
+  const filteredPlaybooks = selectedBrandId
+    ? playbooks.filter((p) => p.brandId === selectedBrandId)
+    : playbooks;
 
   function pickPlaybookForBrand(brandId: string | null | undefined, preferredId?: string) {
-    const pool = playbooks.filter((p) => (brandId ? p.brandId === brandId : !p.brandId));
+    const pool = brandId
+      ? playbooks.filter((p) => p.brandId === brandId)
+      : playbooks.filter((p) => !p.brandId);
     if (preferredId && pool.some((p) => p.id === preferredId)) return preferredId;
     return pool[0]?.id || '';
   }
@@ -405,13 +407,13 @@ export default function TrainerView() {
     if (!playbooks.length || !playbookId) return;
     const allowed = playbooks.some((p) => {
       if (p.id !== playbookId) return false;
-      return selectedBrandId ? p.brandId === selectedBrandId : !p.brandId;
+      return selectedBrandId ? p.brandId === selectedBrandId : true;
     });
     if (allowed) return;
     const preferred = selectedPack?.playbookId;
-    const pool = playbooks.filter((p) =>
-      selectedBrandId ? p.brandId === selectedBrandId : !p.brandId
-    );
+    const pool = selectedBrandId
+      ? playbooks.filter((p) => p.brandId === selectedBrandId)
+      : playbooks;
     const next =
       preferred && pool.some((p) => p.id === preferred) ? preferred : pool[0]?.id || '';
     setPlaybookId(next);
@@ -984,13 +986,13 @@ export default function TrainerView() {
             </label>
 
             <label className="cc-desk-config__field">
-              <span>Brand pack</span>
+              <span>Brand / pack</span>
               <select
                 value={packKey}
                 onChange={(e) => onPackKeyChange(e.target.value)}
                 disabled={realtime.isConnected}
               >
-                <option value="">None — generic</option>
+                <option value="">None — generic practice</option>
                 {brandPacks.map((p) => (
                   <option key={`${p.brandId}:${p.packId || 'pb'}`} value={`${p.brandId}:${p.packId}`}>
                     {p.brandName} · {p.packName}
@@ -1009,7 +1011,7 @@ export default function TrainerView() {
                 <option value="">None — default</option>
                 {filteredPlaybooks.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.title}
+                    {p.brandName ? `${p.brandName} · ${p.title}` : p.title}
                   </option>
                 ))}
               </select>
@@ -1186,7 +1188,7 @@ export default function TrainerView() {
                 <p className="cc-desk__gate-desc">
                   {leadTab === 'brand'
                     ? 'Accepted campaign leads appear here for AI practice personalization.'
-                    : 'Seed demo practice leads, then refresh — or browse brand deals for practice packs.'}
+                    : 'Loading practice leads… If this stays empty, hit Refresh or pick a brand playbook under Configure practice.'}
                 </p>
                 {leadTab === 'brand' ? (
                   <Link href="/gigs" className="btn-ghost">
@@ -1194,11 +1196,15 @@ export default function TrainerView() {
                   </Link>
                 ) : (
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <Link href="/gigs" className="btn-ghost">
-                      Browse brand deals →
-                    </Link>
-                    <button type="button" className="btn-ghost" onClick={() => void loadLeads()}>
+                    <button type="button" className="btn" onClick={() => void loadLeads()}>
                       Refresh
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => setConfigOpen(true)}
+                    >
+                      Configure practice
                     </button>
                   </div>
                 )}

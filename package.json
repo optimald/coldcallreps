@@ -31,6 +31,7 @@
     "db:patch:campaign-decision": "npx tsx scripts/patch-campaign-decision.ts",
     "db:patch:campaign-budget": "npx tsx scripts/patch-campaign-budget.ts",
     "db:patch:talent-interest": "npx tsx scripts/patch-talent-interest.ts",
+    "db:patch:playbook-practice": "npx tsx scripts/patch-playbook-practice-allowed.ts",
     "db:studio": "prisma studio",
     "seed:demo-brands": "npx tsx src/lib/seed-demo-brands.ts",
     "seed:dispatchnode": "npx tsx src/lib/seed-dispatchnode.ts",

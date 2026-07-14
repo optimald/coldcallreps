@@ -809,6 +809,8 @@ model Playbook {
   brand       Brand?      @relation(fields: [brandId], references: [id], onDelete: Cascade)
   title       String
   contentJSON String      @default("{}")
+  /** When true, SDRs may pick this brand playbook in Practice (public practice catalog). */
+  practiceAllowed Boolean @default(false)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -817,6 +819,7 @@ model Playbook {
   @@index([orgId])
   @@index([brandId])
   @@index([userId])
+  @@index([practiceAllowed])
 }
 
 // ——— Campaign marketplace (brand gigs) ———

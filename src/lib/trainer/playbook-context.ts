@@ -102,8 +102,8 @@ export type ResolvedPlaybookContext = {
 
 /**
  * Resolve a playbook for trainer/coach use.
- * Personal + org playbooks require ownership/membership.
- * Brand playbooks are practice content — any authenticated caller may load them.
+ * Personal + org: ownership/membership.
+ * Brand: demo, practiceAllowed catalog, brand manager, or accepted campaign SDR.
  */
 export async function resolvePlaybookContext(opts: {
   userId: string;
@@ -112,17 +112,32 @@ export async function resolvePlaybookContext(opts: {
 }): Promise<ResolvedPlaybookContext | null> {
   if (!opts.playbookId) return null;
 
-  const playbook = await prisma.playbook.findFirst({
-    where: {
-      id: opts.playbookId,
-      OR: [
-        { userId: opts.userId },
-        ...(opts.orgId ? [{ orgId: opts.orgId }] : []),
-        { brandId: { not: null } },
-      ],
+  const playbook = await prisma.playbook.findUnique({
+    where: { id: opts.playbookId },
+    include: {
+      brand: { select: { id: true, slug: true, ownerId: true } },
     },
   });
   if (!playbook) return null;
+
+  const isPersonal =
+    playbook.userId === opts.userId ||
+    (Boolean(opts.orgId) && playbook.orgId === opts.orgId);
+  if (!isPersonal && playbook.brandId) {
+    const demo = Boolean(playbook.brand?.slug?.startsWith('demo-'));
+    if (!demo && !playbook.practiceAllowed) {
+      const profile = await prisma.userProfile.findUnique({
+        where: { id: opts.userId },
+        select: { id: true, platformRole: true, email: true },
+      });
+      if (!profile) return null;
+      const { assertTrainerBrandAccess } = await import('@/lib/trainer-brand-access');
+      const access = await assertTrainerBrandAccess(profile, playbook.brandId);
+      if (!access.ok) return null;
+    }
+  } else if (!isPersonal) {
+    return null;
+  }
 
   const content = parsePlaybookContent(playbook.contentJSON);
   if (!content.steps.length) return null;

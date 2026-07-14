@@ -20,6 +20,7 @@ export default function BrandDetailPage() {
   const [bountyMin, setBountyMin] = useState('80');
   const [boardTitle, setBoardTitle] = useState('');
   const [playbookTitle, setPlaybookTitle] = useState('');
+  const [practiceBusyId, setPracticeBusyId] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -156,6 +157,37 @@ export default function BrandDetailPage() {
       return;
     }
     setMsg(data.error || 'Could not create playbook');
+  }
+
+  async function togglePracticeAllowed(pb: { id: string; practiceAllowed?: boolean }) {
+    if (!brand?.canEdit) return;
+    setPracticeBusyId(pb.id);
+    setMsg('');
+    try {
+      const res = await fetch(`/api/playbooks/${pb.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ practiceAllowed: !pb.practiceAllowed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || 'Could not update practice permission');
+        return;
+      }
+      setBrand((prev: typeof brand) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          playbooks: (prev.playbooks || []).map((row: { id: string }) =>
+            row.id === pb.id
+              ? { ...row, practiceAllowed: Boolean(data.playbook?.practiceAllowed) }
+              : row
+          ),
+        };
+      });
+    } finally {
+      setPracticeBusyId(null);
+    }
   }
 
   if (loading) {
@@ -298,7 +330,8 @@ export default function BrandDetailPage() {
               Packs & playbooks
             </h2>
             <p className="brand-section__lead">
-              Talk tracks inject into the Practice playbook and live coach. Reps should review before dialing.
+              Talk tracks inject into Practice and the live coach. Permit a playbook so SDRs can train on
+              your brand; otherwise it stays off the public practice list.
             </p>
           </div>
         </div>
@@ -351,6 +384,10 @@ export default function BrandDetailPage() {
 
           <div className="brand-unit">
             <h3 className="brand-unit__title">Playbooks</h3>
+            <p className="muted" style={{ marginTop: 0, fontSize: '0.88rem' }}>
+              Permit a playbook for Practice so SDRs can select your brand talk track. Off = excluded from
+              the public practice list (accepted campaign SDRs can still train on assigned campaigns).
+            </p>
             {playbooks.length === 0 ? (
               <p className="muted brand-unit__empty">No playbooks yet — open → qualify → pitch → close.</p>
             ) : (
@@ -358,10 +395,32 @@ export default function BrandDetailPage() {
                 {playbooks.map((pb: any) => {
                   const qs = new URLSearchParams({ brandId: brand.id, playbookId: pb.id });
                   if (primaryPack) qs.set('packId', primaryPack.id);
+                  const allowed = Boolean(pb.practiceAllowed);
                   return (
                     <li key={pb.id}>
-                      <span>{pb.title}</span>
+                      <span>
+                        {pb.title}
+                        {allowed ? (
+                          <span className="chip" style={{ marginLeft: '0.4rem' }}>
+                            Practice open
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="brand-list__links">
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            className="btn-ghost btn--sm"
+                            disabled={practiceBusyId === pb.id}
+                            onClick={() => void togglePracticeAllowed(pb)}
+                          >
+                            {practiceBusyId === pb.id
+                              ? 'Saving…'
+                              : allowed
+                                ? 'Revoke practice'
+                                : 'Permit practice'}
+                          </button>
+                        ) : null}
                         <Link href={brandHref(id, 'playbooks', pb.id)}>Edit</Link>
                         <Link href={`/practice?${qs.toString()}`}>Practice →</Link>
                       </span>

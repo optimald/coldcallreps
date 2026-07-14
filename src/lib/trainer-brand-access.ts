@@ -23,6 +23,13 @@ export async function assertTrainerBrandAccess(
   if (await canManageBrandLeads(profile, brandId)) return { ok: true };
   if (canManageBrand(profile, brand.ownerId)) return { ok: true };
 
+  // Brand opted a playbook into the public Practice catalog.
+  const openPractice = await prisma.playbook.findFirst({
+    where: { brandId, practiceAllowed: true },
+    select: { id: true },
+  });
+  if (openPractice) return { ok: true };
+
   const app = await prisma.campaignApplication.findFirst({
     where: {
       userId: profile.id,

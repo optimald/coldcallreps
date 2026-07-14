@@ -8,7 +8,11 @@ import {
   PROSPECT_DIAL_SELECT,
   PROSPECT_LIST_SELECT,
 } from '@/lib/brand-leads';
-import { TRAINING_SOURCE, listTrainingLeads } from '@/lib/training-leads';
+import {
+  TRAINING_SOURCE,
+  ensureTrainingLeadsAvailable,
+  listTrainingLeads,
+} from '@/lib/training-leads';
 import { effectiveRole } from '@/lib/roles';
 
 /** CRM list — personal, brand campaign, dialable, or training (?training=1). */
@@ -64,6 +68,14 @@ export async function GET(req: Request) {
         const demoOk = Boolean(brand.slug?.startsWith('demo-'));
         if (!demoOk && !(await canManageBrandLeads(profile, brandId))) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
+      // SDRs always get a live practice queue — seed platform demos if empty.
+      if (!brandId && role !== 'BRAND' && role !== 'RECRUITER') {
+        try {
+          await ensureTrainingLeadsAvailable();
+        } catch (e) {
+          console.warn('[prospects] ensureTrainingLeadsAvailable failed', e);
         }
       }
       const { prospects, hasMore, total } = await listTrainingLeads({

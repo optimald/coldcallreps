@@ -60,9 +60,13 @@ export async function GET(req: Request) {
       if (wantsMine && !isSuperadmin(profile)) {
         where = { ownerId: profile.id };
       } else if (forcePractice || role === 'REP' || role === 'MANAGER') {
-        // Trainer / hiring catalog: platform demos + any brands the user owns
+        // Trainer catalog: demos + brands with opted-in playbooks + owned brands
         where = {
-          OR: [{ slug: { startsWith: 'demo-' } }, { ownerId: profile.id }],
+          OR: [
+            { slug: { startsWith: 'demo-' } },
+            { ownerId: profile.id },
+            { playbooks: { some: { practiceAllowed: true } } },
+          ],
         };
       }
       // Superadmin without mine/practice: no filter (all brands)
@@ -96,18 +100,30 @@ export async function GET(req: Request) {
       take: 50,
       include: {
         packs: { where: { active: true }, take: 5 },
-        playbooks: { take: 5, orderBy: { updatedAt: 'desc' } },
+        playbooks: { take: 20, orderBy: { updatedAt: 'desc' } },
         _count: { select: { certifications: true, bounties: true } },
       },
     });
 
     const full = Boolean(userId);
+    const viewerId = userId || null;
     return NextResponse.json({
-      brands: brands.map((b) => ({
-        ...b,
-        packs: b.packs.map((p) => stripPackSecrets(p, full)),
-        playbooks: b.playbooks.map((pb) => stripPlaybookSecrets(pb, full)),
-      })),
+      brands: brands.map((b) => {
+        const isDemo = Boolean(b.slug?.startsWith('demo-'));
+        const isOwner = Boolean(viewerId && b.ownerId === viewerId);
+        // Non-owners only see playbooks brands have opted into Practice.
+        const playbooks =
+          isDemo || isOwner
+            ? b.playbooks
+            : b.playbooks.filter((pb) => pb.practiceAllowed);
+        return {
+          ...b,
+          packs: b.packs.map((p) => stripPackSecrets(p, full)),
+          playbooks: playbooks
+            .slice(0, 5)
+            .map((pb) => stripPlaybookSecrets(pb, full)),
+        };
+      }),
     });
   } catch (error: any) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

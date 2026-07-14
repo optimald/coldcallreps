@@ -86,7 +86,11 @@ export async function loadSdrVitals(
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - (PERIOD_DAYS - 1));
 
-  const [calls, claims, payoutsPaid, payoutsPending, rankAhead, payoutRows] =
+  const rankSince = new Date(now);
+  rankSince.setUTCHours(0, 0, 0, 0);
+  rankSince.setUTCDate(rankSince.getUTCDate() - 13);
+
+  const [calls, claims, payoutsPaid, payoutsPending, rankAhead, payoutRows, sessionCount] =
     await Promise.all([
       prisma.callLog.findMany({
         where: { userId: profile.id, createdAt: { gte: since } },
@@ -129,6 +133,9 @@ export async function loadSdrVitals(
           ],
         },
         select: { netCents: true, paidAt: true, createdAt: true, status: true },
+      }),
+      prisma.trainerSession.count({
+        where: { userId: profile.id, createdAt: { gte: rankSince } },
       }),
     ]);
 
@@ -230,25 +237,21 @@ export async function loadSdrVitals(
   }
 
   const currentRank = rankAhead + 1;
-  const rankTrack: SdrRankPoint[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(now);
-    d.setUTCHours(0, 0, 0, 0);
-    d.setUTCDate(d.getUTCDate() - i);
-    const wobble = ((i * 7) % 5) - 2;
-    rankTrack.push({
-      key: dayKey(d),
-      label: d.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'UTC',
-      }),
-      rank: Math.max(1, currentRank + wobble),
-    });
-  }
-  if (rankTrack.length) {
-    rankTrack[rankTrack.length - 1].rank = currentRank;
-  }
+  // Live only: no synthetic wobble. Empty until the SDR has practice sessions.
+  const rankTrack: SdrRankPoint[] =
+    sessionCount > 0
+      ? [
+          {
+            key: dayKey(now),
+            label: now.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'UTC',
+            }),
+            rank: currentRank,
+          },
+        ]
+      : [];
 
   return {
     periodDays: PERIOD_DAYS,

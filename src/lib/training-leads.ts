@@ -394,6 +394,32 @@ export async function ensurePlatformSeedUser() {
   });
 }
 
+/**
+ * Ensure platform practice leads exist for every SDR Call Queue.
+ * Seeds demo brands + training prospects when the catalog is empty.
+ */
+export async function ensureTrainingLeadsAvailable() {
+  const existing = await prisma.prospect.count({
+    where: { source: TRAINING_SOURCE },
+  });
+  if (existing > 0) return { seeded: false as const, existing };
+
+  const demoBrands = await prisma.brand.count({
+    where: { slug: { startsWith: 'demo-' } },
+  });
+  if (demoBrands === 0) {
+    const { seedDemoBrands } = await import('./seed-demo-brands');
+    await seedDemoBrands();
+  } else {
+    await seedTrainingLeads();
+  }
+
+  const after = await prisma.prospect.count({
+    where: { source: TRAINING_SOURCE },
+  });
+  return { seeded: true as const, existing: after };
+}
+
 /** Idempotent seed of training leads onto demo brands. */
 export async function seedTrainingLeads() {
   const user = await ensurePlatformSeedUser();

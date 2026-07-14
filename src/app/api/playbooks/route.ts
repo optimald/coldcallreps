@@ -68,9 +68,14 @@ export async function GET(req: Request) {
     }
 
     if (scope === 'brand') {
-      // Only demo brand playbooks for the open practice catalog
+      // Open practice catalog: demos + brand-opted-in playbooks
       const playbooks = await prisma.playbook.findMany({
-        where: { brand: { slug: { startsWith: 'demo-' } } },
+        where: {
+          OR: [
+            { brand: { slug: { startsWith: 'demo-' } } },
+            { practiceAllowed: true },
+          ],
+        },
         orderBy: { updatedAt: 'desc' },
         take: 50,
         include: { brand: { select: { id: true, name: true, slug: true } } },
@@ -78,10 +83,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ playbooks });
     }
 
-    // Default: personal/org + demo brand practice playbooks
+    // Default: personal/org + demo + brand-opted-in practice playbooks
     const playbooks = await prisma.playbook.findMany({
       where: {
-        OR: [...personalOrOrg.OR, { brand: { slug: { startsWith: 'demo-' } } }],
+        OR: [
+          ...personalOrOrg.OR,
+          { brand: { slug: { startsWith: 'demo-' } } },
+          { practiceAllowed: true },
+        ],
       },
       orderBy: { updatedAt: 'desc' },
       take: 80,

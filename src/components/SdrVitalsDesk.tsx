@@ -288,7 +288,11 @@ export function SdrRankTrackChart({
 }) {
   const points = vitals.rankTrack;
   if (!points.length) {
-    return <p className="muted desk-chart__empty">Rank history coming soon.</p>;
+    return (
+      <p className="muted desk-chart__empty">
+        No rank movement yet — practice to climb.
+      </p>
+    );
   }
 
   const w = 560;
