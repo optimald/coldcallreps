@@ -706,5 +706,41 @@ export async function POST(req: Request) {
     }
   }
 
+  // Chargebacks / disputes — surface in admin health & refunds
+  if (
+    event.type === 'charge.dispute.created' ||
+    event.type === 'charge.dispute.updated' ||
+    event.type === 'charge.dispute.closed'
+  ) {
+    const dispute = event.data.object as Stripe.Dispute;
+    const evidenceDue =
+      dispute.evidence_details?.due_by != null
+        ? new Date(dispute.evidence_details.due_by * 1000)
+        : null;
+    await prisma.stripeDisputeRecord.upsert({
+      where: { stripeDisputeId: dispute.id },
+      create: {
+        stripeDisputeId: dispute.id,
+        chargeId: typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id,
+        paymentIntentId:
+          typeof dispute.payment_intent === 'string'
+            ? dispute.payment_intent
+            : dispute.payment_intent?.id || null,
+        amountCents: dispute.amount,
+        currency: dispute.currency,
+        reason: dispute.reason,
+        status: dispute.status,
+        evidenceDueBy: evidenceDue,
+        rawJSON: JSON.stringify(dispute).slice(0, 8000),
+      },
+      update: {
+        status: dispute.status,
+        reason: dispute.reason,
+        evidenceDueBy: evidenceDue,
+        rawJSON: JSON.stringify(dispute).slice(0, 8000),
+      },
+    });
+  }
+
   return NextResponse.json({ received: true });
 }

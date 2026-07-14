@@ -20,6 +20,8 @@
     "db:patch:pipeline": "npx tsx scripts/patch-pipeline-handoff.ts",
     "db:patch:pipeline-jobs": "npx tsx scripts/patch-pipeline-jobs.ts",
     "db:patch:role-modes": "npx tsx scripts/patch-role-modes.ts",
+    "db:patch:admin-ops": "npx tsx scripts/patch-admin-ops.ts",
+    "db:patch:admin-ops-p46": "npx tsx scripts/patch-admin-ops-p46.ts",
     "db:patch:notification-prefs": "npx tsx scripts/patch-notification-prefs.ts",
     "db:patch:session-wrap": "npx tsx scripts/patch-trainer-session-wrap.ts",
     "db:patch:meeting-attribution": "npx tsx scripts/patch-meeting-attribution.ts",

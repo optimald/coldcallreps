@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireSuperadmin } from '@/lib/auth';
+import { requireOps } from '@/lib/auth';
 import { loadAdminPlatformOverview } from '@/lib/admin-platform';
 
 export async function GET() {
   try {
-    await requireSuperadmin();
+    await requireOps('admin.access');
     const data = await loadAdminPlatformOverview();
     return NextResponse.json(data);
   } catch (error: unknown) {
@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     if (message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

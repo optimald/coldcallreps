@@ -6,7 +6,8 @@ import { auditAppointmentClaim } from '@/lib/appointment-audit';
 
 /**
  * POST /api/campaigns/[id]/claims
- * SDR claims a booked meeting → AI audit → brand must confirm payout.
+ * SDR claims a booked meeting → AI audit → auto escrow release / Connect payout on pass.
+ * Brand or SDR can dispute afterward via /claims/[claimId]/dispute.
  * Body: { notes, transcriptSnippet?, prospectName?, meetingAt?, callLogId?, calendarEventId? }
  */
 export async function POST(
@@ -161,16 +162,23 @@ export async function POST(
         .catch(() => null);
     }
 
-    // AI pass attributes the claim — brand must confirm before escrow/payout.
+    const { releaseAppointmentClaimPayout } = await import('@/lib/claim-payout');
+    const paid = await releaseAppointmentClaimPayout(claim.id);
+    if (!paid.ok) {
+      console.warn('[claims] auto payout', paid.error);
+    }
+
     const { notifyAsync } = await import('@/lib/notifications');
     const brandCtx = {
       id: campaign.brand.id,
       name: campaign.brand.name,
       slug: campaign.brand.slug,
     };
+    const payoutStatus = paid.ok ? paid.payoutStatus : 'PENDING';
+    const paidOut = payoutStatus === 'PAID';
     if (campaign.brand.ownerId) {
       notifyAsync({
-        event: 'appointment.booked',
+        event: paidOut ? 'payout.paid' : 'appointment.verified',
         recipient: { userId: campaign.brand.ownerId },
         brand: brandCtx,
         payload: {
@@ -180,28 +188,34 @@ export async function POST(
           ctaUrl: `/brands/${campaign.brand.slug}/sdrs/payouts`,
           forAudience: 'brand',
         },
-        idempotencyKey: `appointment.claim:brand:${claim.id}`,
+        idempotencyKey: `appointment.claim:brand:${claim.id}:${payoutStatus}`,
       });
     }
     notifyAsync({
-      event: 'appointment.booked',
+      event: paidOut ? 'payout.paid' : 'appointment.verified',
       recipient: { userId: profile.id },
       brand: brandCtx,
       payload: {
         campaignTitle: campaign.title,
         campaignId,
-        ctaUrl: '/gigs',
+        ctaUrl: paidOut ? '/billing' : '/gigs',
         forAudience: 'sdr',
       },
-      idempotencyKey: `appointment.claim:sdr:${claim.id}`,
+      idempotencyKey: `appointment.claim:sdr:${claim.id}:${payoutStatus}`,
     });
 
+    const fresh = await prisma.appointmentClaim.findUnique({ where: { id: claim.id } });
+    const payoutNotice = !paid.ok
+      ? `AI audit passed — payout not completed: ${paid.error}`
+      : paidOut
+        ? 'AI audit passed — escrow released and SDR payout sent.'
+        : 'AI audit passed — escrow released. Payout pending (SDR Connect or ops hold).';
     return NextResponse.json({
-      claim,
+      claim: fresh || claim,
       audit,
-      code: 'PAYOUT_PENDING_BRAND_CONFIRM',
-      notice:
-        'Appointment claim passed AI audit. Brand must confirm before escrow release and payout.',
+      payoutStatus,
+      code: paidOut ? 'PAYOUT_PAID' : 'PAYOUT_PENDING',
+      notice: payoutNotice,
     });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

@@ -57,9 +57,18 @@ export default function VerifiedGoalsClient({
   const searchParams = useSearchParams();
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | VerifiedGoalRow['kind']>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'payable' | 'pending' | 'paid'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'payable' | 'pending' | 'paid' | 'failed'>(
+    'all'
+  );
   const [repFilter, setRepFilter] = useState(() => searchParams.get('rep') || '');
   const [campaignFilter, setCampaignFilter] = useState(() => searchParams.get('campaign') || '');
+  const [rows, setRows] = useState(initial);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRows(initial);
+  }, [initial]);
 
   useEffect(() => {
     setRepFilter(searchParams.get('rep') || '');
@@ -69,7 +78,7 @@ export default function VerifiedGoalsClient({
   const reps = useMemo(() => {
     if (mode !== 'brand') return [];
     const map = new Map<string, string>();
-    for (const g of initial) {
+    for (const g of rows) {
       if (g.repUserId) map.set(g.repUserId, g.repName);
     }
     if (repFilter && !map.has(repFilter)) {
@@ -78,11 +87,11 @@ export default function VerifiedGoalsClient({
     return [...map.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [initial, mode, repFilter]);
+  }, [rows, mode, repFilter]);
 
   const campaigns = useMemo(() => {
     const map = new Map<string, string>();
-    for (const g of initial) {
+    for (const g of rows) {
       if (g.campaignId && g.campaignTitle) map.set(g.campaignId, g.campaignTitle);
     }
     if (campaignFilter && !map.has(campaignFilter)) {
@@ -91,7 +100,7 @@ export default function VerifiedGoalsClient({
     return [...map.entries()]
       .map(([id, label]) => ({ id, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [initial, campaignFilter]);
+  }, [rows, campaignFilter]);
 
   function patchFilters(next: { rep?: string; campaign?: string }) {
     if (next.rep !== undefined) setRepFilter(next.rep);
@@ -117,9 +126,59 @@ export default function VerifiedGoalsClient({
     patchFilters({ campaign: next });
   }
 
+  async function disputeClaim(g: VerifiedGoalRow) {
+    if (!g.campaignId || g.kind !== 'claim') return;
+    const isFail = (g.status || '').toUpperCase() === 'FAILED';
+    const isPaid =
+      (g.status || '').toUpperCase() === 'PAID' ||
+      (g.payoutStatus || '').toUpperCase() === 'PAID' ||
+      (g.payoutStatus || '').toUpperCase() === 'PENDING';
+    if (mode === 'sdr' && !isFail) return;
+    if (mode === 'brand' && !isPaid && (g.status || '').toUpperCase() !== 'PASSED') return;
+
+    const reason = window.prompt(
+      mode === 'sdr'
+        ? 'Why should this AI rejection be overturned?'
+        : 'Why are you disputing this payout? (Ops reviews; sent transfers are not auto-reversed.)'
+    );
+    if (!reason || reason.trim().length < 8) {
+      setMsg('Dispute cancelled — reason must be at least 8 characters.');
+      return;
+    }
+    setBusyId(g.id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/campaigns/${g.campaignId}/claims/${g.id}/dispute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Dispute failed');
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === g.id
+            ? {
+                ...row,
+                status: mode === 'sdr' ? row.status : row.status,
+                payoutStatus: mode === 'brand' ? 'DISPUTED' : row.payoutStatus,
+                title:
+                  mode === 'sdr' ? `${row.title} · disputed` : row.title,
+              }
+            : row
+        )
+      );
+      setMsg(data.notice || 'Dispute filed.');
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Dispute failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return initial.filter((g) => {
+    return rows.filter((g) => {
       if (repFilter && g.repUserId !== repFilter) return false;
       if (campaignFilter && g.campaignId !== campaignFilter) return false;
       if (kindFilter !== 'all' && g.kind !== kindFilter) return false;
@@ -130,6 +189,7 @@ export default function VerifiedGoalsClient({
       }
       if (statusFilter === 'pending' && s !== 'PENDING_AUDIT' && ps !== 'PENDING') return false;
       if (statusFilter === 'paid' && s !== 'PAID' && ps !== 'PAID') return false;
+      if (statusFilter === 'failed' && s !== 'FAILED') return false;
       if (!q) return true;
       const hay = [
         g.companyName,
@@ -143,9 +203,9 @@ export default function VerifiedGoalsClient({
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [initial, query, kindFilter, statusFilter, repFilter, campaignFilter]);
+  }, [rows, query, kindFilter, statusFilter, repFilter, campaignFilter]);
 
-  const payableCount = initial.filter((g) => {
+  const payableCount = rows.filter((g) => {
     const s = (g.status || '').toUpperCase();
     const ps = (g.payoutStatus || '').toUpperCase();
     return s === 'PASSED' || s === 'BOOKED' || ps === 'PENDING' || s === 'PAID' || ps === 'PAID';
@@ -157,10 +217,11 @@ export default function VerifiedGoalsClient({
       title={title}
       description={
         description ||
-        `${filtered.length}${filtered.length !== initial.length ? ` of ${initial.length}` : ''} · ${payableCount} payout-eligible`
+        `${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ''} · ${payableCount} payout-eligible`
       }
     >
-      {initial.length > 0 ? (
+      {msg ? <p className="muted small">{msg}</p> : null}
+      {rows.length > 0 ? (
         <DeskToolbar>
           <DeskToolbarSearch
             value={query}
@@ -219,11 +280,12 @@ export default function VerifiedGoalsClient({
             <option value="payable">Payout-eligible</option>
             <option value="pending">Pending</option>
             <option value="paid">Paid</option>
+            <option value="failed">AI rejected</option>
           </DeskToolbarSelect>
         </DeskToolbar>
       ) : null}
 
-      {initial.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState
           title="No verified goals yet"
           description={
@@ -245,6 +307,7 @@ export default function VerifiedGoalsClient({
                 <th scope="col">Outcome</th>
                 <th scope="col">Payout</th>
                 <th scope="col">When</th>
+                <th scope="col"> </th>
               </tr>
             </thead>
             <tbody>
@@ -268,6 +331,15 @@ export default function VerifiedGoalsClient({
                             ? '/earnings'
                             : '#';
                 const upcoming = new Date(g.at).getTime() > Date.now();
+                const s = (g.status || '').toUpperCase();
+                const ps = (g.payoutStatus || '').toUpperCase();
+                const canDispute =
+                  g.kind === 'claim' &&
+                  g.campaignId &&
+                  ((mode === 'sdr' && s === 'FAILED' && !g.title.includes('· disputed')) ||
+                    (mode === 'brand' &&
+                      (s === 'PASSED' || s === 'PAID' || ps === 'PAID' || ps === 'PENDING') &&
+                      ps !== 'DISPUTED'));
                 return (
                   <tr key={g.id}>
                     <td>
@@ -305,6 +377,18 @@ export default function VerifiedGoalsClient({
                       )}
                     </td>
                     <td className="muted">{formatWhen(g.at)}</td>
+                    <td>
+                      {canDispute ? (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          disabled={busyId === g.id}
+                          onClick={() => void disputeClaim(g)}
+                        >
+                          {busyId === g.id ? '…' : 'Dispute'}
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}

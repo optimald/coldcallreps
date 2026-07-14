@@ -109,6 +109,29 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
     return { ok: true, claimStatus: claim.status, payoutStatus: 'PAID' };
   }
 
+  if (payout.status === 'HELD' || payout.status === 'DISPUTED' || payout.status === 'CANCELED') {
+    return {
+      ok: false,
+      error: `Payout is ${payout.status} — ops must release before transfer`,
+      code: 'PAYOUT_HELD',
+      status: 409,
+    };
+  }
+
+  // Block payouts to suspended/banned reps
+  const repStatus = await prisma.userProfile.findUnique({
+    where: { id: claim.repUserId },
+    select: { accountStatus: true },
+  });
+  if (repStatus?.accountStatus === 'SUSPENDED' || repStatus?.accountStatus === 'BANNED') {
+    return {
+      ok: false,
+      error: 'Rep account is restricted',
+      code: 'ACCOUNT_RESTRICTED',
+      status: 403,
+    };
+  }
+
   const rep = await prisma.userProfile.findUnique({
     where: { id: claim.repUserId },
     select: {

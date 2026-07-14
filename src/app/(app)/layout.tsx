@@ -9,10 +9,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const shell = await loadShellBootstrap();
   const pathname = (await headers()).get('x-ccr-pathname') || '';
 
+  if (shell?.accountRestricted && pathname && !pathname.startsWith('/restricted')) {
+    redirect('/restricted');
+  }
+
   if (
     shell?.needsOnboardingPath &&
     pathname &&
-    !pathname.startsWith('/onboarding')
+    !pathname.startsWith('/onboarding') &&
+    !pathname.startsWith('/restricted')
   ) {
     redirect(shell.needsOnboardingPath);
   }

@@ -2,71 +2,66 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AdminSubNav } from '@/components/AdminSubNav';
 import {
   EmptyState,
   PageHeader,
   Panel,
   SoftLink,
 } from '@/components/ui/PagePrimitives';
+import { adminGetJson } from '@/components/AdminPageKit';
+import { useAdminDeskMode } from '@/hooks/useAdminDeskMode';
 
 type AdminUser = {
   id: string;
   email: string | null;
   displayName: string | null;
   platformRole: string;
+  opsRole?: string | null;
+  accountStatus?: string;
+  statusReason?: string | null;
   minutesRemaining: number;
   totalPoints: number;
+  plan?: string;
+  stripeConnectPayoutsEnabled?: boolean;
   repProfile?: { verified?: boolean; slug?: string | null } | null;
 };
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [sessions, setSessions] = useState<
-    Array<{
-      id: string;
-      overallScore: number;
-      focusArea: string;
-      duration: number;
-      integrityFlags: string | null;
-      user?: { displayName?: string | null } | null;
-    }>
-  >([]);
   const [q, setQ] = useState('');
+  const [status, setStatus] = useState('ALL');
+  const [role, setRole] = useState('ALL');
   const [msg, setMsg] = useState('');
   const [forbidden, setForbidden] = useState(false);
+  const { isDemo, hydrated } = useAdminDeskMode();
 
   async function loadUsers(query = q) {
-    const res = await fetch(`/api/admin/users?q=${encodeURIComponent(query)}`);
-    if (res.status === 403 || res.status === 401) {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (status !== 'ALL') params.set('status', status);
+    if (role !== 'ALL') params.set('role', role);
+    const res = await adminGetJson<{ users: AdminUser[] }>(`/api/admin/users?${params}`, isDemo);
+    if (res.status === 401 || res.status === 403 || res.error === 'forbidden') {
       setForbidden(true);
       return;
     }
-    if (!res.ok) return;
-    const d = await res.json();
-    setUsers(d.users || []);
-    if (Array.isArray(d.recentSessions)) setSessions(d.recentSessions);
+    if (!res.ok) {
+      setMsg(res.error || 'Failed to load users');
+      return;
+    }
+    setUsers(res.data?.users || []);
   }
 
   useEffect(() => {
-    loadUsers('');
-  }, []);
-
-  async function patchUser(userId: string, patch: Record<string, unknown>) {
-    const res = await fetch('/api/admin/users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, ...patch }),
-    });
-    const d = await res.json();
-    setMsg(res.ok ? 'Updated.' : d.error);
-    if (res.ok) loadUsers();
-  }
+    if (!hydrated) return;
+    loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, role, isDemo, hydrated]);
 
   if (forbidden) {
     return (
       <main className="app-page">
-        <PageHeader eyebrow="Access" title="Users" description="Superadmin required." />
+        <PageHeader eyebrow="Access" title="Users" description="Ops access required." />
         <SoftLink href="/admin">← Command</SoftLink>
       </main>
     );
@@ -77,98 +72,111 @@ export default function AdminUsersPage() {
       <PageHeader
         eyebrow="Platform"
         title="Users"
-        description="Search accounts, adjust role and minutes, verify reps."
+        description="Search SDRs and brands — open a record to suspend, adjust credits, or impersonate."
       />
-      <AdminSubNav />
-
       <Panel
         title="Directory"
-        description="Search by email or name, then adjust role, minutes, or verification."
+        description="Filter by status and role. Click a row for the full ops dossier."
       >
-        <div className="search-row">
+        <div className="search-row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
           <input
             className="field"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && loadUsers()}
-            placeholder="Search email / name"
+            placeholder="Email, name, handle, Stripe ID…"
           />
+          <select
+            className="field"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            {['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED'].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            {['ALL', 'REP', 'BRAND', 'RECRUITER', 'MANAGER', 'SUPERADMIN'].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
           <button type="button" className="btn" onClick={() => loadUsers()}>
             Search
           </button>
         </div>
 
         {users.length === 0 ? (
-          <EmptyState title="No users found" description="Try a different search." />
+          <EmptyState title="No users" description="Try a different filter." />
         ) : (
-          <div>
-            {users.map((u) => (
-              <div key={u.id} className="data-row">
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <strong>{u.displayName || '—'}</strong>{' '}
-                  <span className="muted" style={{ fontSize: '0.85rem' }}>
-                    {u.email}
-                  </span>
-                  <div className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
-                    {u.platformRole} · {u.minutesRemaining} min · {u.totalPoints} pts
-                    {u.repProfile?.verified ? ' · verified' : ''}
-                    {u.repProfile?.slug ? ` · /${u.repProfile.slug}` : ''}
-                  </div>
-                </div>
-                <select
-                  className="field"
-                  value={u.platformRole}
-                  onChange={(e) => patchUser(u.id, { platformRole: e.target.value })}
-                  style={{ width: 'auto', minWidth: 130 }}
-                >
-                  {['REP', 'RECRUITER', 'BRAND', 'MANAGER', 'SUPERADMIN'].map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() =>
-                    patchUser(u.id, { minutesRemaining: u.minutesRemaining + 20 })
-                  }
-                >
-                  +20 min
-                </button>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() =>
-                    patchUser(u.id, { verified: !u.repProfile?.verified })
-                  }
-                >
-                  {u.repProfile?.verified ? 'Unverify' : 'Verify'}
-                </button>
-              </div>
-            ))}
+          <div className="table-scroll">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Minutes</th>
+                  <th>Connect</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <Link href={`/admin/users/${u.id}`} className="admin-table__brand">
+                        <strong>{u.displayName || '—'}</strong>
+                      </Link>
+                      <div className="muted" style={{ fontSize: '0.8rem' }}>
+                        {u.email}
+                        {u.repProfile?.slug ? ` · /${u.repProfile.slug}` : ''}
+                      </div>
+                    </td>
+                    <td>
+                      {u.platformRole}
+                      {u.opsRole ? (
+                        <div className="muted" style={{ fontSize: '0.75rem' }}>
+                          ops:{u.opsRole}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <span
+                        className={
+                          u.accountStatus === 'BANNED'
+                            ? 'admin-risk admin-risk--high'
+                            : u.accountStatus === 'SUSPENDED'
+                              ? 'admin-risk admin-risk--mid'
+                              : undefined
+                        }
+                      >
+                        {u.accountStatus || 'ACTIVE'}
+                      </span>
+                    </td>
+                    <td>{u.minutesRemaining}</td>
+                    <td>{u.stripeConnectPayoutsEnabled ? 'Ready' : '—'}</td>
+                    <td>
+                      <SoftLink href={`/admin/users/${u.id}`}>Open →</SoftLink>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Panel>
 
-      {sessions.length > 0 ? (
-        <Panel title="Recent practice sessions">
-          <ul className="list-quiet">
-            {sessions.map((s) => (
-              <li key={s.id}>
-                {s.user?.displayName || 'Rep'} · {s.overallScore}/100 · {s.focusArea} ·{' '}
-                {s.duration}s
-                {s.integrityFlags ? ' · flagged' : ''}{' '}
-                <Link href={`/sessions/${s.id}`}>open</Link>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      ) : null}
-
-      {msg ? (
-        <p className={msg === 'Updated.' ? 'msg-ok' : 'msg-err'}>{msg}</p>
-      ) : null}
+      {msg ? <p className="msg-err">{msg}</p> : null}
     </main>
   );
 }

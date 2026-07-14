@@ -48,5 +48,6 @@ export function pathForRole(role: string | null | undefined): SignupPath | undef
 }
 
 export function homeForRole(role: string | null | undefined): string {
+  if (role?.toUpperCase() === 'SUPERADMIN') return '/admin';
   return pathForRole(role)?.home || '/dashboard';
 }

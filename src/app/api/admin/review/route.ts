@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { requireSuperadmin } from '@/lib/auth';
+import { requireOps } from '@/lib/auth';
 import { loadAdminReviewQueue } from '@/lib/admin-platform';
 import { writeAudit } from '@/lib/audit';
 import { prisma } from '@/lib/prisma';
+import { assertAdminLiveWrites } from '@/lib/admin-demo-guard';
 
 export async function GET() {
   try {
-    await requireSuperadmin();
+    await requireOps('trust.review');
     const data = await loadAdminReviewQueue();
     return NextResponse.json(data);
   } catch (error: unknown) {
@@ -15,7 +16,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     if (message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
+      return NextResponse.json({ error: 'Trust access required' }, { status: 403 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -28,8 +29,11 @@ export async function GET() {
  *  { kind: 'claim', id, action: 'approve' | 'reject' }
  */
 export async function PATCH(req: Request) {
+  const demoBlock = await assertAdminLiveWrites();
+  if (demoBlock) return demoBlock;
+
   try {
-    const admin = await requireSuperadmin();
+    const admin = await requireOps('trust.review');
     const body = await req.json();
     const kind = String(body.kind || '');
     const id = String(body.id || '');
@@ -85,6 +89,11 @@ export async function PATCH(req: Request) {
             }),
           },
         });
+        const { releaseAppointmentClaimPayout } = await import('@/lib/claim-payout');
+        const paid = await releaseAppointmentClaimPayout(id);
+        if (!paid.ok) {
+          console.warn('[admin/review] approve payout', paid.error);
+        }
       } else {
         await prisma.appointmentClaim.update({
           where: { id },

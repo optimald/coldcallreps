@@ -1423,7 +1423,7 @@ export default function BrandCampaignDetailClient({
       {!canManage && myAppStatus && ['ACCEPTED', 'ACTIVE', 'COMPLETED'].includes(myAppStatus) && (
         <Panel
           title="Claim booked meeting"
-          description="Submit notes from the live call. AI audits BANT + meeting set, then escrow releases to your Connect account."
+          description="Submit notes from the live call. AI audits BANT + meeting set, then escrow auto-releases to your Connect account. Brands can dispute afterward."
         >
           <div className="stack" style={{ gap: '0.65rem', maxWidth: 520 }}>
             <input

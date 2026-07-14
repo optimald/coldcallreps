@@ -3,6 +3,7 @@ import { PlanTier, type UserProfile } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { TRIAL_MINUTES } from '@/lib/product';
 import { effectiveRole, isSuperadmin, type AppRole } from '@/lib/roles';
+import { assertOps, isOpsStaff, type OpsCapability } from '@/lib/admin-ops';
 import { ensureRepProfile } from '@/lib/profile-slug';
 
 function makeReferralCode(userId: string): string {
@@ -11,36 +12,51 @@ function makeReferralCode(userId: string): string {
 }
 
 /** Ensure a UserProfile row exists for the signed-in Clerk user. */
-export async function requireUser(): Promise<UserProfile> {
+export async function requireUser(opts?: {
+  allowSuspended?: boolean;
+}): Promise<UserProfile> {
   const { userId, orgId } = await auth();
   if (!userId) {
     throw new Error('UNAUTHORIZED');
   }
 
   let profile = await prisma.userProfile.findUnique({ where: { id: userId } });
+
   if (!profile) {
     const user = await currentUser();
     const email = user?.emailAddresses?.[0]?.emailAddress || null;
     const displayName =
       user?.fullName || user?.username || email?.split('@')[0] || 'Rep';
-    profile = await prisma.userProfile.create({
-      data: {
-        id: userId,
-        email,
-        displayName,
-        orgId: orgId || null,
-        plan: PlanTier.FREE,
-        platformRole: 'REP',
-        unlockedRolesJSON: '["REP"]',
-        repOnboardedAt: new Date(),
-        minutesRemaining: TRIAL_MINUTES,
-        referralCode: makeReferralCode(userId),
-      },
-    });
-  } else {
+    try {
+      // Upsert avoids UNIQUE races when parallel requests both miss findUnique
+      profile = await prisma.userProfile.upsert({
+        where: { id: userId },
+        create: {
+          id: userId,
+          email,
+          displayName,
+          orgId: orgId || null,
+          plan: PlanTier.FREE,
+          platformRole: 'REP',
+          unlockedRolesJSON: '["REP"]',
+          repOnboardedAt: new Date(),
+          minutesRemaining: TRIAL_MINUTES,
+          referralCode: makeReferralCode(userId),
+        },
+        update: {},
+      });
+    } catch (err: unknown) {
+      // Concurrent create (or stale miss) — re-read the existing row
+      profile = await prisma.userProfile.findUnique({ where: { id: userId } });
+      if (!profile) throw err;
+    }
+  }
+
+  {
     const updates: {
       orgId?: string | null;
       platformRole?: 'SUPERADMIN';
+      opsRole?: 'SUPER';
       email?: string;
       displayName?: string;
       plan?: PlanTier;
@@ -55,6 +71,9 @@ export async function requireUser(): Promise<UserProfile> {
     // Promote from SUPERADMIN_EMAILS env without requiring manual DB edit
     if (isSuperadmin(profile) && profile.platformRole !== 'SUPERADMIN') {
       updates.platformRole = 'SUPERADMIN';
+    }
+    if (isSuperadmin(profile) && profile.opsRole !== 'SUPER') {
+      updates.opsRole = 'SUPER';
     }
     // Keep email/name in sync with Clerk
     const user = await currentUser();
@@ -91,6 +110,13 @@ export async function requireUser(): Promise<UserProfile> {
   // Every rep/manager gets a unique public slug (LinkedIn-lite)
   await ensureRepProfile({ userId: profile.id, displayName: profile.displayName });
 
+  if (
+    !opts?.allowSuspended &&
+    (profile.accountStatus === 'SUSPENDED' || profile.accountStatus === 'BANNED')
+  ) {
+    throw new Error('ACCOUNT_RESTRICTED');
+  }
+
   return profile;
 }
 
@@ -104,10 +130,22 @@ export async function requireRole(...roles: AppRole[]): Promise<UserProfile> {
 }
 
 export async function requireSuperadmin(): Promise<UserProfile> {
-  const profile = await requireUser();
-  if (!isSuperadmin(profile)) {
+  const profile = await requireUser({ allowSuspended: true });
+  if (!isOpsStaff(profile)) {
     throw new Error('FORBIDDEN');
   }
+  return profile;
+}
+
+/** Require ops desk access with a specific capability. */
+export async function requireOps(
+  capability: OpsCapability = 'admin.access'
+): Promise<UserProfile> {
+  const profile = await requireUser({ allowSuspended: true });
+  if (!isOpsStaff(profile)) {
+    throw new Error('FORBIDDEN');
+  }
+  assertOps(profile, capability);
   return profile;
 }
 

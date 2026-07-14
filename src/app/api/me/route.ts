@@ -18,7 +18,19 @@ import {
 
 export async function GET(req: Request) {
   try {
-    const profile = await requireUser();
+    const profile = await requireUser({ allowSuspended: true });
+    if (profile.accountStatus === 'SUSPENDED' || profile.accountStatus === 'BANNED') {
+      return NextResponse.json(
+        {
+          id: profile.id,
+          accountStatus: profile.accountStatus,
+          statusReason: profile.statusReason,
+          restricted: true,
+          platformRole: effectiveRole(profile),
+        },
+        { status: 403 }
+      );
+    }
     const { searchParams } = new URL(req.url);
     const fields = searchParams.get('fields');
     const metricsOnly = fields === 'metrics' || fields === 'shell';

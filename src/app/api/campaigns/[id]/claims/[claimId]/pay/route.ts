@@ -8,7 +8,8 @@ type Ctx = { params: Promise<{ id: string; claimId: string }> };
 
 /**
  * POST /api/campaigns/[id]/claims/[claimId]/pay
- * Brand confirms a PASSED attributed booking and releases escrow/payout.
+ * Retry escrow release / Connect transfer after AI pass
+ * (e.g. SDR finished Connect onboarding). Primary path auto-pays on audit pass.
  */
 export async function POST(_req: Request, ctx: Ctx) {
   try {

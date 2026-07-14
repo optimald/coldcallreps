@@ -107,12 +107,46 @@ export default function BrandSdrPayoutsClient({
     }
   }
 
+  async function disputePayout(p: PayoutRow) {
+    if (isDemo) {
+      setMsg(DEMO_MSG);
+      return;
+    }
+    if (p.status === 'DISPUTED' || p.status === 'CANCELED') return;
+    const reason = window.prompt(
+      'Why are you disputing this payout? (Ops will review; already-sent Connect transfers are not auto-reversed.)'
+    );
+    if (!reason || reason.trim().length < 8) {
+      setMsg('Dispute cancelled — reason must be at least 8 characters.');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/campaigns/${p.campaignId}/payouts/${p.id}/dispute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Dispute failed');
+      setRows((prev) =>
+        prev.map((row) => (row.id === p.id ? { ...row, status: 'DISPUTED' } : row))
+      );
+      setMsg(data.notice || 'Dispute filed.');
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Dispute failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="stack" style={{ gap: '1.25rem' }}>
       <Panel
         compact
         title="Escrow wallet"
-        description={`Prepaid balance for verified appointments. Current: ${displayEscrow}.`}
+        description={`Prepaid balance for AI-verified appointments. Current: ${displayEscrow}.`}
       >
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="btn" disabled={busy} onClick={() => void fundEscrow()}>
@@ -152,7 +186,7 @@ export default function BrandSdrPayoutsClient({
             description={
               repFilter
                 ? 'Try another rep, or clear the filter.'
-                : 'When you approve and pay an SDR on a campaign, it will appear here.'
+                : 'AI-verified appointment payouts appear here. Dispute any you disagree with.'
             }
           />
         ) : (
@@ -162,9 +196,21 @@ export default function BrandSdrPayoutsClient({
                 <span>
                   {p.sdrName} · {p.campaignTitle} · {formatPayout(p.grossCents)} · {p.status}
                 </span>
-                <Link href={brandHref(brandKey, 'campaigns', p.campaignId)} className="soft-link">
-                  Open →
-                </Link>
+                <span style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                  {p.status === 'PAID' || p.status === 'PENDING' || p.status === 'HELD' ? (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      disabled={busy}
+                      onClick={() => void disputePayout(p)}
+                    >
+                      Dispute
+                    </button>
+                  ) : null}
+                  <Link href={brandHref(brandKey, 'campaigns', p.campaignId)} className="soft-link">
+                    Open →
+                  </Link>
+                </span>
               </li>
             ))}
           </ul>

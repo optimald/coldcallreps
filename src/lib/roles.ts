@@ -53,8 +53,20 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 
 const I = {
   admin: { href: '/admin', label: 'Admin', icon: 'admin' as const },
-  adminBrands: { href: '/admin/brands', label: 'All brands', icon: 'brands' as const },
+  adminBrands: { href: '/admin/brands', label: 'Brands', icon: 'brands' as const },
   adminReview: { href: '/admin/review', label: 'Review', icon: 'leads' as const },
+  adminAppeals: { href: '/admin/appeals', label: 'Appeals', icon: 'hiring' as const },
+  adminUsers: { href: '/admin/users', label: 'Users', icon: 'team' as const },
+  adminFinance: { href: '/admin/finance', label: 'Finance', icon: 'earnings' as const },
+  adminRefunds: { href: '/admin/refunds', label: 'Refunds', icon: 'billing' as const },
+  adminAudit: { href: '/admin/audit', label: 'Audit', icon: 'settings' as const },
+  adminDialer: { href: '/admin/dialer', label: 'Dialer', icon: 'outbound' as const },
+  adminPipeline: { href: '/admin/pipeline', label: 'Pipeline', icon: 'leads' as const },
+  adminVoice: { href: '/admin/voice', label: 'Voice', icon: 'trainer' as const },
+  adminCampaigns: { href: '/admin/campaigns', label: 'Campaigns', icon: 'campaigns' as const },
+  adminContent: { href: '/admin/content', label: 'CMS', icon: 'playbooks' as const },
+  adminAnalytics: { href: '/admin/analytics', label: 'Analytics', icon: 'dashboard' as const },
+  adminHealth: { href: '/admin/health', label: 'Health', icon: 'integrations' as const },
   dashboard: { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' as const },
   trainer: { href: '/practice', label: 'Practice', icon: 'trainer' as const },
   resume: { href: '/resume', label: 'Resume', icon: 'hiring' as const },
@@ -279,12 +291,23 @@ export const NAV_SECTIONS_BY_ROLE: Record<AppRole, NavSection[]> = {
     {
       id: 'ops',
       label: 'Ops',
-      items: [I.admin, I.adminBrands, I.adminReview, I.dashboard, I.campaigns, I.brands],
-    },
-    {
-      id: 'account',
-      label: 'Account',
-      items: [I.earnings, I.integrations, I.subscribe, I.billing, I.settings],
+      items: [
+        I.admin,
+        I.adminUsers,
+        I.adminFinance,
+        I.adminRefunds,
+        I.adminReview,
+        I.adminAppeals,
+        I.adminCampaigns,
+        I.adminBrands,
+        I.adminDialer,
+        I.adminPipeline,
+        I.adminVoice,
+        I.adminContent,
+        I.adminAnalytics,
+        I.adminHealth,
+        I.adminAudit,
+      ],
     },
   ],
 };
@@ -298,7 +321,11 @@ export const NAV_BY_ROLE: Record<AppRole, NavItem[]> = {
   SUPERADMIN: NAV_SECTIONS_BY_ROLE.SUPERADMIN.flatMap((s) => s.items),
 };
 
-export function isSuperadmin(profile: Pick<UserProfile, 'platformRole' | 'email'>): boolean {
+export function isSuperadmin(
+  profile: Pick<UserProfile, 'platformRole' | 'email'> & { id?: string }
+): boolean {
+  if (profile.id === 'platform_training_seed') return false;
+  if (profile.email?.toLowerCase().endsWith('.local')) return false;
   if (profile.platformRole === 'SUPERADMIN') return true;
   const allow = (process.env.SUPERADMIN_EMAILS || '')
     .split(',')

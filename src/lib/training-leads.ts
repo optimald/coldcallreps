@@ -15,8 +15,37 @@ import {
 
 export const TRAINING_SOURCE = 'training' as const;
 
-/** Synthetic owner for platform-seeded training prospects (not a Clerk user). */
+/** Synthetic owner for platform-seeded training prospects (not a Clerk login). */
 export const PLATFORM_SEED_USER_ID = 'platform_training_seed';
+
+export function isSyntheticUserId(id: string | null | undefined): boolean {
+  return id === PLATFORM_SEED_USER_ID;
+}
+
+export function isSyntheticUserEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const e = email.toLowerCase();
+  return e.endsWith('.local') || e === 'seed@coldcallreps.local';
+}
+
+/** Exclude seed / placeholder rows from ops directories and KPIs. */
+export function realUserWhere() {
+  return {
+    NOT: {
+      OR: [
+        { id: PLATFORM_SEED_USER_ID },
+        { email: 'seed@coldcallreps.local' },
+      ],
+    },
+  };
+}
+
+/** Exclude demo-* brands from ops directories and KPIs. */
+export function realBrandWhere() {
+  return {
+    NOT: { slug: { startsWith: 'demo-' } },
+  };
+}
 
 export type TrainingLeadSeed = {
   /** Matches demo brand slug from seed-demo-brands */
@@ -344,18 +373,23 @@ export const TRAINING_LEAD_SEEDS: TrainingLeadSeed[] = [
 ];
 
 export async function ensurePlatformSeedUser() {
+  // Placeholder FK owner for training prospects only — never a real ops login.
   return prisma.userProfile.upsert({
     where: { id: PLATFORM_SEED_USER_ID },
     create: {
       id: PLATFORM_SEED_USER_ID,
       email: 'seed@coldcallreps.local',
       displayName: 'Platform Training Seed',
-      platformRole: 'SUPERADMIN',
+      platformRole: 'REP',
+      opsRole: null,
       referralCode: 'PLATFORMSEED',
       minutesRemaining: 0,
     },
     update: {
       displayName: 'Platform Training Seed',
+      platformRole: 'REP',
+      opsRole: null,
+      email: 'seed@coldcallreps.local',
     },
   });
 }

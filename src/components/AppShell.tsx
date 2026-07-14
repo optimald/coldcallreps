@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import BrandMark from '@/components/BrandMark';
 import CreateBrandModal from '@/components/CreateBrandModal';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import NavIconGlyph from '@/components/NavIcon';
 import ThemePicker from '@/components/ThemePicker';
 import { ShellProvider } from '@/components/ShellProvider';
@@ -24,6 +25,10 @@ import {
   type BrandDeskMode,
   type BrandRef,
 } from '@/lib/brand-context';
+import {
+  writeAdminDeskMode,
+  type AdminDeskMode,
+} from '@/lib/admin-context';
 import {
   CANONICAL_DEMO_BRANDS,
   getDemoBrandNavCounts,
@@ -73,6 +78,8 @@ function syncBrandCookie(key: string) {
 
 function isActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
+  // Command center is exact /admin — nested ops pages use their own nav items
+  if (href === '/admin') return pathname === '/admin' || pathname === '/admin/';
   // /brands list should not highlight for nested brand routes
   if (href === '/brands') return pathname === '/brands' || pathname === '/brands/';
   // Brand dashboard is exact /brands/[id] only — not campaigns/leads/etc.
@@ -193,6 +200,9 @@ export default function AppShell({
   const [deskMode, setDeskModeState] = useState<BrandDeskMode>(
     () => initial?.deskMode || 'live'
   );
+  const [adminDeskMode, setAdminDeskModeState] = useState<AdminDeskMode>(
+    () => initial?.adminDeskMode || 'live'
+  );
   const setDeskMode = useCallback(
     (mode: BrandDeskMode) => {
       writeBrandDeskMode(mode);
@@ -247,6 +257,10 @@ export default function AppShell({
     },
     [selectedBrand, pathKey, role, pathname, ownedBrands, router]
   );
+  const setAdminDeskMode = useCallback((mode: AdminDeskMode) => {
+    writeAdminDeskMode(mode);
+    setAdminDeskModeState(mode);
+  }, []);
   const deskHydrated = true;
   const isBrandDesk = role === 'BRAND' || role === 'RECRUITER';
   const switcherBrands = useMemo(() => {
@@ -666,7 +680,7 @@ export default function AppShell({
   const sidebar = (
     <>
       <div className="app-sidebar__brand">
-        <BrandMark href="/dashboard" size="md" className="app-sidebar__brand-link" />
+        <BrandMark href={role === 'SUPERADMIN' ? '/admin' : '/dashboard'} size="md" className="app-sidebar__brand-link" />
         <button
           type="button"
           className="app-sidebar__collapse-btn"
@@ -799,7 +813,36 @@ export default function AppShell({
             </button>
           </div>
         )}
-        {metrics.profileSlug && role !== 'BRAND' && role !== 'RECRUITER' && (
+        {role === 'SUPERADMIN' && (
+          <div
+            className="app-desk-mode app-desk-mode--footer"
+            role="group"
+            aria-label="Ops desk mode"
+          >
+            <button
+              type="button"
+              className={`app-desk-mode__btn${adminDeskMode === 'live' ? ' is-active' : ''}`}
+              aria-pressed={adminDeskMode === 'live'}
+              title="Live — real platform ops data"
+              onClick={() => setAdminDeskMode('live')}
+            >
+              Live
+            </button>
+            <button
+              type="button"
+              className={`app-desk-mode__btn${adminDeskMode === 'demo' ? ' is-active' : ''}`}
+              aria-pressed={adminDeskMode === 'demo'}
+              title="Demo — sample ops data (read-only, not written live)"
+              onClick={() => setAdminDeskMode('demo')}
+            >
+              Demo
+            </button>
+          </div>
+        )}
+        {metrics.profileSlug &&
+          role !== 'BRAND' &&
+          role !== 'RECRUITER' &&
+          role !== 'SUPERADMIN' && (
           <Link
             href={repPublicPath(metrics.profileSlug)}
             className="app-nav-link"
@@ -837,35 +880,37 @@ export default function AppShell({
           </p>
         ) : null}
         <div className="app-sidebar__clerk">
-          <OrganizationSwitcher
-            hidePersonal={false}
-            afterCreateOrganizationUrl="/academy"
-            afterSelectOrganizationUrl="/academy"
-            appearance={{
-              variables: {
-                colorPrimary: 'var(--accent)',
-                colorBackground: 'var(--bg-elevated)',
-                colorInputBackground: 'var(--bg-soft)',
-                colorInputText: 'var(--ink)',
-                colorText: 'var(--ink)',
-                colorTextSecondary: 'var(--muted)',
-                colorNeutral: 'var(--muted)',
-                borderRadius: '0.5rem',
-              },
-              elements: {
-                rootBox: { width: '100%' },
-                organizationSwitcherTrigger: {
-                  width: '100%',
-                  justifyContent: 'space-between',
-                  border: '1px solid var(--line)',
-                  borderRadius: 6,
-                  padding: '0.45rem 0.65rem',
-                  background: 'var(--bg-soft)',
-                  color: 'var(--ink)',
+          {role !== 'SUPERADMIN' ? (
+            <OrganizationSwitcher
+              hidePersonal={false}
+              afterCreateOrganizationUrl="/academy"
+              afterSelectOrganizationUrl="/academy"
+              appearance={{
+                variables: {
+                  colorPrimary: 'var(--accent)',
+                  colorBackground: 'var(--bg-elevated)',
+                  colorInputBackground: 'var(--bg-soft)',
+                  colorInputText: 'var(--ink)',
+                  colorText: 'var(--ink)',
+                  colorTextSecondary: 'var(--muted)',
+                  colorNeutral: 'var(--muted)',
+                  borderRadius: '0.5rem',
                 },
-              },
-            }}
-          />
+                elements: {
+                  rootBox: { width: '100%' },
+                  organizationSwitcherTrigger: {
+                    width: '100%',
+                    justifyContent: 'space-between',
+                    border: '1px solid var(--line)',
+                    borderRadius: 6,
+                    padding: '0.45rem 0.65rem',
+                    background: 'var(--bg-soft)',
+                    color: 'var(--ink)',
+                  },
+                },
+              }}
+            />
+          ) : null}
           <UserButton
             appearance={{
               variables: {
@@ -901,8 +946,11 @@ export default function AppShell({
       metrics={metrics}
       deskMode={deskMode}
       setDeskMode={setDeskMode}
+      adminDeskMode={adminDeskMode}
+      setAdminDeskMode={setAdminDeskMode}
     >
     <div className={shellClass}>
+      <ImpersonationBanner />
       <aside className="app-sidebar app-sidebar--desktop" aria-label="Primary">
         {sidebar}
       </aside>
@@ -937,6 +985,7 @@ export default function AppShell({
           </div>
           <div className="app-topbar__right">
             <ThemePicker compact />
+            {role !== 'SUPERADMIN' ? (
             <div className="app-metrics" aria-label="Account metrics">
               {isBrandDesk ? (
                 <>
@@ -1031,6 +1080,7 @@ export default function AppShell({
                 <span className="app-metric__value">{planLabel(metrics.plan)}</span>
               </Link>
             </div>
+            ) : null}
             <div className="app-topbar__user">
               <UserButton />
             </div>

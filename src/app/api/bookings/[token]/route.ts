@@ -198,64 +198,7 @@ export async function POST(req: Request, ctx: Ctx) {
       });
     }
 
-    // Forgeable redirect/postMessage evidence attributes the meeting but does not
-    // move money — brand must confirm payout (or complete via manual evidence).
-    const autoPay = evidence === 'manual';
-    if (!autoPay) {
-      const { notifyAsync } = await import('@/lib/notifications');
-      const brand = claim.campaign.brand;
-      const brandCtx = {
-        id: claim.campaign.brandId,
-        name: brand.name,
-        slug: brand.slug,
-      };
-      const meetingLabel = meetingAt.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-      if (brand.ownerId) {
-        notifyAsync({
-          event: 'appointment.booked',
-          recipient: { userId: brand.ownerId },
-          brand: brandCtx,
-          payload: {
-            campaignTitle: claim.campaign.title,
-            campaignId: claim.campaignId,
-            prospectName: claim.prospectName || undefined,
-            meetingAtLabel: meetingLabel,
-            ctaUrl: `/brands/${brand.slug}/sdrs/payouts`,
-            forAudience: 'brand',
-          },
-          idempotencyKey: `appointment.booked:brand:${updated.id}`,
-        });
-      }
-      notifyAsync({
-        event: 'appointment.booked',
-        recipient: { userId: claim.repUserId },
-        brand: brandCtx,
-        payload: {
-          campaignTitle: claim.campaign.title,
-          campaignId: claim.campaignId,
-          prospectName: claim.prospectName || undefined,
-          meetingAtLabel: meetingLabel,
-          ctaUrl: '/cold_calls',
-          forAudience: 'sdr',
-        },
-        idempotencyKey: `appointment.booked:sdr:${updated.id}`,
-      });
-
-      return NextResponse.json({
-        claim: updated,
-        audit,
-        meetingAt: meetingAt.toISOString(),
-        code: 'PAYOUT_PENDING_BRAND_CONFIRM',
-        notice:
-          'Meeting attributed. Brand must confirm before escrow release and payout.',
-      });
-    }
-
+    // AI pass auto-releases escrow. Brand/SDR can dispute afterward.
     const { releaseAppointmentClaimPayout } = await import('@/lib/claim-payout');
     const paid = await releaseAppointmentClaimPayout(updated.id);
     if (!paid.ok) {
@@ -275,9 +218,11 @@ export async function POST(req: Request, ctx: Ctx) {
       hour: 'numeric',
       minute: '2-digit',
     });
+    const payoutStatus = paid.ok ? paid.payoutStatus : 'PENDING';
+    const paidOut = payoutStatus === 'PAID';
     if (brand.ownerId) {
       notifyAsync({
-        event: 'appointment.booked',
+        event: paidOut ? 'payout.paid' : 'appointment.verified',
         recipient: { userId: brand.ownerId },
         brand: brandCtx,
         payload: {
@@ -285,14 +230,14 @@ export async function POST(req: Request, ctx: Ctx) {
           campaignId: claim.campaignId,
           prospectName: claim.prospectName || undefined,
           meetingAtLabel: meetingLabel,
-          ctaUrl: `/brands/${brand.slug}/calls`,
+          ctaUrl: `/brands/${brand.slug}/sdrs/payouts`,
           forAudience: 'brand',
         },
-        idempotencyKey: `appointment.booked:brand:${updated.id}`,
+        idempotencyKey: `appointment.booked:brand:${updated.id}:${payoutStatus}`,
       });
     }
     notifyAsync({
-      event: 'appointment.booked',
+      event: paidOut ? 'payout.paid' : 'appointment.verified',
       recipient: { userId: claim.repUserId },
       brand: brandCtx,
       payload: {
@@ -300,10 +245,10 @@ export async function POST(req: Request, ctx: Ctx) {
         campaignId: claim.campaignId,
         prospectName: claim.prospectName || undefined,
         meetingAtLabel: meetingLabel,
-        ctaUrl: '/cold_calls',
+        ctaUrl: paidOut ? '/billing' : '/cold_calls',
         forAudience: 'sdr',
       },
-      idempotencyKey: `appointment.booked:sdr:${updated.id}`,
+      idempotencyKey: `appointment.booked:sdr:${updated.id}:${payoutStatus}`,
     });
 
     const fresh = await prisma.appointmentClaim.findUnique({ where: { id: updated.id } });
@@ -311,7 +256,8 @@ export async function POST(req: Request, ctx: Ctx) {
       claim: fresh || updated,
       audit,
       meetingAt: meetingAt.toISOString(),
-      payoutStatus: paid.ok ? paid.payoutStatus : 'PENDING',
+      payoutStatus,
+      code: paidOut ? 'PAYOUT_PAID' : 'PAYOUT_PENDING',
     });
   } catch (e: unknown) {
     console.error('[bookings/complete]', e);

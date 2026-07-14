@@ -40,6 +40,8 @@ export function goalDisposition(
   if (s === 'pending_audit') return { label: 'Pending audit', tone: 'warn' as const };
   if (s === 'passed') return { label: 'Audit passed', tone: 'good' as const };
   if (s === 'paid') return { label: 'Paid out', tone: 'good' as const };
+  if (s === 'failed') return { label: 'AI rejected', tone: 'warn' as const };
+  if (s === 'disputed') return { label: 'Disputed', tone: 'warn' as const };
   if (o === 'interested' || o.includes('interest') || s === 'qualified') {
     return { label: 'Qualified lead', tone: 'accent' as const };
   }

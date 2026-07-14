@@ -21,6 +21,10 @@ import {
   type BrandDeskMode,
   type BrandRef,
 } from '@/lib/brand-context';
+import {
+  ADMIN_DESK_MODE_COOKIE,
+  type AdminDeskMode,
+} from '@/lib/admin-context';
 import { canonicalDemoBrandBySlug, CANONICAL_DEMO_BRANDS } from '@/lib/demo/canonical-brands';
 import { getDemoBrandNavCounts } from '@/lib/demo/brand-demo-data';
 
@@ -43,8 +47,11 @@ export type ShellBootstrap = {
   selectedBrand: BrandRef | null;
   sections: NavSection[];
   deskMode: BrandDeskMode;
+  adminDeskMode: AdminDeskMode;
   /** True when active desk mode still needs onboarding. */
   needsOnboardingPath: string | null;
+  /** Suspended/banned — layout redirects to /restricted. */
+  accountRestricted?: boolean;
 };
 
 function brandKeyFromPathname(pathname: string | null | undefined): string | null {
@@ -56,7 +63,30 @@ function brandKeyFromPathname(pathname: string | null | undefined): string | nul
 /** Lightweight shell payload for AppShell first paint (no global rank queries). */
 export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
   try {
-    const profile = await requireUser();
+    const profile = await requireUser({ allowSuspended: true });
+    if (profile.accountStatus === 'SUSPENDED' || profile.accountStatus === 'BANNED') {
+      return {
+        role: effectiveRole(profile),
+        roleMode: buildRoleModeState(profile),
+        metrics: {
+          minutesRemaining: null,
+          minutesUsed: null,
+          totalPoints: null,
+          currentStreak: null,
+          globalRank: null,
+          globalRankPool: null,
+          plan: profile.plan,
+          profileSlug: null,
+        },
+        brands: [],
+        selectedBrand: null,
+        sections: [],
+        deskMode: 'live',
+        adminDeskMode: 'live',
+        needsOnboardingPath: null,
+        accountRestricted: true,
+      };
+    }
     const role = effectiveRole(profile);
     const roleMode = buildRoleModeState(profile);
 
@@ -68,6 +98,8 @@ export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
       : null;
     const deskMode: BrandDeskMode =
       cookieStore.get(BRAND_DESK_MODE_COOKIE)?.value === 'demo' ? 'demo' : 'live';
+    const adminDeskMode: AdminDeskMode =
+      cookieStore.get(ADMIN_DESK_MODE_COOKIE)?.value === 'demo' ? 'demo' : 'live';
 
     const pathBrand = brandKeyFromPathname(pathname);
 
@@ -169,6 +201,7 @@ export async function loadShellBootstrap(): Promise<ShellBootstrap | null> {
       selectedBrand,
       sections,
       deskMode,
+      adminDeskMode,
       needsOnboardingPath,
     };
   } catch {

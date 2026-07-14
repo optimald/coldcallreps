@@ -39,9 +39,8 @@ export type AdminPlatformOverview = {
     pendingPayoutLabel: string;
     reviewQueue: number;
     brandsAtRisk: number;
-    failedJobs: number;
-    flaggedSessions: number;
-  };
+  failedJobs: number;
+};
   liquiditySeries: Array<{
     key: string;
     label: string;
@@ -98,6 +97,7 @@ export type AdminBrandsMatrix = {
     slug: string;
     name: string;
     logoUrl: string | null;
+    ownerId: string | null;
     ownerEmail: string | null;
     ownerName: string | null;
     leadPlan: string;

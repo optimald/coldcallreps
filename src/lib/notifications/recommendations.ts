@@ -248,7 +248,11 @@ export function buildRecommendations(ctx: RecCtx): Recommendation[] {
     case 'appointment.verified':
       if (ctx.audience === 'brand') {
         auto = [
-          { title: 'Review escrow / payout status', href: slug ? `/brands/${slug}/sdrs/payouts` : '/billing' },
+          {
+            title: 'Review payout — dispute if wrong',
+            href: slug ? `/brands/${slug}/sdrs/payouts` : '/billing',
+            detail: 'AI released escrow. File a dispute if the meeting was not valid.',
+          },
           { title: 'Keep dialing while budget remains', href: calls },
         ];
       } else {
@@ -263,16 +267,17 @@ export function buildRecommendations(ctx: RecCtx): Recommendation[] {
       if (ctx.audience === 'brand') {
         auto = [
           {
-            title: 'Review the claim manually',
-            detail: ctx.payload.reason || 'AI audit failed — decide pass/fail.',
+            title: 'Review the rejected claim',
+            detail: ctx.payload.reason || 'AI rejected the claim — SDR may dispute.',
             href: calls,
           },
         ];
       } else {
         auto = [
           {
-            title: 'Improve notes / proof',
-            detail: 'Re-claim only if the brand asks — do not spam claims.',
+            title: 'Dispute the AI rejection',
+            detail: ctx.payload.reason || 'If the meeting was real, dispute from Goals with more context.',
+            href: '/goals',
           },
           { title: 'Practice objection handling', href: practice },
         ];

@@ -1,7 +1,7 @@
 /**
  * AI post-call audit (handoff §5).
- * Verifies appointment legitimacy from transcript/notes and flags for brand review.
- * Does NOT release escrow or transfer funds — brand confirms via claim pay endpoint.
+ * Verifies appointment legitimacy from transcript/notes.
+ * On pass, auto-releases escrow / Connect payout. Parties can dispute afterward.
  */
 
 import { prisma } from '@/lib/prisma';
@@ -22,7 +22,7 @@ export async function flagCallForManualReview(callLogId: string, reason?: string
 
 /**
  * Independent referee: verify appointment legitimacy from transcript/notes.
- * Creates/updates a PASSED claim for brand confirmation — never moves money.
+ * Creates/updates a PASSED claim and auto-releases escrow on pass.
  */
 export async function runAuditCallTask(payload: AuditCallPayload) {
   const callLog = await prisma.callLog.findUnique({ where: { id: payload.callLogId } });
@@ -148,6 +148,14 @@ export async function runAuditCallTask(payload: AuditCallPayload) {
     }).catch(() => null);
   }
 
+  const { releaseAppointmentClaimPayout } = await import('@/lib/claim-payout');
+  const paid = await releaseAppointmentClaimPayout(claimId);
+  if (!paid.ok) {
+    console.warn('[audit-call] auto payout', paid.error);
+  }
+  const payoutStatus = paid.ok ? paid.payoutStatus : 'PENDING';
+  const paidOut = payoutStatus === 'PAID';
+
   const brand = await prisma.brand.findUnique({
     where: { id: campaign.brandId },
     select: { ownerId: true, name: true, slug: true, id: true },
@@ -155,7 +163,7 @@ export async function runAuditCallTask(payload: AuditCallPayload) {
   if (brand?.ownerId) {
     const { notifyAsync } = await import('@/lib/notifications');
     notifyAsync({
-      event: 'appointment.booked',
+      event: paidOut ? 'payout.paid' : 'appointment.verified',
       recipient: { userId: brand.ownerId },
       brand: { id: brand.id, name: brand.name, slug: brand.slug },
       payload: {
@@ -165,7 +173,7 @@ export async function runAuditCallTask(payload: AuditCallPayload) {
         ctaUrl: `/brands/${brand.slug}/sdrs/payouts`,
         forAudience: 'brand',
       },
-      idempotencyKey: `appointment.audit:brand:${claimId}`,
+      idempotencyKey: `appointment.audit:brand:${claimId}:${payoutStatus}`,
     });
   }
 
@@ -174,6 +182,7 @@ export async function runAuditCallTask(payload: AuditCallPayload) {
     passed: true,
     audit: aiAuditResult,
     claimId,
-    code: 'PAYOUT_PENDING_BRAND_CONFIRM',
+    payoutStatus,
+    code: paidOut ? 'PAYOUT_PAID' : 'PAYOUT_PENDING',
   };
 }

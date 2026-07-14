@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { loadBrandPortfolio } from '@/lib/brand-portfolio';
 import { prisma } from '@/lib/prisma';
@@ -32,11 +33,14 @@ export default async function DashboardPage() {
   const profile = await requireUser();
   const role = effectiveRole(profile);
 
+  // Superadmin home is the platform command center, not the personal practice desk.
+  if (role === 'SUPERADMIN') {
+    redirect('/admin');
+  }
+
   const isSdr = role === 'REP';
   const isBrand = role === 'BRAND' || role === 'RECRUITER';
   const isManager = role === 'MANAGER';
-  const isAdmin = role === 'SUPERADMIN';
-  const isRepDesk = isSdr || isAdmin;
 
   const greetingName = profile.displayName || ROLE_LABELS[role] || 'there';
 
@@ -71,7 +75,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const [sessions, rep, minuteBalance, rankAhead, leaderboardData, sdrVitals] =
+  const [sessions, rep, minuteBalance, leaderboardData, sdrVitals] =
     await Promise.all([
       prisma.trainerSession.findMany({
         where: { userId: profile.id },
@@ -81,14 +85,9 @@ export default async function DashboardPage() {
       }),
       prisma.repProfile.findUnique({ where: { userId: profile.id } }),
       getMinuteBalance(profile),
-      isRepDesk
-        ? prisma.userProfile.count({
-            where: { totalPoints: { gt: profile.totalPoints } },
-          })
-        : Promise.resolve(0),
-      isRepDesk
+      isSdr
         ? loadTrainerLeaderboard({
-            limit: isAdmin ? 12 : 8,
+            limit: 8,
             period: 'week',
             scope: 'global',
             orgId: profile.orgId,
@@ -97,10 +96,8 @@ export default async function DashboardPage() {
       isSdr ? loadSdrVitals(profile) : Promise.resolve(null),
     ]);
 
-  const rank = isRepDesk ? rankAhead + 1 : null;
-
   let pendingCents = 0;
-  if (isRepDesk) {
+  if (isSdr) {
     try {
       const pending = await prisma.campaignPayout.aggregate({
         where: { repUserId: profile.id, status: 'PENDING' },
@@ -119,20 +116,11 @@ export default async function DashboardPage() {
     badges = [];
   }
 
-  const avgScore =
-    sessions.length > 0
-      ? Math.round(
-          sessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) /
-            sessions.length
-        )
-      : null;
-
-  const rosterCount =
-    isManager || isAdmin
-      ? profile.orgId
-        ? await prisma.userProfile.count({ where: { orgId: profile.orgId } })
-        : 0
-      : 0;
+  const rosterCount = isManager
+    ? profile.orgId
+      ? await prisma.userProfile.count({ where: { orgId: profile.orgId } })
+      : 0
+    : 0;
 
   const minutesLabel = minuteBalance.available;
 
@@ -230,7 +218,7 @@ export default async function DashboardPage() {
     );
   }
 
-  // ─── Manager / Admin desk ───────────────────────────────────────────
+  // ─── Manager desk ───────────────────────────────────────────────────
   return (
     <main className="app-page">
       <Suspense fallback={null}>
@@ -240,126 +228,81 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow={ROLE_LABELS[role]}
         title={`Hey ${greetingName}`}
-        description={
-          isManager
-            ? 'Desk overview — roster, academy, and team campaigns.'
-            : 'Ops overview — marketplace + practice signal.'
-        }
+        description="Desk overview — roster, academy, and team campaigns."
         actions={
-          isManager ? (
-            <Link href="/team" className="btn">
-              Team roster
-            </Link>
-          ) : (
-            <Link href="/practice" className="btn">
-              Practice
-            </Link>
-          )
+          <Link href="/team" className="btn">
+            Team roster
+          </Link>
         }
       />
 
-      {isManager && (
-        <StatGrid>
-          <Stat label="Roster" value={rosterCount} tone="accent" />
-          <Stat label="Minutes" value={minutesLabel} />
-          <Stat label="Streak" value={`${profile.currentStreak}d`} />
-          <Stat label="Points" value={profile.totalPoints} />
-        </StatGrid>
-      )}
-
-      {isAdmin && (
-        <StatGrid>
-          <Stat label="Minutes" value={minutesLabel} tone="accent" />
-          <Stat label="Points" value={profile.totalPoints} />
-          <Stat label="Streak" value={`${profile.currentStreak}d`} />
-          <Stat
-            label="Avg score"
-            value={avgScore ?? '—'}
-            tone={
-              avgScore != null && avgScore >= 70
-                ? 'good'
-                : avgScore != null
-                  ? 'warn'
-                  : undefined
-            }
-          />
-          <Stat label="Rank" value={rank != null ? `#${rank}` : '—'} />
-        </StatGrid>
-      )}
+      <StatGrid>
+        <Stat label="Roster" value={rosterCount} tone="accent" />
+        <Stat label="Minutes" value={minutesLabel} />
+        <Stat label="Streak" value={`${profile.currentStreak}d`} />
+        <Stat label="Points" value={profile.totalPoints} />
+      </StatGrid>
 
       <div className="page-grid" style={{ marginBottom: '1.15rem' }}>
-        {isManager && (
-          <Panel title="Team" description="Org roster and academy.">
-            <div className="stack">
-              <SoftLink href="/team">
-                {profile.orgId
-                  ? `${rosterCount} member${rosterCount === 1 ? '' : 's'} on roster`
-                  : 'Create or join a Clerk org to unlock roster'}
-              </SoftLink>
-              <SoftLink href="/academy">Academy curricula</SoftLink>
-              <SoftLink href="/campaigns">Team campaigns</SoftLink>
-              <SoftLink href="/practice">Playbooks</SoftLink>
-            </div>
-          </Panel>
-        )}
+        <Panel title="Team" description="Org roster and academy.">
+          <div className="stack">
+            <SoftLink href="/team">
+              {profile.orgId
+                ? `${rosterCount} member${rosterCount === 1 ? '' : 's'} on roster`
+                : 'Create or join a Clerk org to unlock roster'}
+            </SoftLink>
+            <SoftLink href="/academy">Academy curricula</SoftLink>
+            <SoftLink href="/campaigns">Team campaigns</SoftLink>
+            <SoftLink href="/practice">Playbooks</SoftLink>
+          </div>
+        </Panel>
       </div>
 
-      {(isManager || isAdmin) && (
-        <Panel
-          title="Recent sessions"
-          description="Your latest practice runs — open any scorecard to review."
-          actions={
-            <Link href="/practice" className="btn-ghost">
-              New session
-            </Link>
-          }
-        >
-          {sessions.length === 0 ? (
-            <EmptyState
-              title="No warm-ups yet"
-              description="Run a few AI scenarios before your first campaign dial."
-              action={
-                <Link href="/practice" className="btn" style={{ marginTop: '1rem' }}>
-                  Start practice
-                </Link>
-              }
-            />
-          ) : (
-            <div className="stack">
-              {sessions.map((s) => (
-                <Link key={s.id} href={`/sessions/${s.id}`} className="session-row">
-                  <div>
-                    <div style={{ fontWeight: 650 }}>
-                      {s.prospect?.companyName ||
-                        (FOCUS_LABELS as Record<string, string>)[s.focusArea] ||
-                        s.focusArea}
-                    </div>
-                    <div className="session-row__meta">
-                      {formatSessionDate(s.createdAt.toISOString())} ·{' '}
-                      {formatDuration(s.duration)} · +{s.pointsEarned} pts
-                    </div>
+      <Panel
+        title="Recent sessions"
+        description="Your latest practice runs — open any scorecard to review."
+        actions={
+          <Link href="/practice" className="btn-ghost">
+            New session
+          </Link>
+        }
+      >
+        {sessions.length === 0 ? (
+          <EmptyState
+            title="No warm-ups yet"
+            description="Run a few AI scenarios before your first campaign dial."
+            action={
+              <Link href="/practice" className="btn" style={{ marginTop: '1rem' }}>
+                Start practice
+              </Link>
+            }
+          />
+        ) : (
+          <div className="stack">
+            {sessions.map((s) => (
+              <Link key={s.id} href={`/sessions/${s.id}`} className="session-row">
+                <div>
+                  <div style={{ fontWeight: 650 }}>
+                    {s.prospect?.companyName ||
+                      (FOCUS_LABELS as Record<string, string>)[s.focusArea] ||
+                      s.focusArea}
                   </div>
-                  <span
-                    className="session-row__score"
-                    style={{ color: scoreColor(s.overallScore) }}
-                  >
-                    {s.overallScore}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Panel>
-      )}
-
-      {isAdmin && (
-        <LeaderboardPanel
-          embedded
-          limit={12}
-          initialRows={leaderboardData.leaderboard}
-          initialOrgId={profile.orgId}
-        />
-      )}
+                  <div className="session-row__meta">
+                    {formatSessionDate(s.createdAt.toISOString())} ·{' '}
+                    {formatDuration(s.duration)} · +{s.pointsEarned} pts
+                  </div>
+                </div>
+                <span
+                  className="session-row__score"
+                  style={{ color: scoreColor(s.overallScore) }}
+                >
+                  {s.overallScore}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </Panel>
     </main>
   );
 }

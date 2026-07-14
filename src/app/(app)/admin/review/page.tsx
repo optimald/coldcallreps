@@ -2,17 +2,167 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AdminSubNav } from '@/components/AdminSubNav';
 import {
   EmptyState,
   PageHeader,
   Panel,
   SoftLink,
 } from '@/components/ui/PagePrimitives';
+import { adminGetJson, ADMIN_DEMO_MSG } from '@/components/AdminPageKit';
+import { useAdminDeskMode } from '@/hooks/useAdminDeskMode';
 import type { AdminReviewQueue } from '@/lib/admin-platform-types';
 
 type CallItem = AdminReviewQueue['calls'][number];
 type ClaimItem = AdminReviewQueue['claims'][number];
+
+type AuditField = { label: string; value: string };
+
+const AUDIT_LABELS: Record<string, string> = {
+  score: 'Score',
+  confidence: 'Score',
+  reason: 'Reason',
+  reasoning: 'Reason',
+  failureReason: 'Failure reason',
+  fail: 'Failure',
+  passed: 'Passed',
+  isLegitAppointment: 'Legitimate appointment',
+  reasons: 'Reasons',
+  bant: 'BANT',
+};
+
+const SKIP_AUDIT_KEYS = new Set(['raw', 'rawResponse', 'raw_response']);
+
+function humanizeKey(key: string): string {
+  return (
+    AUDIT_LABELS[key] ||
+    key
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
+function formatAuditPrimitive(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    return t || null;
+  }
+  return null;
+}
+
+function formatBant(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const parts = Object.entries(value as Record<string, unknown>)
+    .map(([k, v]) => {
+      if (typeof v !== 'boolean') return null;
+      return `${humanizeKey(k)}: ${v ? 'Yes' : 'No'}`;
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** Parse aiAuditResult / auditJSON into labeled rows (no raw JSON dump). */
+function parseAuditSummary(raw: string | null | undefined): AuditField[] {
+  if (!raw?.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [{ label: 'Audit notes', value: raw.trim() }];
+  }
+
+  if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const fallback = formatAuditPrimitive(parsed);
+    return fallback ? [{ label: 'Audit', value: fallback }] : [];
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  const fields: AuditField[] = [];
+  const used = new Set<string>();
+
+  const push = (key: string, label: string, value: string | null) => {
+    if (!value || used.has(key)) return;
+    used.add(key);
+    fields.push({ label, value });
+  };
+
+  const score =
+    formatAuditPrimitive(obj.score) ?? formatAuditPrimitive(obj.confidence);
+  if (score != null) {
+    push('score', 'Score', score);
+    used.add('confidence');
+  }
+
+  const reason =
+    formatAuditPrimitive(obj.reason) ??
+    formatAuditPrimitive(obj.reasoning) ??
+    formatAuditPrimitive(obj.failureReason);
+  if (reason) {
+    push('reason', 'Reason', reason);
+    used.add('reasoning');
+    used.add('failureReason');
+  }
+
+  if (Array.isArray(obj.reasons)) {
+    const lines = obj.reasons
+      .map((r) => formatAuditPrimitive(r))
+      .filter((r): r is string => Boolean(r));
+    if (lines.length) {
+      push('reasons', 'Reasons', lines.join('; '));
+    } else {
+      used.add('reasons');
+    }
+  }
+
+  const fail = formatAuditPrimitive(obj.fail);
+  if (fail) push('fail', 'Failure', fail.replace(/_/g, ' '));
+
+  for (const key of ['passed', 'isLegitAppointment'] as const) {
+    const v = formatAuditPrimitive(obj[key]);
+    if (v) push(key, humanizeKey(key), v);
+  }
+
+  const bant = formatBant(obj.bant);
+  if (bant) push('bant', 'BANT', bant);
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (used.has(key) || SKIP_AUDIT_KEYS.has(key)) continue;
+    if (key === 'bant') continue;
+    if (Array.isArray(value)) {
+      const lines = value
+        .map((r) => formatAuditPrimitive(r))
+        .filter((r): r is string => Boolean(r));
+      if (lines.length) push(key, humanizeKey(key), lines.join('; '));
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      // Skip nested blobs (e.g. raw LLM payloads) — keep summary flat.
+      continue;
+    }
+    const prim = formatAuditPrimitive(value);
+    if (prim) push(key, humanizeKey(key), prim);
+  }
+
+  return fields;
+}
+
+function AuditSummary({ raw }: { raw: string | null | undefined }) {
+  const fields = parseAuditSummary(raw);
+  if (!fields.length) return null;
+  return (
+    <dl className="admin-review__audit">
+      {fields.map((f) => (
+        <div key={f.label} className="admin-review__audit-row">
+          <dt>{f.label}</dt>
+          <dd>{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export default function AdminReviewPage() {
   const [calls, setCalls] = useState<CallItem[]>([]);
@@ -23,27 +173,37 @@ export default function AdminReviewPage() {
   const [forbidden, setForbidden] = useState(false);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const { isDemo, hydrated } = useAdminDeskMode();
 
   async function load() {
-    const res = await fetch('/api/admin/review');
-    if (res.status === 403 || res.status === 401) {
+    const res = await adminGetJson<{ calls: CallItem[]; claims: ClaimItem[] }>(
+      '/api/admin/review',
+      isDemo
+    );
+    if (res.status === 401 || res.status === 403 || res.error === 'forbidden') {
       setForbidden(true);
       return;
     }
-    const d = await res.json();
-    setCalls(d.calls || []);
-    setClaims(d.claims || []);
+    if (!res.ok) return;
+    setCalls(res.data?.calls || []);
+    setClaims(res.data?.claims || []);
   }
 
   useEffect(() => {
+    if (!hydrated) return;
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDemo, hydrated]);
 
   async function resolve(
     kind: 'call' | 'claim',
     id: string,
     action: 'clear' | 'approve' | 'reject'
   ) {
+    if (isDemo) {
+      setMsg(ADMIN_DEMO_MSG);
+      return;
+    }
     setBusy(true);
     setMsg('');
     const res = await fetch('/api/admin/review', {
@@ -72,20 +232,6 @@ export default function AdminReviewPage() {
     );
   }
 
-  const auditPretty = (() => {
-    if (!selected) return null;
-    const raw =
-      selected.kind === 'call'
-        ? selected.item.aiAuditResult
-        : selected.item.auditJSON;
-    if (!raw) return null;
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return raw;
-    }
-  })();
-
   return (
     <main className="app-page admin-page">
       <PageHeader
@@ -93,8 +239,6 @@ export default function AdminReviewPage() {
         title="Review queue"
         description="AI audit failures and calls flagged for human referee. Approve overrides or clear the flag."
       />
-      <AdminSubNav reviewBadge={calls.length} />
-
       <div className="admin-review">
         <Panel
           compact
@@ -153,7 +297,11 @@ export default function AdminReviewPage() {
           )}
         </Panel>
 
-        <Panel compact title="Detail" description="Recording, transcript, audit JSON">
+        <Panel
+          compact
+          title="Detail"
+          description="Recording, transcript, and audit summary"
+        >
           {!selected ? (
             <EmptyState
               title="Select an item"
@@ -186,13 +334,12 @@ export default function AdminReviewPage() {
                 <p className="muted">No recording URL.</p>
               )}
               {selected.item.transcript ? (
-                <pre className="admin-review__pre">{selected.item.transcript}</pre>
+                <div className="admin-review__block">
+                  <p className="admin-review__block-label">Transcript</p>
+                  <pre className="admin-review__pre">{selected.item.transcript}</pre>
+                </div>
               ) : null}
-              {auditPretty ? (
-                <pre className="admin-review__pre admin-review__pre--json">
-                  {auditPretty}
-                </pre>
-              ) : null}
+              <AuditSummary raw={selected.item.aiAuditResult} />
               <div className="admin-review__actions">
                 <button
                   type="button"
@@ -228,15 +375,14 @@ export default function AdminReviewPage() {
                 </p>
               ) : null}
               {selected.item.transcriptSnippet ? (
-                <pre className="admin-review__pre">
-                  {selected.item.transcriptSnippet}
-                </pre>
+                <div className="admin-review__block">
+                  <p className="admin-review__block-label">Transcript</p>
+                  <pre className="admin-review__pre">
+                    {selected.item.transcriptSnippet}
+                  </pre>
+                </div>
               ) : null}
-              {auditPretty ? (
-                <pre className="admin-review__pre admin-review__pre--json">
-                  {auditPretty}
-                </pre>
-              ) : null}
+              <AuditSummary raw={selected.item.auditJSON} />
               <div className="admin-review__actions">
                 <button
                   type="button"
@@ -256,9 +402,8 @@ export default function AdminReviewPage() {
                 </button>
               </div>
               <p className="muted" style={{ fontSize: '0.8rem' }}>
-                Approve marks the claim PASSED and clears the linked call review.
-                Escrow release / Connect transfer still runs through the normal
-                payout path when applicable.
+                Approve marks the claim PASSED, clears the linked call review,
+                and auto-releases escrow / Connect payout.
               </p>
             </div>
           )}

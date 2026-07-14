@@ -37,6 +37,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
     }
 
+    // TCPA / DNC gate
+    {
+      const { isOnDoNotCall } = await import('@/lib/dnc');
+      let brandIdForDnc: string | null = null;
+      if (prospectId) {
+        const p = await prisma.prospect.findUnique({
+          where: { id: prospectId },
+          select: { brandId: true },
+        });
+        brandIdForDnc = p?.brandId ?? null;
+      } else if (campaignId) {
+        const c = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { brandId: true },
+        });
+        brandIdForDnc = c?.brandId ?? null;
+      }
+      const dnc = await isOnDoNotCall({
+        phone: e164,
+        brandId: brandIdForDnc,
+        prospectId: prospectId || null,
+      });
+      if (dnc.blocked) {
+        return NextResponse.json(
+          { error: `Cannot dial — ${dnc.reason || 'Do Not Call'}`, code: 'DNC' },
+          { status: 403 }
+        );
+      }
+    }
+
     if (prospectId) {
       const prospect = await prisma.prospect.findUnique({
         where: { id: prospectId },

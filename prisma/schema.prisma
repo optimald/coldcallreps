@@ -25,12 +25,39 @@ enum PlatformRole {
   SUPERADMIN
 }
 
+/** Ops desk roles — blast-radius split for admin tooling (Section 2). */
+enum OpsRole {
+  SUPER
+  FINANCE
+  TRUST
+  SUPPORT
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum BanAppealStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
 model UserProfile {
   id                   String       @id // Clerk userId
   email                String?
   displayName          String?
   orgId                String?
   platformRole         PlatformRole @default(REP)
+  /** Ops desk role for /admin — null for marketplace-only users. */
+  opsRole              OpsRole?
+  /** Account enforcement — suspend/ban blocks dials, payouts, applications. */
+  accountStatus        AccountStatus @default(ACTIVE)
+  statusReason         String?
+  statusChangedAt      DateTime?
+  statusChangedById    String?
   /** JSON PlatformRole[] — roles unlocked after accept + onboarding (REP / BRAND). */
   unlockedRolesJSON    String       @default("[\"REP\"]")
   /** When the SDR profile onboarding was completed. */
@@ -101,12 +128,20 @@ model UserProfile {
   notificationLogs    NotificationLog[]
   talentInterestsSent TalentInterest[] @relation("TalentInterestFrom")
   talentInterestsRecv TalentInterest[] @relation("TalentInterestTo")
+  banAppeals          BanAppeal[]         @relation("BanAppealUser")
+  banAppealsReviewed  BanAppeal[]         @relation("BanAppealReviewer")
+  impersonationsAsAdmin ImpersonationSession[] @relation("ImpersonationAdmin")
+  impersonationsAsTarget ImpersonationSession[] @relation("ImpersonationTarget")
+  payoutsHeld         CampaignPayout[]    @relation("PayoutHeldBy")
 
   @@index([orgId])
   @@index([totalPoints])
   @@index([hiringBoardOptIn])
   @@index([platformRole])
+  @@index([opsRole])
+  @@index([accountStatus])
   @@index([stripeConnectAccountId])
+  @@index([email])
 }
 
 model Prospect {
@@ -164,6 +199,14 @@ model Prospect {
   callbackLockedUntil    DateTime?
   callbackLockedByUserId String?
   callbackLockedBy       UserProfile? @relation("CallbackLock", fields: [callbackLockedByUserId], references: [id], onDelete: SetNull)
+  /** TCPA / DNC — set when lead opts out or is listed. */
+  doNotCall          Boolean   @default(false)
+  doNotCallReason    String?
+  doNotCallAt        DateTime?
+  /** Recording / dial consent state: unknown | granted | denied | revoked */
+  consentStatus      String    @default("unknown")
+  consentAt          DateTime?
+  consentSource      String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -180,6 +223,8 @@ model Prospect {
   @@index([callbackLockedByUserId, callbackLockedUntil])
   @@index([checkedOutByUserId, checkedOutUntil])
   @@index([campaignId, nextCallAt, outreachReady])
+  @@index([doNotCall])
+  @@index([phone])
 }
 
 /** Browser→PSTN call log + post-call AI audit fields. */
@@ -207,6 +252,9 @@ model CallLog {
   isAudited        Boolean      @default(false)
   aiAuditResult    String? // JSON audit payload
   needsManualReview Boolean     @default(false)
+  /** Per-call recording consent affirmation (TCPA). */
+  recordingConsent Boolean?
+  consentNote      String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -217,6 +265,7 @@ model CallLog {
   @@index([brandPhoneNumberId])
   @@index([campaignId, status])
   @@index([needsManualReview, createdAt])
+  @@index([toNumber])
 }
 
 model TrainerSession {
@@ -877,6 +926,8 @@ model PipelineJob {
 
 enum CampaignPayoutStatus {
   PENDING
+  HELD
+  DISPUTED
   PAID
   FAILED
   CANCELED
@@ -1025,6 +1076,13 @@ model CampaignPayout {
   stripePaymentIntentId   String?
   stripeTransferId        String?
   failureReason           String?
+  /** Ops hold / dispute fields (Section 4.2). */
+  holdReason              String?
+  heldAt                  DateTime?
+  heldById                String?
+  heldBy                  UserProfile?         @relation("PayoutHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
+  disputeReason           String?
+  disputedAt              DateTime?
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
   paidAt                  DateTime?
@@ -1032,7 +1090,44 @@ model CampaignPayout {
   @@index([campaignId, status])
   @@index([repUserId, status])
   @@index([brandUserId, createdAt])
+  @@index([status, createdAt])
   @@index([stripeCheckoutSessionId])
+}
+
+/** Ban/suspension appeal queue (Section 6). */
+model BanAppeal {
+  id           String          @id @default(cuid())
+  userId       String
+  user         UserProfile     @relation("BanAppealUser", fields: [userId], references: [id], onDelete: Cascade)
+  status       BanAppealStatus @default(PENDING)
+  reason       String
+  response     String?
+  reviewedById String?
+  reviewedBy   UserProfile?    @relation("BanAppealReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+}
+
+/** Logged, time-limited Clerk actor-token impersonation (Section 3.2). */
+model ImpersonationSession {
+  id              String      @id @default(cuid())
+  adminId         String
+  admin           UserProfile @relation("ImpersonationAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  targetUserId    String
+  target          UserProfile @relation("ImpersonationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  reason          String
+  clerkActorTokenId String?
+  expiresAt       DateTime
+  endedAt         DateTime?
+  createdAt       DateTime    @default(now())
+
+  @@index([adminId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([endedAt])
 }
 
 model ApiKey {
@@ -1101,4 +1196,67 @@ model NotificationLog {
   @@index([userId, createdAt])
   @@index([brandId, createdAt])
   @@index([status, createdAt])
+}
+
+/** Global / brand-scoped Do Not Call list (TCPA). */
+model DoNotCallEntry {
+  id        String   @id @default(cuid())
+  phoneE164 String
+  brandId   String?
+  /** global | brand */
+  scope     String   @default("global")
+  source    String   @default("admin") // admin | prospect | carrier | import
+  reason    String?
+  createdById String?
+  createdAt DateTime @default(now())
+
+  @@unique([phoneE164, brandId])
+  @@index([phoneE164])
+  @@index([brandId])
+  @@index([scope, createdAt])
+}
+
+/** Stripe dispute / chargeback inbox (surface webhooks in-app). */
+model StripeDisputeRecord {
+  id              String   @id @default(cuid())
+  stripeDisputeId String   @unique
+  chargeId        String?
+  paymentIntentId String?
+  amountCents     Int      @default(0)
+  currency        String   @default("usd")
+  reason          String?
+  status          String
+  evidenceDueBy   DateTime?
+  rawJSON         String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+/** Platform feature flags / admin config (JSON values). */
+model AdminConfig {
+  key       String   @id
+  valueJSON String   @default("{}")
+  updatedById String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+/** Optional editable practice scenario catalog (CMS). */
+model PracticeScenario {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  focusArea   String
+  difficulty  String   @default("medium")
+  description String?
+  promptJSON  String   @default("{}")
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@index([focusArea])
 }

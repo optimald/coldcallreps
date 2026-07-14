@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { requireSuperadmin } from '@/lib/auth';
+import { requireOps } from '@/lib/auth';
 import { loadAdminBrandsMatrix } from '@/lib/admin-platform';
 import { writeAudit } from '@/lib/audit';
 import { creditWallet } from '@/lib/escrow';
 import { grantLeadPack } from '@/lib/lead-credits';
 import { prisma } from '@/lib/prisma';
+import { assertAdminLiveWrites } from '@/lib/admin-demo-guard';
 
 export async function GET() {
   try {
-    await requireSuperadmin();
+    await requireOps('admin.access');
     const data = await loadAdminBrandsMatrix();
     return NextResponse.json(data);
   } catch (error: unknown) {
@@ -17,7 +18,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     if (message === 'FORBIDDEN') {
-      return NextResponse.json({ error: 'Superadmin required' }, { status: 403 });
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -28,8 +29,11 @@ export async function GET() {
  * Body: { brandId, grantCredits?: number, walletAdjustCents?: number, note?: string }
  */
 export async function PATCH(req: Request) {
+  const demoBlock = await assertAdminLiveWrites();
+  if (demoBlock) return demoBlock;
+
   try {
-    const admin = await requireSuperadmin();
+    const admin = await requireOps('brands.override');
     const body = await req.json();
     const brandId = String(body.brandId || '');
     if (!brandId) {

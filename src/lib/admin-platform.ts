@@ -10,6 +10,7 @@ import {
 import { loadDeskEconomicsForBrands } from '@/lib/desk-economics-load';
 import { getOrCreateBrandWallet } from '@/lib/escrow';
 import { prisma } from '@/lib/prisma';
+import { realBrandWhere, realUserWhere } from '@/lib/training-leads';
 
 function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -65,7 +66,6 @@ export async function loadAdminPlatformOverview() {
     sdrPlanGroups,
     reviewCallCount,
     failedJobs,
-    flaggedSessions,
     brandsAtRiskSeed,
     recentAudits,
     prospects30d,
@@ -73,9 +73,11 @@ export async function loadAdminPlatformOverview() {
     fraudClaims,
     pipelineFailedRecent,
   ] = await Promise.all([
-    prisma.brand.count(),
-    prisma.userProfile.count(),
-    prisma.campaign.count({ where: { status: 'OPEN' } }),
+    prisma.brand.count({ where: realBrandWhere() }),
+    prisma.userProfile.count({ where: realUserWhere() }),
+    prisma.campaign.count({
+      where: { status: 'OPEN', brand: realBrandWhere() },
+    }),
     prisma.campaignApplication.count({
       where: { status: { in: ['ACCEPTED', 'ACTIVE'] } },
     }),
@@ -127,8 +129,8 @@ export async function loadAdminPlatformOverview() {
     prisma.userProfile.groupBy({ by: ['plan'], _count: true }),
     prisma.callLog.count({ where: { needsManualReview: true } }),
     prisma.pipelineJob.count({ where: { status: 'failed' } }),
-    prisma.trainerSession.count({ where: { integrityFlags: { not: null } } }),
     prisma.brand.findMany({
+      where: realBrandWhere(),
       select: { id: true, slug: true, name: true, logoUrl: true },
       take: 80,
       orderBy: { createdAt: 'desc' },
@@ -341,15 +343,6 @@ export async function loadAdminPlatformOverview() {
       href: '/admin/brands',
     });
   }
-  if (flaggedSessions > 0) {
-    alerts.push({
-      id: 'flagged-sessions',
-      severity: 'info',
-      title: `${flaggedSessions} integrity-flagged practice session${flaggedSessions === 1 ? '' : 's'}`,
-      detail: 'Review in Users / sessions when volume spikes.',
-      href: '/admin/users',
-    });
-  }
   if (brandsAtRisk > 0) {
     alerts.push({
       id: 'brands-at-risk',
@@ -400,7 +393,6 @@ export async function loadAdminPlatformOverview() {
       reviewQueue: reviewCallCount,
       brandsAtRisk,
       failedJobs,
-      flaggedSessions,
     },
     liquiditySeries,
     fraudScatter,
@@ -431,6 +423,7 @@ export async function loadAdminPlatformOverview() {
 export async function loadAdminBrandsMatrix() {
   const now = new Date();
   const brands = await prisma.brand.findMany({
+    where: realBrandWhere(),
     select: {
       id: true,
       slug: true,
@@ -531,6 +524,7 @@ export async function loadAdminBrandsMatrix() {
       slug: brand.slug,
       name: brand.name,
       logoUrl: brand.logoUrl,
+      ownerId: brand.owner?.id || brand.ownerId || null,
       ownerEmail: brand.owner?.email || null,
       ownerName: brand.owner?.displayName || null,
       leadPlan: brand.leadPlan,

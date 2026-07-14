@@ -56,7 +56,7 @@ export async function loadVerifiedGoals(opts: LoadOpts = {}): Promise<VerifiedGo
       where: {
         ...(claimCampaignWhere || {}),
         ...(opts.repUserId ? { repUserId: opts.repUserId } : {}),
-        status: { in: ['PENDING_AUDIT', 'PASSED', 'PAID'] },
+        status: { in: ['PENDING_AUDIT', 'PASSED', 'PAID', 'FAILED'] },
       },
       orderBy: { createdAt: 'desc' },
       take,
