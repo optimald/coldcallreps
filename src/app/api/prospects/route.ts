@@ -78,17 +78,22 @@ export async function GET(req: Request) {
           console.warn('[prospects] ensureTrainingLeadsAvailable failed', e);
         }
       }
-      const { prospects, hasMore, total } = await listTrainingLeads({
+      const rotate = Math.max(
+        0,
+        parseInt(searchParams.get('rotate') || '0', 10) || 0
+      );
+      const { prospects, hasMore, total, catalogTotal } = await listTrainingLeads({
         brandId: brandId || undefined,
         take,
         skip,
         ownerUserId:
           role === 'BRAND' || role === 'RECRUITER' ? profile.id : undefined,
-        // Shared practice queue: fixed window of 8 per SDR (no catalog paging).
+        // Shared practice queue: recycled window of 8 from the ~100-lead catalog.
         practiceQueueUserId:
           !brandId && role !== 'BRAND' && role !== 'RECRUITER'
             ? profile.id
             : undefined,
+        practiceQueueRotate: rotate,
       });
       const filtered = status
         ? prospects.filter((p) => p.status === status)
@@ -98,7 +103,9 @@ export async function GET(req: Request) {
         purpose: 'training',
         hasMore,
         total,
+        catalogTotal,
         skip,
+        rotate,
       });
     }
 
@@ -111,21 +118,53 @@ export async function GET(req: Request) {
       // Only leads assigned to campaigns this SDR is accepted on — no brand-wide
       // unassigned pool (prevents reading another campaign's unassigned CRM).
       const campaignIds = campaigns.map((c) => c.id);
-      const where = campaignLeadWhere({
-        campaignId: { in: campaignIds },
-        ...(status ? { status } : {}),
-        ...qFilter,
-      });
-      const [total, prospects] = await Promise.all([
-        prisma.prospect.count({ where }),
-        prisma.prospect.findMany({
-          where,
-          orderBy: { updatedAt: 'desc' },
+
+      // Prefer hot-potato dial queue when possible (checkout affinity + nextCallAt ladder).
+      let prospects: unknown[] = [];
+      let total = 0;
+      let usedQueue = false;
+      try {
+        const { listQueueLeads } = await import('@/lib/lead-queue');
+        const queued = await listQueueLeads({
+          campaignIds,
+          userId: profile.id,
           take,
-          skip,
-          select: prospectSelect,
-        }),
-      ]);
+        });
+        if (queued.length > 0) {
+          const ids = queued.map((q) => q.id);
+          const full = await prisma.prospect.findMany({
+            where: { id: { in: ids } },
+            select: prospectSelect,
+          });
+          const byId = new Map(full.map((p) => [p.id, p]));
+          prospects = ids.map((id) => byId.get(id)).filter(Boolean);
+          total = prospects.length;
+          usedQueue = true;
+        }
+      } catch {
+        usedQueue = false;
+      }
+
+      if (!usedQueue) {
+        const where = campaignLeadWhere({
+          campaignId: { in: campaignIds },
+          ...(status ? { status } : {}),
+          ...qFilter,
+        });
+        const [count, rows] = await Promise.all([
+          prisma.prospect.count({ where }),
+          prisma.prospect.findMany({
+            where,
+            orderBy: [{ nextCallAt: 'asc' }, { updatedAt: 'asc' }],
+            take,
+            skip,
+            select: prospectSelect,
+          }),
+        ]);
+        total = count;
+        prospects = rows;
+      }
+
       const slimCampaigns = campaigns.map((c) => ({
         id: c.id,
         title: c.title,
@@ -138,9 +177,10 @@ export async function GET(req: Request) {
       return NextResponse.json({
         prospects,
         campaigns: slimCampaigns,
-        hasMore: skip + prospects.length < total,
+        hasMore: usedQueue ? false : skip + (prospects as unknown[]).length < total,
         total,
         skip,
+        queueMode: usedQueue ? 'dial' : 'crm',
       });
     }
 

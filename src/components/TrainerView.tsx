@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useXaiTrainerRealtime } from '@/hooks/useXaiTrainerRealtime';
 import { useLiveCoach } from '@/hooks/useLiveCoach';
 import { FOCUS_LABELS, type FocusArea } from '@/lib/product';
@@ -97,9 +97,8 @@ function mapLead(raw: Record<string, unknown>, purpose: 'training' | 'brand'): P
 
 export default function TrainerView() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const shell = useShell();
-  const [focus, setFocus] = useState<FocusArea>('budget_500');
+  const [focus, setFocus] = useState<FocusArea>('standard');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [gatekeeperVoice, setGatekeeperVoice] = useState<TrainerVoiceId>('ara');
   const [bossVoice, setBossVoice] = useState<TrainerVoiceId>('sal');
@@ -111,6 +110,15 @@ export default function TrainerView() {
   const [queueLoading, setQueueLoading] = useState(true);
   const queueRetryRef = useRef(false);
   const [leadTab, setLeadTab] = useState<LeadTab>('training');
+  const [practiceRotate, setPracticeRotate] = useState(0);
+  const [contextTab, setContextTab] = useState<'intel' | 'details'>('intel');
+  const [detailsDraft, setDetailsDraft] = useState({
+    ownerName: '',
+    ownerTitle: '',
+    phone: '',
+    notes: '',
+  });
+  const [detailsSaving, setDetailsSaving] = useState(false);
   const [prospectId, setProspectId] = useState<string>('');
   const [brandPacks, setBrandPacks] = useState<
     {
@@ -198,6 +206,16 @@ export default function TrainerView() {
     return all.find((p) => p.id === prospectId) ?? queue[0] ?? null;
   }, [trainingLeads, brandLeads, prospectId, queue]);
 
+  useEffect(() => {
+    if (!selected) return;
+    setDetailsDraft({
+      ownerName: selected.ownerName || '',
+      ownerTitle: selected.ownerTitle || '',
+      phone: selected.phone || '',
+      notes: selected.notes || '',
+    });
+  }, [selected?.id]);
+
   const coach = useLiveCoach({
     enabled: coachOn,
     active: realtime.isConnected,
@@ -227,16 +245,24 @@ export default function TrainerView() {
     setQueueLoading(true);
     try {
       const [trainingRes, brandRes] = await Promise.all([
-        fetch(`/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0`),
+        fetch(
+          `/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0&rotate=${practiceRotate}`
+        ),
         fetch(`/api/prospects?dialable=1&limit=${TRAINING_PAGE_SIZE}`),
       ]);
 
       if (trainingRes.ok) {
         const data = await trainingRes.json();
-        setTrainingLeads(
-          (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
+        const rows = (data.prospects || []).map((p: Record<string, unknown>) =>
+          mapLead(p, 'training')
         );
+        setTrainingLeads(rows);
         setTrainingHasMore(false);
+        if (rows[0]?.id) {
+          setProspectId((current) =>
+            rows.some((r: ProspectRow) => r.id === current) ? current : rows[0].id
+          );
+        }
       } else {
         const legacy = await fetch('/api/prospects/search');
         if (legacy.ok) {
@@ -262,7 +288,7 @@ export default function TrainerView() {
     } finally {
       setQueueLoading(false);
     }
-  }, [searchParams]);
+  }, [searchParams, practiceRotate]);
 
   useEffect(() => {
     void loadLeads();
@@ -776,10 +802,60 @@ export default function TrainerView() {
   }
 
   function openLeadRecord() {
+    setContextTab('details');
+  }
+
+  function advanceToNextLead() {
+    if (!queue.length) return;
+    const idx = queue.findIndex((p) => p.id === prospectId);
+    const atEnd = idx < 0 || idx >= queue.length - 1;
+    if (atEnd && leadTab === 'training') {
+      // Finished this window of 8 — rotate into the next slice of the ~100 catalog.
+      setPracticeRotate((r) => r + 1);
+      return;
+    }
+    const next = atEnd ? queue[0] : queue[idx + 1];
+    if (next) {
+      setProspectId(next.id);
+      setContextTab('intel');
+    }
+  }
+
+  async function saveLeadDetailsInline() {
     if (!selected) return;
-    // Always use the shared lead page from Practice — brand-scoped URLs
-    // redirect non-managers back to /practice (looks like a flash).
-    router.push(`/leads/${selected.id}?from=practice`);
+    setDetailsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/prospects/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ownerName: detailsDraft.ownerName.trim() || null,
+          ownerTitle: detailsDraft.ownerTitle.trim() || null,
+          phone: detailsDraft.phone.trim() || null,
+          notes: detailsDraft.notes.trim() || null,
+          source: 'practice_details',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save lead details');
+      applyLeadPatch({
+        id: selected.id,
+        companyName: selected.companyName,
+        ownerName: detailsDraft.ownerName.trim() || null,
+        ownerTitle: detailsDraft.ownerTitle.trim() || null,
+        phone: detailsDraft.phone.trim() || null,
+        website: selected.website,
+        industry: selected.industry,
+        city: selected.city,
+        state: selected.state,
+        notes: detailsDraft.notes.trim() || null,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not save lead details');
+    } finally {
+      setDetailsSaving(false);
+    }
   }
 
   async function savePracticeWrap() {
@@ -806,6 +882,12 @@ export default function TrainerView() {
           body: JSON.stringify({
             notes: mergedNotes || null,
             source: 'practice_wrap',
+            ...(leadTab === 'brand'
+              ? {
+                  disposition: wrapDisposition,
+                  applyQueueFollowUp: true,
+                }
+              : {}),
           }),
         });
         if (res.ok && selected) {
@@ -826,6 +908,10 @@ export default function TrainerView() {
       setWrapOpen(false);
       setWrapDisposition(null);
       setRecapOpen(true);
+      advanceToNextLead();
+      if (leadTab === 'brand') {
+        void loadLeads();
+      }
     } catch (e: any) {
       setError(e.message || 'Could not save wrap-up');
     } finally {
@@ -837,6 +923,7 @@ export default function TrainerView() {
     setWrapOpen(false);
     setWrapDisposition(null);
     setRecapOpen(true);
+    advanceToNextLead();
   }
 
   async function createClipDraft() {
@@ -876,11 +963,17 @@ export default function TrainerView() {
     focus === 'standard' || focus === 'budget_500'
       ? `${trainerVoiceLabel(gatekeeperVoice)} → ${trainerVoiceLabel(bossVoice)}`
       : trainerVoiceLabel(soloVoice);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [realtime.transcript.length, coach.visible, coach.sayNext]);
+    const scroller = transcriptScrollRef.current;
+    const end = transcriptEndRef.current;
+    if (!scroller || !end) return;
+    // Reserve space below the latest bubble so it lands above the coach margin.
+    const top = end.offsetTop - scroller.clientHeight + end.offsetHeight + 72;
+    scroller.scrollTop = Math.max(0, top);
+  }, [realtime.transcript.length]);
 
   return (
     <div className="app-page app-page--desk">
@@ -1343,43 +1436,54 @@ export default function TrainerView() {
                   </div>
                 ) : null}
 
-                <div className="cc-desk__transcript" aria-live="polite">
-                  {realtime.transcript.length === 0 ? (
-                    <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-                      {realtime.isConnected
-                        ? 'Listening… transcript appears as you talk.'
-                        : 'Transcript appears here once the call starts.'}
-                    </p>
-                  ) : (
-                    realtime.transcript.map((entry) => {
-                      const isUser = entry.role === 'user';
-                      return (
-                        <div
-                          key={`${entry.id}-${entry.seq}`}
-                          className={`bubble bubble--${entry.role}${isUser ? ' bubble--right' : ' bubble--left'}`}
-                        >
-                          <strong>{entry.role.replace(/_/g, ' ')}</strong>
-                          <span>{entry.text}</span>
-                        </div>
-                      );
-                    })
-                  )}
-                  <div ref={transcriptEndRef} aria-hidden />
-                </div>
-
-                {coachOn && coach.visible && coach.sayNext && (
-                  <div className="cc-desk__coach" role="status">
-                    <strong>
-                      Coach whisper
-                      {coach.source === 'llm'
-                        ? ' · AI'
-                        : coach.source === 'instant'
-                          ? ' · quick tip'
-                          : ''}
-                    </strong>
-                    <p>{coach.sayNext}</p>
+                <div className="cc-desk__dialer-live">
+                  <div
+                    className="cc-desk__transcript"
+                    aria-live="polite"
+                    ref={transcriptScrollRef}
+                  >
+                    {realtime.transcript.length === 0 ? (
+                      <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                        {realtime.isConnected
+                          ? 'Listening… transcript appears as you talk.'
+                          : 'Transcript appears here once the call starts.'}
+                      </p>
+                    ) : (
+                      realtime.transcript.map((entry) => {
+                        const isUser = entry.role === 'user';
+                        return (
+                          <div
+                            key={`${entry.id}-${entry.seq}`}
+                            className={`bubble bubble--${entry.role}${isUser ? ' bubble--right' : ' bubble--left'}`}
+                          >
+                            <strong>{entry.role.replace(/_/g, ' ')}</strong>
+                            <span>{entry.text}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={transcriptEndRef} className="cc-desk__transcript-end" aria-hidden />
+                    <div className="cc-desk__transcript-pad" aria-hidden />
                   </div>
-                )}
+
+                  <div className="cc-desk__coach-slot">
+                    {coachOn && coach.visible && coach.sayNext ? (
+                      <div className="cc-desk__coach" role="status">
+                        <strong>
+                          Coach whisper
+                          {coach.source === 'llm'
+                            ? ' · AI'
+                            : coach.source === 'instant'
+                              ? ' · quick tip'
+                              : ''}
+                        </strong>
+                        <p>{coach.sayNext}</p>
+                      </div>
+                    ) : (
+                      <div className="cc-desk__coach is-empty" aria-hidden />
+                    )}
+                  </div>
+                </div>
 
                 {scorecard && !recapOpen && !realtime.isConnected && !wrapOpen ? (
                   <div className="cc-desk__recap-actions">
@@ -1397,22 +1501,102 @@ export default function TrainerView() {
         </section>
 
         {/* Right: context */}
-        <section className="cc-desk__col cc-desk__context" aria-label="Lead intel">
+        <section className="cc-desk__col cc-desk__context" aria-label="Lead context">
           <div className="cc-desk__col-head">
-            <strong>Lead intel</strong>
+            <strong>{contextTab === 'details' ? 'Lead details' : 'Lead intel'}</strong>
             {selected ? (
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ fontSize: '0.75rem', padding: '0.2rem 0.45rem' }}
-                onClick={openLeadRecord}
-              >
-                Lead details
-              </button>
+              <div className="cc-desk__ctx-tabs" role="tablist" aria-label="Lead panels">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={contextTab === 'intel'}
+                  className={`cc-desk__ctx-tab${contextTab === 'intel' ? ' is-active' : ''}`}
+                  onClick={() => setContextTab('intel')}
+                >
+                  Intel
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={contextTab === 'details'}
+                  className={`cc-desk__ctx-tab${contextTab === 'details' ? ' is-active' : ''}`}
+                  onClick={() => setContextTab('details')}
+                >
+                  Details
+                </button>
+              </div>
             ) : null}
           </div>
           <div className="cc-desk__col-body">
-            {selected ? (
+            {selected && contextTab === 'details' ? (
+              <div className="cc-desk__details-form">
+                <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>
+                  Edit without leaving the call — practice state stays live.
+                </p>
+                <label>
+                  Contact
+                  <input
+                    value={detailsDraft.ownerName}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({ ...d, ownerName: e.target.value }))
+                    }
+                    placeholder="Name"
+                  />
+                </label>
+                <label>
+                  Title
+                  <input
+                    value={detailsDraft.ownerTitle}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({ ...d, ownerTitle: e.target.value }))
+                    }
+                    placeholder="CRO, Owner…"
+                  />
+                </label>
+                <label>
+                  Phone
+                  <input
+                    value={detailsDraft.phone}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({ ...d, phone: e.target.value }))
+                    }
+                    placeholder="+1…"
+                  />
+                </label>
+                <label>
+                  Notes
+                  <textarea
+                    value={detailsDraft.notes}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({ ...d, notes: e.target.value }))
+                    }
+                    placeholder="Gatekeeper, best time, follow-up…"
+                  />
+                </label>
+                <div className="cc-desk__details-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={detailsSaving}
+                    onClick={() => void saveLeadDetailsInline()}
+                  >
+                    {detailsSaving ? 'Saving…' : 'Save details'}
+                  </button>
+                  <Link
+                    href={`/leads/${selected.id}?from=practice`}
+                    className="soft-link"
+                    onClick={(e) => {
+                      if (realtime.isConnected) {
+                        e.preventDefault();
+                        setError('End the call before opening the full lead page.');
+                      }
+                    }}
+                  >
+                    Full lead page →
+                  </Link>
+                </div>
+              </div>
+            ) : selected ? (
               <>
                 <div className="cc-desk__ctx-block">
                   <h3 className="cc-desk__ctx-title">{selected.companyName}</h3>

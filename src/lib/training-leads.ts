@@ -375,6 +375,169 @@ export const TRAINING_LEAD_SEEDS: TrainingLeadSeed[] = [
   },
 ];
 
+const BRAND_PROFILES: Record<
+  string,
+  {
+    industry: string;
+    titles: string[];
+    cities: [string, string][];
+    companyParts: [string[], string[]];
+    hooks: string[][];
+    note: string;
+    phoneBase: number;
+  }
+> = {
+  'demo-meridianops': {
+    industry: 'B2B SaaS',
+    titles: ['VP Sales', 'CRO', 'Head of RevOps', 'Sales Ops Manager', 'Director of Sales'],
+    cities: [
+      ['Austin', 'TX'],
+      ['Denver', 'CO'],
+      ['Chicago', 'IL'],
+      ['Seattle', 'WA'],
+      ['Boston', 'MA'],
+      ['Atlanta', 'GA'],
+      ['San Francisco', 'CA'],
+      ['Raleigh', 'NC'],
+      ['Minneapolis', 'MN'],
+      ['Nashville', 'TN'],
+    ],
+    companyParts: [
+      ['North', 'Bright', 'Helix', 'Orbit', 'Ledger', 'Quantum', 'Signal', 'Forge', 'Pulse', 'Nimbus'],
+      ['Analytics', 'Pipeline', 'Revenue', 'Quota', 'Forecast', 'CRM', 'Growth', 'Ops', 'Metrics', 'Funnel'],
+    ],
+    hooks: [
+      ['Forecast variance spiked last two quarters', 'RevOps hire still ramping', 'SDR→AE handoff leakage'],
+      ['Board wants weekly forecast confidence', 'CRM stage definitions differ by region', 'Evaluating overlay tools'],
+      ['Series C diligence on pipeline hygiene', 'AE accept rates dropped after SDR hire', 'Manual forecast cleanup every Friday'],
+    ],
+    note: 'Training lead — MeridianOps ICP practice. Not a real prospect.',
+    phoneBase: 10101,
+  },
+  'demo-harborline': {
+    industry: 'Insurance',
+    titles: ['Agency Principal', 'Managing Partner', 'Benefits Director', 'Owner', 'Producer'],
+    cities: [
+      ['Tampa', 'FL'],
+      ['Phoenix', 'AZ'],
+      ['Miami', 'FL'],
+      ['Dallas', 'TX'],
+      ['Charlotte', 'NC'],
+      ['Columbus', 'OH'],
+      ['Orlando', 'FL'],
+      ['Houston', 'TX'],
+      ['Jacksonville', 'FL'],
+      ['Indianapolis', 'IN'],
+    ],
+    companyParts: [
+      ['Lakeview', 'Summit', 'Coastal', 'Harbor', 'Pioneer', 'Cedar', 'Ridge', 'Valley', 'Metro', 'Patriot'],
+      ['Benefits', 'Insurance', 'Agency', 'Coverage', 'Group', 'Brokerage', 'Protection', 'Assurance'],
+    ],
+    hooks: [
+      ['Medicare Advantage AEP coming up', 'Wants commercial cross-sell', 'Short window for appointments'],
+      ['Group renewal up YoY', 'Spouse/CFO must join licensed review', 'Gatekeeper screens unknown numbers'],
+      ['Book pressure before anniversary', 'Looking for dial-ready setters', 'Prefers morning callbacks'],
+    ],
+    note: 'Training lead — Harborline insurance practice. Not a real prospect.',
+    phoneBase: 10201,
+  },
+  'demo-summitshield': {
+    industry: 'Home services',
+    titles: ['Homeowner', 'Property Manager', 'Decision Maker', 'Co-owner'],
+    cities: [
+      ['Houston', 'TX'],
+      ['Dallas', 'TX'],
+      ['New Orleans', 'LA'],
+      ['Oklahoma City', 'OK'],
+      ['Birmingham', 'AL'],
+      ['Memphis', 'TN'],
+      ['Kansas City', 'MO'],
+      ['Tulsa', 'OK'],
+      ['Little Rock', 'AR'],
+      ['Shreveport', 'LA'],
+    ],
+    companyParts: [
+      ['Oak', 'Pine', 'Bayou', 'Prairie', 'Cypress', 'Magnolia', 'River', 'Stone', 'Willow', 'Maple'],
+      ['Residence', 'Homestead', 'Property', 'Estates', 'House', 'Manor', 'Cottage', 'Lodge'],
+    ],
+    hooks: [
+      ['Storm damage claim still open', 'Roof age past warranty', 'Both decision-makers for numbers'],
+      ['Utility rate hike — comparing solar payback', 'Wants monthly math not cash outlay', 'Site survey if both owners free'],
+      ['HVAC failing in peak season', 'Neighbor just booked inspection', 'Prefers evening appointment'],
+    ],
+    note: 'Training lead — SummitShield home services practice. Not a real prospect.',
+    phoneBase: 10301,
+  },
+};
+
+const FIRST_NAMES = [
+  'Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Avery', 'Quinn', 'Jamie', 'Reese',
+  'Cameron', 'Drew', 'Harper', 'Parker', 'Skyler', 'Rowan', 'Sage', 'Blake', 'Finley', 'Emery',
+  'Kai', 'Noah', 'Mia', 'Liam', 'Sofia', 'Elena', 'Marcus', 'Priya', 'Devon', 'Samira',
+];
+const LAST_NAMES = [
+  'Nguyen', 'Patel', 'Garcia', 'Johnson', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore',
+  'Taylor', 'Anderson', 'Thomas', 'Jackson', 'White', 'Harris', 'Martin', 'Thompson', 'Lee', 'Walker',
+  'Hall', 'Allen', 'Young', 'King', 'Wright', 'Lopez', 'Hill', 'Scott', 'Green', 'Adams',
+];
+
+/** Target size for the shared practice catalog — queue of 8 recycles through this pool. */
+export const TARGET_TRAINING_LEADS = 100;
+
+function slugifyCompany(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48);
+}
+
+/** Expand handcrafted seeds to a ~100-lead realistic practice catalog. */
+export function buildTrainingLeadCatalog(target = TARGET_TRAINING_LEADS): TrainingLeadSeed[] {
+  const out: TrainingLeadSeed[] = [...TRAINING_LEAD_SEEDS];
+  const seen = new Set(out.map((s) => s.companyName.toLowerCase()));
+  const brandSlugs = Object.keys(BRAND_PROFILES);
+  let n = 0;
+
+  while (out.length < target && n < target * 4) {
+    const brandSlug = brandSlugs[n % brandSlugs.length];
+    const profile = BRAND_PROFILES[brandSlug];
+    const [lefts, rights] = profile.companyParts;
+    const left = lefts[Math.floor(n / brandSlugs.length) % lefts.length];
+    const right = rights[(n * 3 + 1) % rights.length];
+    const suffix = ['Co', 'Inc', 'Group', 'Labs', 'LLC', 'Partners'][n % 6];
+    const companyName = `${left} ${right} ${suffix}`.replace(/\s+/g, ' ').trim();
+    const key = companyName.toLowerCase();
+    n += 1;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const city = profile.cities[n % profile.cities.length];
+    const first = FIRST_NAMES[n % FIRST_NAMES.length];
+    const last = LAST_NAMES[(n * 7) % LAST_NAMES.length];
+    const hooks = profile.hooks[n % profile.hooks.length];
+    const phoneNum = profile.phoneBase + (out.length % 800);
+    out.push({
+      brandSlug,
+      companyName,
+      ownerName: `${first} ${last}`,
+      ownerTitle: profile.titles[n % profile.titles.length],
+      city: city[0],
+      state: city[1],
+      industry: profile.industry,
+      phone: `+1555${String(phoneNum).padStart(7, '0')}`,
+      website: `https://example.com/${slugifyCompany(companyName)}`,
+      hooks: [...hooks],
+      notes: profile.note,
+    });
+  }
+
+  return out.slice(0, target);
+}
+
+/** Full practice catalog (handcrafted + generated). */
+export const TRAINING_LEAD_CATALOG = buildTrainingLeadCatalog();
+
 export async function ensurePlatformSeedUser() {
   // Placeholder FK owner for training prospects only — never a real ops login.
   return prisma.userProfile.upsert({
@@ -399,13 +562,15 @@ export async function ensurePlatformSeedUser() {
 
 /**
  * Ensure platform practice leads exist for every SDR Call Queue.
- * Seeds demo brands + training prospects when the catalog is empty.
+ * Tops up to TARGET_TRAINING_LEADS so the recycled 8-slot queue never starves.
  */
 export async function ensureTrainingLeadsAvailable() {
   const existing = await prisma.prospect.count({
     where: { source: TRAINING_SOURCE },
   });
-  if (existing > 0) return { seeded: false as const, existing };
+  if (existing >= TARGET_TRAINING_LEADS) {
+    return { seeded: false as const, existing };
+  }
 
   const demoBrands = await prisma.brand.count({
     where: { slug: { startsWith: 'demo-' } },
@@ -431,12 +596,13 @@ export async function seedTrainingLeads() {
     select: { id: true, slug: true },
   });
   const bySlug = new Map(brands.map((b) => [b.slug, b.id]));
+  const catalog = TRAINING_LEAD_CATALOG;
 
   let created = 0;
   let updated = 0;
   let skipped = 0;
 
-  for (const seed of TRAINING_LEAD_SEEDS) {
+  for (const seed of catalog) {
     const brandId = bySlug.get(seed.brandSlug);
     if (!brandId) {
       skipped += 1;
@@ -495,7 +661,7 @@ export async function seedTrainingLeads() {
     }
   }
 
-  return { created, updated, skipped };
+  return { created, updated, skipped, total: catalog.length };
 }
 
 const trainingLeadSelect = {
@@ -534,6 +700,8 @@ export async function listTrainingLeads(opts?: {
    * Prevents SDRs from paging/refreshing through the full catalog.
    */
   practiceQueueUserId?: string;
+  /** Extra window rotation (multiples of PRACTICE_QUEUE_LIMIT) through the catalog. */
+  practiceQueueRotate?: number;
 }) {
   const where = {
     source: TRAINING_SOURCE,
@@ -556,7 +724,13 @@ export async function listTrainingLeads(opts?: {
 
   if (opts?.practiceQueueUserId && !opts.brandId) {
     take = PRACTICE_QUEUE_LIMIT;
-    skip = practiceQueueOffset(opts.practiceQueueUserId, total, PRACTICE_QUEUE_LIMIT);
+    const base = practiceQueueOffset(opts.practiceQueueUserId, total, PRACTICE_QUEUE_LIMIT);
+    const rotate = Math.max(0, opts.practiceQueueRotate || 0);
+    const maxStart = Math.max(0, total - PRACTICE_QUEUE_LIMIT);
+    skip =
+      total <= PRACTICE_QUEUE_LIMIT
+        ? 0
+        : (base + rotate * PRACTICE_QUEUE_LIMIT) % (maxStart + 1);
     hasMore = false;
   }
 
@@ -577,11 +751,12 @@ export async function listTrainingLeads(opts?: {
     total: opts?.practiceQueueUserId && !opts.brandId
       ? Math.min(total, PRACTICE_QUEUE_LIMIT)
       : total,
+    catalogTotal: total,
     hasMore,
   };
 }
 
-/** Stable offset so the same SDR always sees the same 8 leads. */
+/** Stable offset so the same SDR starts on a consistent 8-lead window. */
 function practiceQueueOffset(userId: string, total: number, size: number): number {
   if (total <= size) return 0;
   let h = 2166136261;

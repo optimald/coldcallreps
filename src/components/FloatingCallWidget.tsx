@@ -14,11 +14,11 @@ export type CallDisposition =
   | 'voicemail';
 
 /** Ruthlessly simple outbound wrap-up codes. */
-export const CALL_DISPOSITIONS: { id: CallDisposition; label: string; short: string }[] = [
-  { id: 'appointment_set', label: 'Appointment set', short: 'Appt' },
-  { id: 'not_interested', label: 'Not interested', short: 'No' },
-  { id: 'no_answer', label: 'No answer / VM', short: 'NA' },
-  { id: 'gatekeeper_blocked', label: 'Gatekeeper blocked', short: 'GK' },
+export const CALL_DISPOSITIONS: { id: CallDisposition; code: string; label: string }[] = [
+  { id: 'appointment_set', code: 'Appt', label: 'Appointment set' },
+  { id: 'not_interested', code: 'No', label: 'Not interested' },
+  { id: 'no_answer', code: 'NA', label: 'No answer / VM' },
+  { id: 'gatekeeper_blocked', code: 'GK', label: 'Gatekeeper blocked' },
 ];
 
 /** Bottom-right floating controls during an active practice or outbound call. */
@@ -57,6 +57,8 @@ export default function FloatingCallWidget({
 
   if (!open) return null;
 
+  const micOn = Boolean(micEnabled);
+
   return (
     <aside
       className={`cc-float-call${minimized ? ' is-minimized' : ''}`}
@@ -94,8 +96,18 @@ export default function FloatingCallWidget({
 
           <div className="cc-float-call__controls">
             {onToggleMic ? (
-              <button type="button" className="cc-float-call__ctrl" onClick={onToggleMic}>
-                Mic {micEnabled ? 'On' : 'Off'}
+              <button
+                type="button"
+                className={`cc-float-call__mic${micOn ? ' is-live' : ' is-muted'}`}
+                onClick={onToggleMic}
+                aria-pressed={micOn}
+                title={micOn ? 'Mute your microphone' : 'Unmute your microphone'}
+              >
+                <span className="cc-float-call__mic-dot" aria-hidden />
+                <span className="cc-float-call__mic-copy">
+                  <strong>{micOn ? 'Mic live' : 'Mic muted'}</strong>
+                  <em>{micOn ? 'Tap to mute' : 'Tap to unmute'}</em>
+                </span>
               </button>
             ) : null}
             {onToggleMute ? (
@@ -111,15 +123,16 @@ export default function FloatingCallWidget({
           {primaryAction}
 
           {dispositions && onQuickDisposition ? (
-            <div className="cc-float-call__dispos">
-              {CALL_DISPOSITIONS.slice(0, 3).map((d) => (
+            <div className="cc-float-call__dispos" role="group" aria-label="Call outcome">
+              {CALL_DISPOSITIONS.map((d) => (
                 <button
                   key={d.id}
                   type="button"
                   className="cc-float-call__dispos-btn"
                   onClick={() => onQuickDisposition(d.id)}
                 >
-                  {d.short} {d.label}
+                  <span className="cc-float-call__dispos-code">{d.code}</span>
+                  <span className="cc-float-call__dispos-label">{d.label}</span>
                 </button>
               ))}
             </div>

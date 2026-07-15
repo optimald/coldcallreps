@@ -48,34 +48,57 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const { id } = await ctx.params;
     const access = await resolveProspectAccess(profile, id);
     if (!access) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!access.canEdit) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     const existing = access.prospect;
     const body = await req.json().catch(() => ({}));
+    const source = typeof body.source === 'string' ? body.source.slice(0, 40) : 'lead_detail';
+    const wrapFollowUp =
+      Boolean(body.applyQueueFollowUp) &&
+      typeof body.disposition === 'string' &&
+      body.disposition.length > 0;
+
+    // SDRs on dialable campaigns: allow wrap notes + queue follow-up only.
+    const sdrWrapOnly =
+      !access.canEdit &&
+      access.via === 'sdr' &&
+      (source === 'practice_wrap' || source === 'practice_details' || wrapFollowUp);
+
+    if (!access.canEdit && !sdrWrapOnly) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const data: Record<string, unknown> = {};
 
-    if (body.companyName != null) data.companyName = String(body.companyName).trim().slice(0, 160);
-    if (body.industry !== undefined)
-      data.industry = body.industry ? String(body.industry).slice(0, 80) : null;
-    if (body.city !== undefined) data.city = body.city ? String(body.city).slice(0, 80) : null;
-    if (body.state !== undefined) data.state = body.state ? String(body.state).slice(0, 40) : null;
-    if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).slice(0, 40) : null;
-    if (body.website !== undefined)
-      data.website = body.website ? String(body.website).slice(0, 300) : null;
-    if (body.ownerName !== undefined)
-      data.ownerName = body.ownerName ? String(body.ownerName).slice(0, 80) : null;
-    if (body.ownerTitle !== undefined)
-      data.ownerTitle = body.ownerTitle ? String(body.ownerTitle).slice(0, 80) : null;
-    if (body.gatekeeperName !== undefined)
-      data.gatekeeperName = body.gatekeeperName ? String(body.gatekeeperName).slice(0, 80) : null;
-    if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).slice(0, 4000) : null;
-    if (body.status !== undefined) data.status = String(body.status).slice(0, 32);
-    if (body.imageUrl !== undefined)
-      data.imageUrl = body.imageUrl ? String(body.imageUrl).slice(0, 500) : null;
+    if (access.canEdit) {
+      if (body.companyName != null) data.companyName = String(body.companyName).trim().slice(0, 160);
+      if (body.industry !== undefined)
+        data.industry = body.industry ? String(body.industry).slice(0, 80) : null;
+      if (body.city !== undefined) data.city = body.city ? String(body.city).slice(0, 80) : null;
+      if (body.state !== undefined) data.state = body.state ? String(body.state).slice(0, 40) : null;
+      if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).slice(0, 40) : null;
+      if (body.website !== undefined)
+        data.website = body.website ? String(body.website).slice(0, 300) : null;
+      if (body.ownerName !== undefined)
+        data.ownerName = body.ownerName ? String(body.ownerName).slice(0, 80) : null;
+      if (body.ownerTitle !== undefined)
+        data.ownerTitle = body.ownerTitle ? String(body.ownerTitle).slice(0, 80) : null;
+      if (body.gatekeeperName !== undefined)
+        data.gatekeeperName = body.gatekeeperName ? String(body.gatekeeperName).slice(0, 80) : null;
+      if (body.status !== undefined) data.status = String(body.status).slice(0, 32);
+      if (body.imageUrl !== undefined)
+        data.imageUrl = body.imageUrl ? String(body.imageUrl).slice(0, 500) : null;
+    } else if (source === 'practice_details') {
+      // SDR inline practice details: contact fields + notes only
+      if (body.ownerName !== undefined)
+        data.ownerName = body.ownerName ? String(body.ownerName).slice(0, 80) : null;
+      if (body.ownerTitle !== undefined)
+        data.ownerTitle = body.ownerTitle ? String(body.ownerTitle).slice(0, 80) : null;
+      if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).slice(0, 40) : null;
+    }
 
-    if (data.companyName === '') {
+    if (body.notes !== undefined) data.notes = body.notes ? String(body.notes).slice(0, 4000) : null;
+
+    if (access.canEdit && data.companyName === '') {
       return NextResponse.json({ error: 'companyName required' }, { status: 400 });
     }
 
@@ -89,14 +112,27 @@ export async function PATCH(req: Request, ctx: Ctx) {
       }
     }
 
-    const prospect = await prisma.prospect.update({
-      where: { id },
-      data,
-      include: {
-        brand: { select: { id: true, slug: true, name: true, ownerId: true } },
-        campaign: { select: { id: true, title: true } },
-      },
-    });
+    const prospect =
+      Object.keys(data).length > 0
+        ? await prisma.prospect.update({
+            where: { id },
+            data,
+            include: {
+              brand: { select: { id: true, slug: true, name: true, ownerId: true } },
+              campaign: { select: { id: true, title: true } },
+            },
+          })
+        : existing;
+
+    if (wrapFollowUp && (access.canEdit || access.via === 'sdr')) {
+      const { applyDispositionFollowUp } = await import('@/lib/lead-queue');
+      await applyDispositionFollowUp({
+        prospectId: id,
+        userId: profile.id,
+        outcome: String(body.disposition).slice(0, 40),
+        campaignId: existing.campaignId,
+      });
+    }
 
     if (Object.keys(changes).length > 0) {
       await writeAudit({
@@ -105,7 +141,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         targetType: 'prospect',
         targetId: id,
         meta: {
-          source: typeof body.source === 'string' ? body.source.slice(0, 40) : 'lead_detail',
+          source,
           brandId: prospect.brandId || null,
           actorName: profile.displayName || profile.email || profile.id,
           actorEmail: profile.email || null,
@@ -114,7 +150,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       });
     }
 
-    return NextResponse.json({ prospect, changes, canEdit: true });
+    return NextResponse.json({ prospect, changes, canEdit: access.canEdit });
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });

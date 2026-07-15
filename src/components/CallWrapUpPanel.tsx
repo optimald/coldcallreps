@@ -89,7 +89,7 @@ export default function CallWrapUpPanel({
               data-outcome={d.id}
               onClick={() => onDisposition(d.id)}
             >
-              <span aria-hidden>{d.short}</span> {d.label}
+              <span aria-hidden className="cc-wrap-up__code">{d.code}</span> {d.label}
             </button>
           ))}
         </div>
