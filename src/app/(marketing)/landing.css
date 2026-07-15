@@ -748,6 +748,9 @@
    ═══════════════════════════════════════════════════════════ */
 
 body:has(.lp-athletic) {
+  /* Hoist athletic tokens so header/footer (siblings of .lp-athletic) match */
+  --ath-signal: #00e5c0;
+  --ath-signal-rgb: 0, 229, 192;
   background: #0a0f1c;
 }
 
@@ -762,6 +765,19 @@ body:has(.lp-athletic) .mkt-header {
 body:has(.lp-athletic) .mkt-header a,
 body:has(.lp-athletic) .mkt-header .theme-mode-toggle__btn {
   color: rgba(255, 255, 255, 0.68) !important;
+}
+
+/* Match nav CTA to athletic teal (not global lime --accent) */
+body:has(.lp-athletic) .mkt-header a.btn {
+  background: var(--ath-signal);
+  color: #060a13 !important;
+  border-color: transparent;
+  box-shadow: 0 0 22px rgba(var(--ath-signal-rgb), 0.28);
+}
+
+body:has(.lp-athletic) .mkt-header a.btn:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 0 30px rgba(var(--ath-signal-rgb), 0.4);
 }
 
 body:has(.lp-athletic) .mkt-footer .brand-mark {
