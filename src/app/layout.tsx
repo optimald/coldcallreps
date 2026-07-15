@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import { ClerkProvider } from '@clerk/nextjs';
 import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import ThemedClerkProvider from '@/components/ThemedClerkProvider';
 import './globals.css';
 
 const display = Bricolage_Grotesque({
@@ -67,72 +67,25 @@ const THEME_BOOT_SCRIPT = `(function(){try{var k='ccr-theme';var mk='ccr-theme-m
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider
-      appearance={{
-        variables: {
-          colorPrimary: 'var(--accent)',
-          colorTextOnPrimaryBackground: 'var(--on-accent)',
-          colorBackground: 'var(--bg-elevated)',
-          colorInputBackground: 'var(--bg-soft)',
-          colorInputText: 'var(--ink)',
-          colorText: 'var(--ink)',
-          colorTextSecondary: 'var(--muted)',
-          colorNeutral: 'var(--muted)',
-          colorDanger: 'var(--bad)',
-          colorSuccess: 'var(--good)',
-          colorWarning: 'var(--warn)',
-          borderRadius: '0.5rem',
-        },
-        elements: {
-          card: {
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--line)',
-            boxShadow: 'none',
-          },
-          formButtonPrimary: {
-            backgroundColor: 'var(--accent)',
-            color: 'var(--on-accent)',
-            borderRadius: '2px',
-            fontWeight: '700',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            boxShadow: 'none',
-          },
-          formFieldInput: {
-            background: 'var(--bg-soft)',
-            color: 'var(--ink)',
-            borderColor: 'var(--line)',
-          },
-          footerActionLink: {
-            color: 'var(--accent)',
-          },
-          footer: {
-            color: 'var(--muted)',
-          },
-          footerPagesLink: {
-            color: 'var(--muted)',
-          },
-        },
-      }}
-    >
-      <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-        </head>
-        <body
-          style={
-            {
-              '--font-display': 'var(--font-display-loaded), sans-serif',
-              '--font-body': 'var(--font-body-loaded), sans-serif',
-            } as React.CSSProperties
-          }
-        >
-          <ThemeProvider>
+    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
+      <body
+        style={
+          {
+            '--font-display': 'var(--font-display-loaded), sans-serif',
+            '--font-body': 'var(--font-body-loaded), sans-serif',
+          } as React.CSSProperties
+        }
+      >
+        <ThemeProvider>
+          <ThemedClerkProvider>
             <GoogleAnalytics />
             {children}
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+          </ThemedClerkProvider>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

@@ -2407,7 +2407,8 @@ textarea {
 
 /* Clerk primary must keep on-accent text (global button inherit broke contrast). */
 .cl-formButtonPrimary,
-.cl-formButtonPrimary.cl-button {
+.cl-formButtonPrimary.cl-button,
+.cl-button.cl-formButtonPrimary {
   background-color: var(--accent) !important;
   color: var(--on-accent) !important;
   box-shadow: none !important;
@@ -2422,7 +2423,8 @@ textarea {
 /* Disabled primary: --on-accent is dark on bright teal — unreadable on a dimmed dark btn. */
 .cl-formButtonPrimary:disabled,
 .cl-formButtonPrimary.cl-button:disabled,
-.cl-formButtonPrimary[disabled] {
+.cl-formButtonPrimary[disabled],
+button.cl-formButtonPrimary:disabled {
   background-color: color-mix(in srgb, var(--ink) 14%, var(--bg-soft)) !important;
   color: var(--muted) !important;
   filter: none !important;
@@ -2431,8 +2433,62 @@ textarea {
 }
 
 .cl-footerActionLink,
-.cl-formFieldAction {
+.cl-formFieldAction,
+.cl-identityPreviewEditButton {
   color: var(--accent) !important;
+}
+
+/*
+ * Dark mode: Clerk org/task UIs often ignore CSS-variable appearance tokens and
+ * keep near-black text. Force readable ink on the whole auth surface.
+ */
+html[data-color-scheme='dark'] .cl-rootBox,
+html[data-color-scheme='dark'] .cl-cardBox,
+html[data-color-scheme='dark'] .cl-card,
+html[data-color-scheme='dark'] .cl-main {
+  color: var(--ink) !important;
+}
+
+html[data-color-scheme='dark'] .cl-headerTitle,
+html[data-color-scheme='dark'] .cl-formFieldLabel,
+html[data-color-scheme='dark'] .cl-formFieldInput,
+html[data-color-scheme='dark'] .cl-input,
+html[data-color-scheme='dark'] .cl-formFieldInput__input {
+  color: var(--ink) !important;
+}
+
+html[data-color-scheme='dark'] .cl-headerSubtitle,
+html[data-color-scheme='dark'] .cl-formFieldHintText,
+html[data-color-scheme='dark'] .cl-identityPreviewText,
+html[data-color-scheme='dark'] .cl-dividerText,
+html[data-color-scheme='dark'] .cl-footer,
+html[data-color-scheme='dark'] .cl-footer p,
+html[data-color-scheme='dark'] .cl-footer span,
+html[data-color-scheme='dark'] .cl-footer a,
+html[data-color-scheme='dark'] [class*='cl-footer'] {
+  color: var(--muted) !important;
+}
+
+html[data-color-scheme='dark'] .cl-formFieldInput,
+html[data-color-scheme='dark'] .cl-input {
+  background-color: var(--bg-soft) !important;
+  border-color: var(--line) !important;
+}
+
+html[data-color-scheme='dark'] .cl-footer svg,
+html[data-color-scheme='dark'] [class*='cl-footer'] svg {
+  color: var(--muted) !important;
+  fill: currentColor !important;
+}
+
+html[data-color-scheme='dark'] .cl-footer svg path,
+html[data-color-scheme='dark'] [class*='cl-footer'] svg path {
+  fill: currentColor !important;
+}
+
+html[data-color-scheme='dark'] .cl-logoBox img,
+html[data-color-scheme='dark'] .cl-footer img {
+  filter: brightness(0) invert(0.72);
 }
 
 /* "Secured by clerk" badge — Clerk defaults to near-black wordmark. */
@@ -2460,11 +2516,6 @@ textarea {
 .cl-footer svg path,
 [class*='cl-footer'] svg path {
   fill: currentColor !important;
-}
-
-html[data-color-scheme='dark'] .cl-logoBox img,
-html[data-color-scheme='dark'] .cl-footer img {
-  filter: brightness(0) invert(0.72);
 }
 
 .auth-shell--wide {
