@@ -348,6 +348,16 @@ textarea {
     var(--bg);
 }
 
+/* Post-signup account type / brand creation — no sidebar or topbar. */
+.app-shell--onboarding {
+  display: block;
+  height: auto;
+  min-height: 100dvh;
+  overflow: auto;
+  overflow-x: clip;
+  background: var(--bg);
+}
+
 .app-shell--sidebar-collapsed {
   grid-template-columns: var(--sidebar-collapsed-w) minmax(0, 1fr);
 }
@@ -2538,6 +2548,23 @@ textarea {
   width: min(420px, 100%);
 }
 
+/* Clerk post-signup tasks (org setup, etc.) need a bit more room + explicit centering. */
+.signup-form-wrap--task {
+  width: min(480px, 100%);
+}
+
+.signup-form-wrap .cl-rootBox,
+.signup-form-wrap .cl-cardBox,
+.signup-form-wrap .cl-card {
+  width: 100%;
+  margin-inline: auto;
+}
+
+.auth-shell > .cl-rootBox {
+  width: min(480px, 100%);
+  margin-inline: auto;
+}
+
 .signup-form-wrap__path {
   width: 100%;
   text-align: center;
@@ -2574,6 +2601,45 @@ textarea {
 
 .signup-form-wrap__change:hover {
   color: var(--ink);
+}
+
+.onboarding-brand {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 1.25rem;
+}
+
+.onboarding-brand__head {
+  text-align: center;
+}
+
+.onboarding-brand__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 3vw, 2.1rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.onboarding-brand__sub {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.onboarding-brand__card {
+  padding: 1.35rem 1.3rem 1.45rem;
+  background: var(--surface-card, var(--bg-elevated));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+}
+
+.onboarding-brand__brand {
+  display: flex;
+  justify-content: center;
 }
 
 .deal-steps {

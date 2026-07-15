@@ -941,6 +941,28 @@ export default function AppShell({
     .filter(Boolean)
     .join(' ');
 
+  // Account-type chooser + brand creation — full viewport, no desk chrome.
+  if (pathname.startsWith('/onboarding')) {
+    return (
+      <ShellProvider
+        role={role}
+        roleMode={roleMode}
+        brands={ownedBrands}
+        selectedBrand={selectedBrand}
+        metrics={metrics}
+        deskMode={deskMode}
+        setDeskMode={setDeskMode}
+        adminDeskMode={adminDeskMode}
+        setAdminDeskMode={setAdminDeskMode}
+      >
+        <div className="app-shell app-shell--onboarding">
+          <ImpersonationBanner />
+          {children}
+        </div>
+      </ShellProvider>
+    );
+  }
+
   return (
     <ShellProvider
       role={role}

@@ -19,11 +19,13 @@ const PLANS = ['STARTER', 'PRO', 'TEAM'] as const;
  */
 export default function SignUpClient() {
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const isClerkHandshake =
-    Boolean(pathname?.includes('sso-callback')) ||
-    Boolean(pathname?.includes('verify-email-address')) ||
-    Boolean(pathname?.includes('continue'));
+  const pathname = usePathname() || '';
+  // Quiet chrome during OAuth/verify — but always keep the centered shell.
+  const hideMarketingChrome =
+    pathname.includes('sso-callback') ||
+    pathname.includes('verify-email-address') ||
+    pathname.includes('/continue') ||
+    pathname.includes('/tasks');
 
   useEffect(() => {
     const ref = searchParams.get('ref');
@@ -46,18 +48,17 @@ export default function SignUpClient() {
     }
   }, [searchParams]);
 
-  // OAuth / verify routes briefly mount this page — don't flash signup chrome.
-  if (isClerkHandshake) {
-    return <SignUp />;
-  }
-
   return (
     <ClerkAuthShell mode="sign-up">
-      <div className="signup-form-wrap">
-        <div className="signup-form-wrap__path">
-          <BrandMark href="/" size="md" />
-          <p className="signup-form-wrap__tagline">Create your account to get started.</p>
-        </div>
+      <div
+        className={`signup-form-wrap${pathname.includes('/tasks') ? ' signup-form-wrap--task' : ''}`}
+      >
+        {!hideMarketingChrome ? (
+          <div className="signup-form-wrap__path">
+            <BrandMark href="/" size="md" />
+            <p className="signup-form-wrap__tagline">Create your account to get started.</p>
+          </div>
+        ) : null}
         <SignUp />
       </div>
     </ClerkAuthShell>

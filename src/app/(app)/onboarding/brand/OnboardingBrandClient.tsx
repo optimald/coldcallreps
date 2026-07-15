@@ -2,9 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { PageHeader, Panel } from '@/components/ui/PagePrimitives';
-import { CAMPAIGN_TIERS } from '@/lib/campaign-tiers';
+import { useRouter } from 'next/navigation';
+import BrandMark from '@/components/BrandMark';
 import { fileToLogoDataUrl } from '@/lib/brand-logo-upload';
 
 type MePrefill = {
@@ -16,7 +15,6 @@ type MePrefill = {
 
 export default function OnboardingBrandClient() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const fileInputId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [brandName, setBrandName] = useState('');
@@ -26,17 +24,8 @@ export default function OnboardingBrandClient() {
   const [logoSource, setLogoSource] = useState<'auto' | 'upload' | null>(null);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoBroken, setLogoBroken] = useState(false);
-  const [campaignTitle, setCampaignTitle] = useState('');
-  const [pricingTier, setPricingTier] = useState('TIER2');
-  const [fundWallet, setFundWallet] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-
-  useEffect(() => {
-    if (searchParams.get('wallet') === 'cancel') {
-      setMsg('Wallet checkout canceled — you can fund later from your brand page.');
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     fetch('/api/me')
@@ -132,23 +121,16 @@ export default function OnboardingBrandClient() {
           websiteUrl: websiteUrl.trim(),
           description: description.trim(),
           logoUrl: logoUrl || undefined,
-          campaignTitle: campaignTitle.trim() || undefined,
-          pricingTier,
-          fundWalletCents: fundWallet ? 10000 : 0,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setMsg(data.error || 'Could not finish Brand onboarding');
-        return;
-      }
-      if (data.walletFundUrl) {
-        window.location.href = data.walletFundUrl;
+        setMsg(data.error || 'Could not create brand');
         return;
       }
       window.location.href = data.redirectTo || '/dashboard';
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : 'Could not finish onboarding');
+      setMsg(e instanceof Error ? e.message : 'Could not create brand');
     } finally {
       setBusy(false);
     }
@@ -157,196 +139,154 @@ export default function OnboardingBrandClient() {
   const showPreview = Boolean(logoUrl) && !logoBroken;
 
   return (
-    <main className="app-page app-page--narrow">
-      <PageHeader
-        eyebrow="Brand"
-        title="Create your brand"
-        description="Logo auto-fills from your website. Creates a draft campaign and starter playbook."
-      />
+    <main className="auth-shell">
+      <div className="onboarding-brand">
+        <div className="onboarding-brand__brand">
+          <BrandMark href="/" size="md" />
+        </div>
+        <header className="onboarding-brand__head">
+          <h1 className="onboarding-brand__title">Create your brand</h1>
+          <p className="onboarding-brand__sub">
+            Name, website, and a short description — logo auto-fills from your site.
+          </p>
+        </header>
 
-      <Panel
-        title="Brand setup"
-        description="Post campaigns, load leads, and pay SDRs for verified meetings."
-      >
-        <div className="stack" style={{ gap: '0.75rem' }}>
-          <div className="brand-create-row">
-            <div className="brand-create-fields">
-              <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-                Brand name
-                <input
-                  className="field"
-                  value={brandName}
-                  onChange={(e) => setBrandName(e.target.value)}
-                  placeholder="Acme Outreach"
-                  required
-                  style={{ marginTop: '0.35rem' }}
-                />
-              </label>
-              <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-                Website URL
-                <input
-                  className="field"
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="https://acme.com"
-                  inputMode="url"
-                  required
-                  style={{ marginTop: '0.35rem' }}
-                />
-              </label>
-            </div>
-
-            <div className="brand-create-logo">
-              <span className="muted" style={{ fontSize: '0.85rem' }}>
-                Logo
-              </span>
-              <input
-                ref={fileRef}
-                id={fileInputId}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-                className="sr-only"
-                onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
-              />
-              <label
-                htmlFor={fileInputId}
-                className={`brand-logo-field${showPreview ? ' is-filled' : ''}${logoBusy ? ' is-loading' : ''}`}
-                title="Upload logo or wait for auto-fill from URL"
-              >
-                {showPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logoUrl!}
-                    alt=""
-                    className="brand-logo-field__img"
-                    onError={() => setLogoBroken(true)}
+        <div className="onboarding-brand__card">
+          <div className="stack" style={{ gap: '0.75rem' }}>
+            <div className="brand-create-row">
+              <div className="brand-create-fields">
+                <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+                  Brand name
+                  <input
+                    className="field"
+                    value={brandName}
+                    onChange={(e) => setBrandName(e.target.value)}
+                    placeholder="Acme Outreach"
+                    required
+                    style={{ marginTop: '0.35rem' }}
                   />
-                ) : (
-                  <span className="brand-logo-field__placeholder">
-                    {logoBusy ? '…' : '+'}
-                  </span>
-                )}
-              </label>
-              <div className="brand-logo-field__meta">
-                {logoSource === 'auto' ? (
-                  <button
-                    type="button"
-                    className="soft-link"
-                    style={{
-                      fontSize: '0.75rem',
-                      background: 'none',
-                      border: 0,
-                      padding: 0,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    Replace
-                  </button>
-                ) : logoSource === 'upload' ? (
-                  <button
-                    type="button"
-                    className="soft-link"
-                    style={{
-                      fontSize: '0.75rem',
-                      background: 'none',
-                      border: 0,
-                      padding: 0,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => {
-                      setLogoSource(null);
-                      setLogoUrl(null);
-                      setLogoBroken(false);
-                      if (fileRef.current) fileRef.current.value = '';
-                    }}
-                  >
-                    Use URL logo
-                  </button>
-                ) : (
-                  <span className="muted" style={{ fontSize: '0.72rem' }}>
-                    From URL
-                  </span>
-                )}
+                </label>
+                <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+                  Website URL
+                  <input
+                    className="field"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://acme.com"
+                    inputMode="url"
+                    required
+                    style={{ marginTop: '0.35rem' }}
+                  />
+                </label>
+              </div>
+
+              <div className="brand-create-logo">
+                <span className="muted" style={{ fontSize: '0.85rem' }}>
+                  Logo
+                </span>
+                <input
+                  ref={fileRef}
+                  id={fileInputId}
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  className="sr-only"
+                  onChange={(e) => void onPickFile(e.target.files?.[0] ?? null)}
+                />
+                <label
+                  htmlFor={fileInputId}
+                  className={`brand-logo-field${showPreview ? ' is-filled' : ''}${logoBusy ? ' is-loading' : ''}`}
+                  title="Upload logo or wait for auto-fill from URL"
+                >
+                  {showPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoUrl!}
+                      alt=""
+                      className="brand-logo-field__img"
+                      onError={() => setLogoBroken(true)}
+                    />
+                  ) : (
+                    <span className="brand-logo-field__placeholder">
+                      {logoBusy ? '…' : '+'}
+                    </span>
+                  )}
+                </label>
+                <div className="brand-logo-field__meta">
+                  {logoSource === 'auto' ? (
+                    <button
+                      type="button"
+                      className="soft-link"
+                      style={{
+                        fontSize: '0.75rem',
+                        background: 'none',
+                        border: 0,
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      Replace
+                    </button>
+                  ) : logoSource === 'upload' ? (
+                    <button
+                      type="button"
+                      className="soft-link"
+                      style={{
+                        fontSize: '0.75rem',
+                        background: 'none',
+                        border: 0,
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => {
+                        setLogoSource(null);
+                        setLogoUrl(null);
+                        setLogoBroken(false);
+                        if (fileRef.current) fileRef.current.value = '';
+                      }}
+                    >
+                      Use URL logo
+                    </button>
+                  ) : (
+                    <span className="muted" style={{ fontSize: '0.72rem' }}>
+                      From URL
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-            Short description
-            <textarea
-              className="field"
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What you sell and who you dial"
-              required
-              style={{ marginTop: '0.35rem' }}
-            />
-          </label>
-          <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-            Starter campaign title
-            <input
-              className="field"
-              value={campaignTitle}
-              onChange={(e) => setCampaignTitle(e.target.value)}
-              placeholder="Optional — defaults from brand name"
-              style={{ marginTop: '0.35rem' }}
-            />
-          </label>
-          <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
-            Pricing tier
-            <select
-              className="field"
-              value={pricingTier}
-              onChange={(e) => setPricingTier(e.target.value)}
-              style={{ marginTop: '0.35rem' }}
-            >
-              {CAMPAIGN_TIERS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label} · {t.subtitle}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="muted" style={{ fontSize: '0.85rem', display: 'block' }}>
+              Short description
+              <textarea
+                className="field"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What you sell and who you dial"
+                required
+                style={{ marginTop: '0.35rem' }}
+              />
+            </label>
 
-          <label
-            style={{
-              display: 'flex',
-              gap: '0.65rem',
-              alignItems: 'flex-start',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={fundWallet}
-              onChange={(e) => setFundWallet(e.target.checked)}
-              style={{ marginTop: 3 }}
-            />
-            <span style={{ fontSize: '0.9rem', color: 'var(--ink)', lineHeight: 1.45 }}>
-              Fund escrow wallet ($100) after setup — required before opening a live campaign.
-              You can skip and fund later from Brands.
-            </span>
-          </label>
-
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn"
-              disabled={busy || !brandName.trim() || !websiteUrl.trim() || !description.trim()}
-              onClick={submit}
-            >
-              {busy ? 'Creating…' : fundWallet ? 'Create & fund wallet' : 'Create brand'}
-            </button>
-            <Link href="/onboarding" className="btn-ghost">
-              Back
-            </Link>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || !brandName.trim() || !websiteUrl.trim() || !description.trim()}
+                onClick={submit}
+              >
+                {busy ? 'Creating…' : 'Create brand'}
+              </button>
+              <Link href="/onboarding" className="btn-ghost">
+                Back
+              </Link>
+            </div>
           </div>
         </div>
-      </Panel>
 
-      {msg && <p className={msg.includes('canceled') ? 'msg-ok' : 'msg-err'}>{msg}</p>}
+        {msg ? <p className="msg-err" style={{ textAlign: 'center' }}>{msg}</p> : null}
+      </div>
     </main>
   );
 }

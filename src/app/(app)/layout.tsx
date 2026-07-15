@@ -8,6 +8,7 @@ import { loadShellBootstrap } from '@/lib/shell-bootstrap';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const shell = await loadShellBootstrap();
   const pathname = (await headers()).get('x-ccr-pathname') || '';
+  const isOnboarding = pathname.startsWith('/onboarding');
 
   if (shell?.accountRestricted && pathname && !pathname.startsWith('/restricted')) {
     redirect('/restricted');
@@ -27,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Suspense fallback={null}>
         <GrowthBootstrap />
       </Suspense>
-      <AppShell initial={shell}>{children}</AppShell>
+      {isOnboarding ? children : <AppShell initial={shell}>{children}</AppShell>}
     </>
   );
 }
