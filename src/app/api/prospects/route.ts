@@ -84,6 +84,11 @@ export async function GET(req: Request) {
         skip,
         ownerUserId:
           role === 'BRAND' || role === 'RECRUITER' ? profile.id : undefined,
+        // Shared practice queue: fixed window of 8 per SDR (no catalog paging).
+        practiceQueueUserId:
+          !brandId && role !== 'BRAND' && role !== 'RECRUITER'
+            ? profile.id
+            : undefined,
       });
       const filtered = status
         ? prospects.filter((p) => p.status === status)

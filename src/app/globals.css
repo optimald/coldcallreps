@@ -2405,6 +2405,68 @@ textarea {
     var(--bg);
 }
 
+/* Clerk primary must keep on-accent text (global button inherit broke contrast). */
+.cl-formButtonPrimary,
+.cl-formButtonPrimary.cl-button {
+  background-color: var(--accent) !important;
+  color: var(--on-accent) !important;
+  box-shadow: none !important;
+}
+
+.cl-formButtonPrimary:hover,
+.cl-formButtonPrimary.cl-button:hover {
+  filter: brightness(1.06);
+  color: var(--on-accent) !important;
+}
+
+/* Disabled primary: --on-accent is dark on bright teal — unreadable on a dimmed dark btn. */
+.cl-formButtonPrimary:disabled,
+.cl-formButtonPrimary.cl-button:disabled,
+.cl-formButtonPrimary[disabled] {
+  background-color: color-mix(in srgb, var(--ink) 14%, var(--bg-soft)) !important;
+  color: var(--muted) !important;
+  filter: none !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+}
+
+.cl-footerActionLink,
+.cl-formFieldAction {
+  color: var(--accent) !important;
+}
+
+/* "Secured by clerk" badge — Clerk defaults to near-black wordmark. */
+.cl-footer,
+.cl-internal-b3fm6y,
+[class*='cl-footer'] {
+  color: var(--muted) !important;
+}
+
+.cl-footer a,
+.cl-footer span,
+.cl-footer p,
+[class*='cl-footer'] a,
+[class*='cl-footer'] span,
+[class*='cl-footer'] p {
+  color: var(--muted) !important;
+}
+
+.cl-footer svg,
+[class*='cl-footer'] svg {
+  color: var(--muted) !important;
+  fill: currentColor !important;
+}
+
+.cl-footer svg path,
+[class*='cl-footer'] svg path {
+  fill: currentColor !important;
+}
+
+html[data-color-scheme='dark'] .cl-logoBox img,
+html[data-color-scheme='dark'] .cl-footer img {
+  filter: brightness(0) invert(0.72);
+}
+
 .auth-shell--wide {
   place-items: start center;
   padding-top: 3rem;

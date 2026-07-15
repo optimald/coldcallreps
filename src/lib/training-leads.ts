@@ -15,6 +15,9 @@ import {
 
 export const TRAINING_SOURCE = 'training' as const;
 
+/** Max practice leads shown in the SDR Call Queue (anti cherry-pick). */
+export const PRACTICE_QUEUE_LIMIT = 8;
+
 /** Synthetic owner for platform-seeded training prospects (not a Clerk login). */
 export const PLATFORM_SEED_USER_ID = 'platform_training_seed';
 
@@ -526,9 +529,12 @@ export async function listTrainingLeads(opts?: {
   skip?: number;
   /** Brand managers: platform demos (ownerId null) + their brands only. */
   ownerUserId?: string;
+  /**
+   * Cap + stable per-user window for the shared practice queue.
+   * Prevents SDRs from paging/refreshing through the full catalog.
+   */
+  practiceQueueUserId?: string;
 }) {
-  const take = Math.min(opts?.take ?? 80, 200);
-  const skip = Math.max(opts?.skip ?? 0, 0);
   const where = {
     source: TRAINING_SOURCE,
     ...(opts?.brandId ? { brandId: opts.brandId } : {}),
@@ -542,22 +548,48 @@ export async function listTrainingLeads(opts?: {
       : {}),
   };
 
-  const [prospects, total] = await Promise.all([
-    prisma.prospect.findMany({
-      where,
-      orderBy: [{ brandId: 'asc' }, { companyName: 'asc' }],
-      take,
-      skip,
-      select: trainingLeadSelect,
-    }),
-    prisma.prospect.count({ where }),
-  ]);
+  const total = await prisma.prospect.count({ where });
+
+  let take = Math.min(opts?.take ?? 80, 200);
+  let skip = Math.max(opts?.skip ?? 0, 0);
+  let hasMore = false;
+
+  if (opts?.practiceQueueUserId && !opts.brandId) {
+    take = PRACTICE_QUEUE_LIMIT;
+    skip = practiceQueueOffset(opts.practiceQueueUserId, total, PRACTICE_QUEUE_LIMIT);
+    hasMore = false;
+  }
+
+  const prospects = await prisma.prospect.findMany({
+    where,
+    orderBy: [{ brandId: 'asc' }, { companyName: 'asc' }],
+    take,
+    skip,
+    select: trainingLeadSelect,
+  });
+
+  if (!opts?.practiceQueueUserId || opts.brandId) {
+    hasMore = skip + prospects.length < total;
+  }
 
   return {
     prospects,
-    total,
-    hasMore: skip + prospects.length < total,
+    total: opts?.practiceQueueUserId && !opts.brandId
+      ? Math.min(total, PRACTICE_QUEUE_LIMIT)
+      : total,
+    hasMore,
   };
+}
+
+/** Stable offset so the same SDR always sees the same 8 leads. */
+function practiceQueueOffset(userId: string, total: number, size: number): number {
+  if (total <= size) return 0;
+  let h = 2166136261;
+  for (let i = 0; i < userId.length; i++) {
+    h ^= userId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % (total - size + 1);
 }
 
 export type TrainingLeadRow = Awaited<ReturnType<typeof listTrainingLeads>>['prospects'][number];

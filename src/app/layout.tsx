@@ -71,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       appearance={{
         variables: {
           colorPrimary: 'var(--accent)',
+          colorTextOnPrimaryBackground: 'var(--on-accent)',
           colorBackground: 'var(--bg-elevated)',
           colorInputBackground: 'var(--bg-soft)',
           colorInputText: 'var(--ink)',
@@ -86,16 +87,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           card: {
             background: 'var(--bg-elevated)',
             border: '1px solid var(--line)',
-            boxShadow: 'var(--panel-shadow)',
+            boxShadow: 'none',
           },
           formButtonPrimary: {
-            background: 'var(--accent)',
+            backgroundColor: 'var(--accent)',
             color: 'var(--on-accent)',
             borderRadius: '2px',
             fontWeight: '700',
             letterSpacing: '0.04em',
             textTransform: 'uppercase',
-            boxShadow: 'var(--btn-glow)',
+            boxShadow: 'none',
           },
           formFieldInput: {
             background: 'var(--bg-soft)',
@@ -104,6 +105,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           },
           footerActionLink: {
             color: 'var(--accent)',
+          },
+          footer: {
+            color: 'var(--muted)',
+          },
+          footerPagesLink: {
+            color: 'var(--muted)',
           },
         },
       }}

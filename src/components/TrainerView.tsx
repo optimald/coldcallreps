@@ -25,7 +25,7 @@ import {
 type Difficulty = 'easy' | 'medium' | 'hard';
 type LeadTab = 'training' | 'brand';
 
-const TRAINING_PAGE_SIZE = 80;
+const TRAINING_PAGE_SIZE = 8;
 
 interface ProspectRow {
   id: string;
@@ -108,6 +108,8 @@ export default function TrainerView() {
   const [trainingLeads, setTrainingLeads] = useState<ProspectRow[]>([]);
   const [trainingHasMore, setTrainingHasMore] = useState(false);
   const [brandLeads, setBrandLeads] = useState<ProspectRow[]>([]);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const queueRetryRef = useRef(false);
   const [leadTab, setLeadTab] = useState<LeadTab>('training');
   const [prospectId, setProspectId] = useState<string>('');
   const [brandPacks, setBrandPacks] = useState<
@@ -222,44 +224,60 @@ export default function TrainerView() {
   });
 
   const loadLeads = useCallback(async () => {
-    const [trainingRes, brandRes] = await Promise.all([
-      fetch(`/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0`),
-      fetch(`/api/prospects?dialable=1&limit=${TRAINING_PAGE_SIZE}`),
-    ]);
+    setQueueLoading(true);
+    try {
+      const [trainingRes, brandRes] = await Promise.all([
+        fetch(`/api/prospects?training=1&limit=${TRAINING_PAGE_SIZE}&skip=0`),
+        fetch(`/api/prospects?dialable=1&limit=${TRAINING_PAGE_SIZE}`),
+      ]);
 
-    if (trainingRes.ok) {
-      const data = await trainingRes.json();
-      setTrainingLeads(
-        (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
-      );
-      setTrainingHasMore(Boolean(data.hasMore));
-    } else {
-      const legacy = await fetch('/api/prospects/search');
-      if (legacy.ok) {
-        const data = await legacy.json();
-        const rows = (data.prospects || [])
-          .map((p: Record<string, unknown>) => mapLead(p, 'training'))
-          .slice(0, TRAINING_PAGE_SIZE);
-        setTrainingLeads(rows);
+      if (trainingRes.ok) {
+        const data = await trainingRes.json();
+        setTrainingLeads(
+          (data.prospects || []).map((p: Record<string, unknown>) => mapLead(p, 'training'))
+        );
         setTrainingHasMore(false);
+      } else {
+        const legacy = await fetch('/api/prospects/search');
+        if (legacy.ok) {
+          const data = await legacy.json();
+          const rows = (data.prospects || [])
+            .map((p: Record<string, unknown>) => mapLead(p, 'training'))
+            .slice(0, TRAINING_PAGE_SIZE);
+          setTrainingLeads(rows);
+          setTrainingHasMore(false);
+        }
       }
-    }
 
-    if (brandRes.ok) {
-      const data = await brandRes.json();
-      const rows = (data.prospects || [])
-        .map((p: Record<string, unknown>) => mapLead(p, 'brand'))
-        .slice(0, TRAINING_PAGE_SIZE);
-      setBrandLeads(rows);
-      if (rows.length > 0 && searchParams.get('tab') === 'brand') {
-        setLeadTab('brand');
+      if (brandRes.ok) {
+        const data = await brandRes.json();
+        const rows = (data.prospects || [])
+          .map((p: Record<string, unknown>) => mapLead(p, 'brand'))
+          .slice(0, TRAINING_PAGE_SIZE);
+        setBrandLeads(rows);
+        if (rows.length > 0 && searchParams.get('tab') === 'brand') {
+          setLeadTab('brand');
+        }
       }
+    } finally {
+      setQueueLoading(false);
     }
   }, [searchParams]);
 
   useEffect(() => {
     void loadLeads();
   }, [loadLeads]);
+
+  // First visit may seed demos server-side — retry once if the queue is still empty.
+  useEffect(() => {
+    if (queueLoading || leadTab !== 'training') return;
+    if (trainingLeads.length > 0 || queueRetryRef.current) return;
+    queueRetryRef.current = true;
+    const t = window.setTimeout(() => {
+      void loadLeads();
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [queueLoading, leadTab, trainingLeads.length, loadLeads]);
 
   useEffect(() => {
     const fromUrl = searchParams.get('prospectId');
@@ -1183,21 +1201,27 @@ export default function TrainerView() {
             {queue.length === 0 ? (
               <div className="cc-desk__gate">
                 <p className="cc-desk__gate-title">
-                  {leadTab === 'brand' ? 'No brand leads' : 'No practice leads'}
+                  {leadTab === 'brand'
+                    ? 'No brand leads'
+                    : queueLoading
+                      ? 'Loading practice leads'
+                      : 'No practice leads'}
                 </p>
                 <p className="cc-desk__gate-desc">
                   {leadTab === 'brand'
                     ? 'Accepted campaign leads appear here for AI practice personalization.'
-                    : 'Loading practice leads… If this stays empty, hit Refresh or pick a brand playbook under Configure practice.'}
+                    : queueLoading
+                      ? 'Preparing your practice queue…'
+                      : 'Practice leads did not load. Try again, or pick a brand playbook under Configure practice.'}
                 </p>
                 {leadTab === 'brand' ? (
                   <Link href="/gigs" className="btn-ghost">
                     Browse brand deals →
                   </Link>
-                ) : (
+                ) : queueLoading ? null : (
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <button type="button" className="btn" onClick={() => void loadLeads()}>
-                      Refresh
+                      Try again
                     </button>
                     <button
                       type="button"
