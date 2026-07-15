@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import BrandMark from '@/components/BrandMark';
 import { SIGNUP_HOME_KEY, SIGNUP_PATHS, SIGNUP_ROLE_KEY, type SignupPath } from '@/lib/signup-paths';
 
@@ -10,7 +9,6 @@ import { SIGNUP_HOME_KEY, SIGNUP_PATHS, SIGNUP_ROLE_KEY, type SignupPath } from 
  * SDR unlocks immediately; Brand continues to brand creation.
  */
 export default function OnboardingChoosePage() {
-  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
@@ -22,11 +20,12 @@ export default function OnboardingChoosePage() {
         const repDone = Boolean(d.roleMode.modes.REP?.onboarded);
         const brandDone = Boolean(d.roleMode.modes.BRAND?.onboarded);
         if (repDone || brandDone) {
-          router.replace('/dashboard');
+          // Hard nav — soft replace from full-screen onboarding can leave the desk without chrome.
+          window.location.replace('/dashboard');
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, []);
 
   async function choose(path: SignupPath) {
     setBusy(path.id);

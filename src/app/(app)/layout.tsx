@@ -8,7 +8,6 @@ import { loadShellBootstrap } from '@/lib/shell-bootstrap';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const shell = await loadShellBootstrap();
   const pathname = (await headers()).get('x-ccr-pathname') || '';
-  const isOnboarding = pathname.startsWith('/onboarding');
 
   if (shell?.accountRestricted && pathname && !pathname.startsWith('/restricted')) {
     redirect('/restricted');
@@ -23,12 +22,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect(shell.needsOnboardingPath);
   }
 
+  // Always mount AppShell so soft navigations off /onboarding keep desk chrome.
+  // AppShell hides sidebar/topbar on onboarding routes via pathname.
   return (
     <>
       <Suspense fallback={null}>
         <GrowthBootstrap />
       </Suspense>
-      {isOnboarding ? children : <AppShell initial={shell}>{children}</AppShell>}
+      <AppShell initial={shell}>{children}</AppShell>
     </>
   );
 }

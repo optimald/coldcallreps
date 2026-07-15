@@ -2,19 +2,20 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import BrandMark from '@/components/BrandMark';
 import { fileToLogoDataUrl } from '@/lib/brand-logo-upload';
 
 type MePrefill = {
   displayName?: string | null;
   roleMode?: {
-    modes?: { BRAND?: { onboarded?: boolean } };
+    modes?: {
+      REP?: { onboarded?: boolean };
+      BRAND?: { onboarded?: boolean };
+    };
   };
 };
 
 export default function OnboardingBrandClient() {
-  const router = useRouter();
   const fileInputId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [brandName, setBrandName] = useState('');
@@ -26,6 +27,8 @@ export default function OnboardingBrandClient() {
   const [logoBroken, setLogoBroken] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  // Switch-to-Brand from an existing desk → Back goes home. First-time chooser → Back to /onboarding.
+  const [backHref, setBackHref] = useState('/onboarding');
 
   useEffect(() => {
     fetch('/api/me')
@@ -33,15 +36,17 @@ export default function OnboardingBrandClient() {
       .then((d: MePrefill | null) => {
         if (!d) return;
         if (d.roleMode?.modes?.BRAND?.onboarded) {
-          router.replace('/dashboard');
+          window.location.replace('/dashboard');
           return;
         }
+        const alreadyHasDesk = Boolean(d.roleMode?.modes?.REP?.onboarded);
+        setBackHref(alreadyHasDesk ? '/dashboard' : '/onboarding');
         if (d.displayName) {
           setBrandName((n) => n || `${d.displayName}'s brand`);
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const trimmed = websiteUrl.trim();
@@ -278,9 +283,9 @@ export default function OnboardingBrandClient() {
               >
                 {busy ? 'Creating…' : 'Create brand'}
               </button>
-              <Link href="/onboarding" className="btn-ghost">
-                Back
-              </Link>
+            <Link href={backHref} className="btn-ghost">
+              Back
+            </Link>
             </div>
           </div>
         </div>
