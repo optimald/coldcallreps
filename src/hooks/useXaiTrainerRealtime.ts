@@ -88,6 +88,10 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     const audioFlushReadyRef = useRef(false);
     const awaitingGatekeeperGreetingRef = useRef(false);
     const greetingDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const playbackDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const playbackDrainingRef = useRef(false);
+    const quietPollsRef = useRef(0);
+    const greetingPcmMsRef = useRef(0);
     const prospectSpeakingRef = useRef(false);
     const acceptProspectAudioRef = useRef(false);
     const recordingBlobRef = useRef<Blob | null>(null);
@@ -96,6 +100,22 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     const recordedChunksRef = useRef<Blob[]>([]);
 
     micEnabledRef.current = micEnabled;
+
+    const clearPlaybackDrain = useCallback(() => {
+        if (playbackDrainTimerRef.current) {
+            clearTimeout(playbackDrainTimerRef.current);
+            playbackDrainTimerRef.current = null;
+        }
+        playbackDrainingRef.current = false;
+        quietPollsRef.current = 0;
+    }, []);
+
+    const isPlaybackQueued = useCallback(() => {
+        const ctx = audioContextRef.current;
+        if (!ctx) return scheduledSourcesRef.current.length > 0;
+        const remainingMs = (nextPlayTimeRef.current - ctx.currentTime) * 1000;
+        return remainingMs > 60 || scheduledSourcesRef.current.length > 0;
+    }, []);
 
     const stopMediaRecorder = useCallback((): Promise<Blob | null> => {
         return new Promise((resolve) => {
@@ -147,6 +167,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     }, []);
 
     const interruptPlayback = useCallback(() => {
+        clearPlaybackDrain();
         scheduledSourcesRef.current.forEach((source) => {
             try {
                 source.stop();
@@ -159,7 +180,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         if (audioContextRef.current) {
             nextPlayTimeRef.current = audioContextRef.current.currentTime;
         }
-    }, []);
+    }, [clearPlaybackDrain]);
 
     const playPcm16Chunk = useCallback((base64: string) => {
         const ctx = audioContextRef.current;
@@ -186,6 +207,8 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         source.start(start);
         nextPlayTimeRef.current = start + buffer.duration;
         scheduledSourcesRef.current.push(source);
+        // New audio arrived — reset quiet streak used by drain polls
+        quietPollsRef.current = 0;
 
         source.onended = () => {
             scheduledSourcesRef.current = scheduledSourcesRef.current.filter((s) => s !== source);
@@ -214,52 +237,93 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
     }, []);
 
     /**
+     * Keep half-duplex mic mute until scheduled Web Audio finishes.
+     * response.done / barge-in fire when TTS bytes are *sent*, not when they finish playing —
+     * opening the mic early lets speaker echo interruptPlayback() mid-sentence.
+     */
+    const beginPlaybackDrain = useCallback(
+        (opts?: { greeting?: boolean; pcmMsHint?: number; onDone?: () => void }) => {
+            if (playbackDrainTimerRef.current) {
+                clearTimeout(playbackDrainTimerRef.current);
+                playbackDrainTimerRef.current = null;
+            }
+            playbackDrainingRef.current = true;
+            quietPollsRef.current = 0;
+
+            const pcmHint = opts?.pcmMsHint ?? greetingPcmMsRef.current;
+            // After gatekeeper.ready the server already waited ~pcmMs; only need local queue drain.
+            // For mid-call prospect.done, hold roughly for remaining TTS.
+            const minHoldMs = opts?.greeting
+                ? Math.max(600, Math.min(2500, (pcmHint || 800)))
+                : Math.max(400, Math.min(8000, (pcmHint || 0) + 250));
+            const startedAt = Date.now();
+
+            const finish = () => {
+                playbackDrainTimerRef.current = null;
+                playbackDrainingRef.current = false;
+                quietPollsRef.current = 0;
+                prospectSpeakingRef.current = false;
+                setIsProspectSpeaking(false);
+                opts?.onDone?.();
+            };
+
+            const poll = () => {
+                const heldLongEnough = Date.now() - startedAt >= minHoldMs;
+                if (isPlaybackQueued()) {
+                    quietPollsRef.current = 0;
+                    playbackDrainTimerRef.current = setTimeout(poll, 100);
+                    return;
+                }
+                // Require sustained quiet so gaps between chunks don't open the mic early
+                quietPollsRef.current += 1;
+                if (!heldLongEnough || quietPollsRef.current < 4) {
+                    playbackDrainTimerRef.current = setTimeout(poll, 100);
+                    return;
+                }
+                finish();
+            };
+
+            // Hard ceiling — never mute forever if the queue glitches
+            const ceilingMs = Math.max(minHoldMs + 1500, Math.min(14000, (pcmHint || 4000) + 2500));
+            setTimeout(() => {
+                if (playbackDrainingRef.current) finish();
+            }, ceilingMs);
+
+            poll();
+        },
+        [isPlaybackQueued]
+    );
+
+    /**
      * response.done / gatekeeper.ready fire when TTS bytes are *sent*, not when
      * Web Audio finished playing. Opening the mic early lets speaker echo
      * trigger barge-in and interruptPlayback() mid-greeting.
      */
     const releaseGreetingMic = useCallback(
         (pcmMsHint?: number) => {
+            if (typeof pcmMsHint === 'number' && pcmMsHint > 0) {
+                greetingPcmMsRef.current = pcmMsHint;
+            }
             if (greetingDrainTimerRef.current) {
                 clearTimeout(greetingDrainTimerRef.current);
                 greetingDrainTimerRef.current = null;
             }
+            if (!awaitingGatekeeperGreetingRef.current) return;
 
-            const finish = () => {
-                greetingDrainTimerRef.current = null;
-                if (!awaitingGatekeeperGreetingRef.current) return;
-                awaitingGatekeeperGreetingRef.current = false;
-                earlyAudioBufferRef.current = [];
-                audioFlushReadyRef.current = true;
-                flushEarlyAudio();
-            };
-
-            const poll = () => {
-                const ctx = audioContextRef.current;
-                if (!ctx) {
-                    finish();
-                    return;
-                }
-                const remainingMs = Math.max(
-                    0,
-                    (nextPlayTimeRef.current - ctx.currentTime) * 1000
-                );
-                if (remainingMs <= 80 && scheduledSourcesRef.current.length === 0) {
-                    finish();
-                    return;
-                }
-                greetingDrainTimerRef.current = setTimeout(poll, 120);
-            };
-
-            // Fallback ceiling so a stuck queue can't mute the mic forever
-            const ceilingMs = Math.max(3000, Math.min(10000, (pcmMsHint || 4000) + 800));
-            setTimeout(() => {
-                if (awaitingGatekeeperGreetingRef.current) finish();
-            }, ceilingMs);
-
-            poll();
+            beginPlaybackDrain({
+                greeting: true,
+                // Server already held for pcmMs — only drain leftover Web Audio locally.
+                pcmMsHint: 800,
+                onDone: () => {
+                    if (!awaitingGatekeeperGreetingRef.current) return;
+                    awaitingGatekeeperGreetingRef.current = false;
+                    earlyAudioBufferRef.current = [];
+                    audioFlushReadyRef.current = true;
+                    flushEarlyAudio();
+                },
+            });
         },
-        [flushEarlyAudio]
+        [beginPlaybackDrain, flushEarlyAudio]
     );
 
     const startMicCapture = useCallback(async () => {
@@ -288,7 +352,9 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         processorRef.current = processor;
 
         processor.onaudioprocess = (event) => {
-            if (!micEnabledRef.current || prospectSpeakingRef.current) return;
+            if (!micEnabledRef.current) return;
+            // Half-duplex: mute uplink while prospect TTS is playing or draining
+            if (prospectSpeakingRef.current || playbackDrainingRef.current) return;
             // Don't uplink or buffer during forced gatekeeper greeting
             if (awaitingGatekeeperGreetingRef.current) return;
 
@@ -321,6 +387,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
             clearTimeout(greetingDrainTimerRef.current);
             greetingDrainTimerRef.current = null;
         }
+        clearPlaybackDrain();
         const recorder = mediaRecorderRef.current;
         if (recorder && recorder.state !== 'inactive') {
             try {
@@ -349,6 +416,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         audioFlushReadyRef.current = false;
         earlyAudioBufferRef.current = [];
         awaitingGatekeeperGreetingRef.current = false;
+        greetingPcmMsRef.current = 0;
 
         if (audioContextRef.current) {
             audioContextRef.current.close().catch(() => {});
@@ -361,7 +429,7 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
         setIsUserSpeaking(false);
         setPhase('prospect');
         setTwoStage(false);
-    }, [interruptPlayback, stopMicCapture]);
+    }, [clearPlaybackDrain, interruptPlayback, stopMicCapture]);
 
     const connect = useCallback(
         async (config: TrainerSessionConfig): Promise<boolean> => {
@@ -451,7 +519,9 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 if (msg.gatekeeperName) setGatekeeperName(msg.gatekeeperName);
                                 if (msg.decisionMakerName) setDecisionMakerName(msg.decisionMakerName);
                                 awaitingGatekeeperGreetingRef.current = !!msg.twoStage;
+                                greetingPcmMsRef.current = 0;
                                 earlyAudioBufferRef.current = [];
+                                clearPlaybackDrain();
                                 if (!msg.twoStage) {
                                     audioFlushReadyRef.current = true;
                                 }
@@ -483,30 +553,50 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
                                 }
                                 break;
                             case 'interrupt':
-                                // Never kill the forced gatekeeper intro for echo barge-in
-                                if (awaitingGatekeeperGreetingRef.current) break;
+                                // Never kill leftover TTS for echo barge-in while still draining
+                                if (
+                                    awaitingGatekeeperGreetingRef.current ||
+                                    playbackDrainingRef.current ||
+                                    isPlaybackQueued()
+                                ) {
+                                    break;
+                                }
                                 interruptPlayback();
                                 acceptProspectAudioRef.current = false;
                                 prospectSpeakingRef.current = false;
                                 setIsProspectSpeaking(false);
                                 break;
                             case 'prospect.speaking':
+                                clearPlaybackDrain();
                                 prospectSpeakingRef.current = true;
                                 acceptProspectAudioRef.current = true;
                                 setIsProspectSpeaking(true);
                                 break;
-                            case 'prospect.done':
-                                prospectSpeakingRef.current = false;
-                                // Keep accepting briefly; scheduled buffers still play out
-                                setIsProspectSpeaking(false);
-                                if (awaitingGatekeeperGreetingRef.current) {
-                                    releaseGreetingMic(
-                                        typeof msg.pcmMs === 'number' ? msg.pcmMs : undefined
-                                    );
+                            case 'prospect.done': {
+                                const pcmMs =
+                                    typeof msg.pcmMs === 'number' ? msg.pcmMs : undefined;
+                                if (typeof pcmMs === 'number' && pcmMs > 0) {
+                                    greetingPcmMsRef.current = pcmMs;
                                 }
+                                // Keep mic muted until local TTS queue drains — response.done
+                                // only means bytes were *sent*, not that audio finished playing.
+                                if (awaitingGatekeeperGreetingRef.current) {
+                                    // Wait for gatekeeper.ready (server pcm hold) before release;
+                                    // stash pcmMs so releaseGreetingMic has a good floor.
+                                    setIsProspectSpeaking(true);
+                                    prospectSpeakingRef.current = true;
+                                    break;
+                                }
+                                beginPlaybackDrain({ pcmMsHint: pcmMs });
                                 break;
+                            }
                             case 'user.speaking':
-                                if (awaitingGatekeeperGreetingRef.current) break;
+                                if (
+                                    awaitingGatekeeperGreetingRef.current ||
+                                    playbackDrainingRef.current
+                                ) {
+                                    break;
+                                }
                                 acceptProspectAudioRef.current = false;
                                 prospectSpeakingRef.current = false;
                                 setIsProspectSpeaking(false);
@@ -601,9 +691,12 @@ export function useXaiTrainerRealtime(options: UseXaiTrainerRealtimeOptions = {}
             }
         },
         [
+            beginPlaybackDrain,
+            clearPlaybackDrain,
             disconnect,
             flushEarlyAudio,
             interruptPlayback,
+            isPlaybackQueued,
             onCallEnded,
             onError,
             playPcm16Chunk,

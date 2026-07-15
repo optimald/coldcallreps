@@ -127,7 +127,8 @@ export class TrainerSession extends DurableObject<Env> {
 
   private openGreetingBargeIn(pcmMs: number) {
     if (this.greetingComplete || !this.xaiWs || !this.browserWs) return;
-    const holdMs = Math.max(2800, Math.min(9000, (pcmMs || 0) + 600));
+    // Hold until estimated playback finishes (+ slack). response.done is send-time, not play-time.
+    const holdMs = Math.max(3500, Math.min(12000, (pcmMs || 0) + 1000));
     console.log(
       `[Trainer Realtime] greeting audio committed — holding barge-in ${holdMs}ms (pcmMs=${pcmMs || 0})`
     );
@@ -770,6 +771,11 @@ export class TrainerSession extends DurableObject<Env> {
       // Ignore barge-in until greeting audio has had time to finish playing.
       if (!this.greetingComplete) {
         console.log('[Trainer Realtime] speech_started ignored (greeting still playing)');
+        try {
+          this.xaiWs?.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+        } catch {
+          /* ignore */
+        }
         return;
       }
       console.log('[Trainer Realtime] speech_started → interrupt');
