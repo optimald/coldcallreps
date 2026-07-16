@@ -16,6 +16,7 @@ import {
   downgradeBrandLeadPlan,
   grantLeadPack,
 } from '@/lib/lead-credits';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 async function markCampaignPayoutPaid(session: Stripe.Checkout.Session) {
   const payoutId = session.metadata?.payoutId;
@@ -93,6 +94,26 @@ async function markCampaignPayoutPaid(session: Stripe.Checkout.Session) {
       },
     });
     if (full) {
+      const { isFirstPayoutForRep } = await import('@/lib/posthog/analytics');
+      const firstPayout = await isFirstPayoutForRep(full.repUserId);
+      trackEvent(full.repUserId, 'payout_received', {
+        role: 'REP',
+        campaignId: full.campaignId,
+        payoutId: full.id,
+        netCents: full.netCents,
+        grossCents: full.grossCents,
+        isFirstPayout: firstPayout,
+        source: 'stripe_checkout',
+      });
+      trackEvent(full.brandUserId, 'payout_released', {
+        role: 'BRAND',
+        campaignId: full.campaignId,
+        payoutId: full.id,
+        repUserId: full.repUserId,
+        netCents: full.netCents,
+        grossCents: full.grossCents,
+        source: 'stripe_checkout',
+      });
       notifyAsync({
         event: 'payout.paid',
         recipient: {
@@ -133,6 +154,7 @@ async function syncConnectAccount(account: Stripe.Account) {
       },
     });
     if (status.payoutsEnabled && !before?.stripeConnectPayoutsEnabled) {
+      trackEvent(userId, 'stripe_connect_completed', { role: 'REP', source: 'stripe_webhook' });
       try {
         const { notifyAsync } = await import('@/lib/notifications');
         notifyAsync({
@@ -420,6 +442,22 @@ export async function POST(req: Request) {
             },
           });
           if (brand?.ownerId) {
+            trackEvent(brand.ownerId, 'wallet_funded', {
+              role: 'BRAND',
+              brandId,
+              amountCents,
+              campaignId: campaignId || null,
+              source: 'stripe_checkout',
+            });
+            if (campaignId) {
+              trackEvent(brand.ownerId, 'escrow_funded', {
+                role: 'BRAND',
+                brandId,
+                campaignId,
+                amountCents,
+                source: 'wallet_checkout',
+              });
+            }
             notifyAsync({
               event: 'wallet.funded',
               recipient: { userId: brand.ownerId },
@@ -448,6 +486,15 @@ export async function POST(req: Request) {
           stripeSessionId: session.id,
           note: `Purchased ${session.metadata.pack || 'lead pack'}`,
         });
+        const ownerId = session.metadata.userId;
+        if (ownerId) {
+          trackEvent(ownerId, 'lead_pack_purchased', {
+            role: 'BRAND',
+            brandId,
+            credits,
+            pack: session.metadata.pack || 'lead_pack',
+          });
+        }
       }
     } else if (
       session.mode === 'subscription' &&

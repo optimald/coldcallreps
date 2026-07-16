@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/roles';
 import { isCampaignDialEligible, practiceHref } from '@/lib/campaigns';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { assertCanApplyToCampaign } from '@/lib/apply-gate';
 import { notifyAsync } from '@/lib/notifications';
+import { trackEvent } from '@/lib/posthog/analytics';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST — SDR applies to an OPEN campaign after AI trainer gate.
@@ -73,6 +75,15 @@ export async function POST(
           forAudience: 'sdr',
         },
         idempotencyKey: `campaign.apply.blocked:${campaign.id}:${profile.id}:${gate.code}`,
+      });
+      trackEvent(profile.id, 'campaign_apply_blocked', {
+        role: 'REP',
+        campaignId: campaign.id,
+        brandId: campaign.brand.id,
+        code: gate.code,
+        sessionCount: gate.sessionCount,
+        bestScore: gate.bestScore,
+        certified: gate.certified,
       });
       return NextResponse.json(
         {
@@ -154,6 +165,25 @@ export async function POST(
           idempotencyKey: `campaign.application.submitted:${application.id}:${application.updatedAt.toISOString()}`,
         });
       }
+    }
+
+    trackEvent(profile.id, 'campaign_applied', {
+      role: 'REP',
+      campaignId: campaign.id,
+      campaignTitle: campaign.title,
+      brandId: campaign.brand.id,
+      applicationId: application.id,
+      isReapply: Boolean(existing),
+    });
+
+    if (campaign.brand.ownerId) {
+      trackEvent(campaign.brand.ownerId, 'sdr_application_received', {
+        role: 'BRAND',
+        campaignId: campaign.id,
+        brandId: campaign.brand.id,
+        applicationId: application.id,
+        sdrUserId: profile.id,
+      });
     }
 
     return NextResponse.json({

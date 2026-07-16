@@ -10,6 +10,7 @@ import {
   resolveBrandLogoFromWebsite,
 } from '@/lib/fetch-brand-logo';
 import { normalizeLogoUrlInput } from '@/lib/brand-logo-upload';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/onboarding/brand
@@ -133,6 +134,13 @@ export async function POST(req: Request) {
           forAudience: 'brand',
         },
         idempotencyKey: `welcome.brand:${profile.id}:${result.brand.id}`,
+      });
+
+      trackEvent(profile.id, 'onboarding_completed', {
+        role: 'BRAND',
+        brandId: result.brand.id,
+        brandSlug: result.brand.slug,
+        redirectTo: `/brands/${result.brand.slug}`,
       });
     }
 

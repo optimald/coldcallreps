@@ -5,6 +5,7 @@ import { releaseEscrowOutcome } from '@/lib/escrow';
 import { calcPayoutSplit, resolveClaimPayoutCents } from '@/lib/campaigns';
 import { PLATFORM_FEE_CAP_CENTS } from '@/lib/platform-fees';
 import { getStripe } from '@/lib/stripe';
+import { isFirstPayoutForRep, trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * Release escrow + attempt Connect transfer for a PASSED appointment claim.
@@ -192,10 +193,49 @@ export async function releaseAppointmentClaimPayout(claimId: string): Promise<{
         where: { id: claim.id },
         data: { status: 'PAID', paidAt: new Date() },
       });
+
+      const firstPayout = await isFirstPayoutForRep(claim.repUserId);
+      trackEvent(claim.repUserId, 'payout_received', {
+        role: 'REP',
+        campaignId: claim.campaignId,
+        claimId: claim.id,
+        netCents: split.netCents,
+        grossCents: split.grossCents,
+        isFirstPayout: firstPayout,
+      });
+      if (brandOwnerId) {
+        trackEvent(brandOwnerId, 'payout_released', {
+          role: 'BRAND',
+          campaignId: claim.campaignId,
+          claimId: claim.id,
+          repUserId: claim.repUserId,
+          netCents: split.netCents,
+          grossCents: split.grossCents,
+        });
+      }
+
       return { ok: true, claimStatus: 'PAID', payoutStatus: 'PAID' };
     } catch (e) {
+      const reason = e instanceof Error ? e.message : 'Connect transfer failed';
       console.warn('[claim-payout] Connect transfer failed — payout stays PENDING', e);
+      await prisma.campaignPayout.update({
+        where: { id: payout.id },
+        data: {
+          status: 'PENDING',
+          failureReason: reason.slice(0, 500),
+        },
+      });
+      payout = { ...payout, status: 'PENDING', failureReason: reason.slice(0, 500) };
     }
+  } else {
+    await prisma.campaignPayout.update({
+      where: { id: payout.id },
+      data: {
+        failureReason: rep?.stripeConnectAccountId
+          ? 'Connect payouts not enabled yet — retry after onboarding completes'
+          : 'SDR has not connected Stripe — retry after Connect onboarding',
+      },
+    });
   }
 
   return { ok: true, claimStatus: 'PASSED', payoutStatus: payout.status };

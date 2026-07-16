@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 export async function GET() {
   try {
@@ -31,6 +32,11 @@ export async function POST(req: Request) {
         hiringHeadline: headline ? String(headline).slice(0, 120) : null,
         hiringBio: bio ? String(bio).slice(0, 800) : null,
       },
+    });
+    trackEvent(profile.id, 'resume_updated', {
+      role: 'REP',
+      source: 'hiring_board',
+      openToWork: updated.hiringBoardOptIn,
     });
     return NextResponse.json({
       ok: true,

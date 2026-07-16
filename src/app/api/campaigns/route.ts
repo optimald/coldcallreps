@@ -24,6 +24,8 @@ import {
 } from '@/lib/campaign-tiers';
 import { lockEscrowForCampaign } from '@/lib/escrow';
 import { isBasePayCadence, PLATFORM_FEE_BPS } from '@/lib/platform-fees';
+import { parseCallingHoursBody } from '@/lib/calling-hours';
+import { brandCampaignCount, trackEvent } from '@/lib/posthog/analytics';
 
 async function serializeWithSpend<T extends { id: string }>(
   campaigns: T[],
@@ -403,6 +405,8 @@ export async function POST(req: Request) {
         ? Math.max(0, Math.round(Number(body.minPracticeSessions)))
         : DEFAULT_MIN_PRACTICE_SESSIONS;
 
+    const priorCampaignCount = await brandCampaignCount(brandId);
+
     const campaign = await prisma.campaign.create({
       data: {
         brandId,
@@ -463,6 +467,25 @@ export async function POST(req: Request) {
       },
     });
 
+    trackEvent(profile.id, 'campaign_created', {
+      role: 'BRAND',
+      campaignId: campaign.id,
+      brandId,
+      goalType,
+      earningsModel,
+      status: campaign.status,
+      budgetCents,
+    });
+
+    if (priorCampaignCount >= 1) {
+      trackEvent(profile.id, 'second_campaign_created', {
+        role: 'BRAND',
+        campaignId: campaign.id,
+        brandId,
+        campaignCount: priorCampaignCount + 1,
+      });
+    }
+
     if (status === 'OPEN') {
       try {
         await lockEscrowForCampaign({
@@ -482,6 +505,20 @@ export async function POST(req: Request) {
             playbook: { select: { id: true, title: true } },
             _count: { select: { applications: true } },
           },
+        });
+        trackEvent(profile.id, 'campaign_published', {
+          role: 'BRAND',
+          campaignId: opened.id,
+          brandId,
+          budgetCents,
+          escrowLockedCents: opened.escrowLockedCents,
+        });
+        trackEvent(profile.id, 'escrow_funded', {
+          role: 'BRAND',
+          campaignId: opened.id,
+          brandId,
+          amountCents: budgetCents,
+          source: 'campaign_create',
         });
         return NextResponse.json({
           campaign: serializeCampaign({

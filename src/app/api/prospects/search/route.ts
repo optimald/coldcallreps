@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { canManageBrandLeads } from '@/lib/brand-leads';
 import { searchMapsProspects } from '@/lib/maps/rapidapi';
 import { prisma } from '@/lib/prisma';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 export async function POST(req: Request) {
   try {
@@ -50,6 +51,16 @@ export async function POST(req: Request) {
       Number(maxResults),
       { noWebsiteOnly: Boolean(noWebsiteOnly) }
     );
+
+    trackEvent(profile.id, 'lead_search_started', {
+      role: 'BRAND',
+      brandId,
+      campaignId,
+      query: String(query).slice(0, 120),
+      location: String(location).slice(0, 120),
+      resultCount: results.length,
+      save: Boolean(save),
+    });
 
     let saved: { id: string; companyName: string; website: string | null }[] = [];
     if (save && results.length > 0) {

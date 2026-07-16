@@ -48,6 +48,11 @@ export async function GET(req: Request) {
     }
 
     await upsertGoogleCalendarConnection(profile.id, code);
+    const { trackEvent } = await import('@/lib/posthog/analytics');
+    trackEvent(profile.id, 'integration_connected', {
+      role: 'BRAND',
+      provider: 'google_calendar',
+    });
     return NextResponse.redirect(`${base}/integrations?connected=google_calendar`);
   } catch (error: any) {
     if (error.message === 'UNAUTHORIZED') {

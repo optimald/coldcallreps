@@ -8,6 +8,7 @@ import {
   setCallbackLock,
 } from '@/lib/brand-phone';
 import { applyDispositionFollowUp } from '@/lib/lead-queue';
+import { isFirstLiveCall, trackEvent, trackReturnSession } from '@/lib/posthog/analytics';
 
 /** POST — create call log before Device.connect; resolve brand pool CallerId for campaigns. */
 export async function POST(request: NextRequest) {
@@ -210,6 +211,25 @@ export async function POST(request: NextRequest) {
     if (prospectId && campaignId) {
       await setCallbackLock(prospectId, profile.id);
     }
+
+    const firstCall = await isFirstLiveCall(profile.id);
+    const lastCall = await prisma.callLog.findFirst({
+      where: { userId: profile.id, id: { not: log.id } },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    trackReturnSession(profile.id, lastCall?.createdAt ?? null, 'live_call', {
+      isFirstCall: firstCall,
+      campaignId: campaignId || null,
+    });
+    trackEvent(profile.id, 'live_call_started', {
+      role: 'REP',
+      callLogId: log.id,
+      campaignId: campaignId || null,
+      brandId,
+      prospectId: prospectId || null,
+      isFirstCall: firstCall,
+    });
 
     return NextResponse.json({
       callLogId: log.id,

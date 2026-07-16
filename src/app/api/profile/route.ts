@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { ensureRepProfile, checkRepHandleAvailable } from '@/lib/profile-slug';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 const MAX_FEATURED_CLIPS = 3;
 
@@ -130,6 +131,15 @@ export async function POST(req: Request) {
     }
 
     const refreshed = await prisma.userProfile.findUnique({ where: { id: profile.id } });
+
+    trackEvent(profile.id, 'resume_updated', {
+      role: 'REP',
+      hasHeadline: Boolean(refreshed?.hiringHeadline),
+      openToWork: refreshed?.hiringBoardOptIn ?? false,
+      featuredClips:
+        featuredClipIdsJSON != null ? JSON.parse(featuredClipIdsJSON).length : undefined,
+      slugChanged: Boolean(slug),
+    });
 
     return NextResponse.json({
       profile: rep,

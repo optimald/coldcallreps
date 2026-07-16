@@ -7,6 +7,7 @@ import {
   homeForMode,
   serializeUnlockedRoles,
 } from '@/lib/role-mode';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/onboarding/rep
@@ -102,6 +103,11 @@ export async function POST(req: Request) {
         },
         payload: { ctaUrl: '/gigs', forAudience: 'sdr' },
         idempotencyKey: `welcome.sdr:${profile.id}`,
+      });
+
+      trackEvent(profile.id, 'onboarding_completed', {
+        role: 'REP',
+        redirectTo: homeForMode('REP'),
       });
     }
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
+import { captureClientEvent } from '@/lib/posthog/client';
 import { EmptyState, PageHeader, Panel } from '@/components/ui/PagePrimitives';
 
 type Campaign = {
@@ -77,9 +78,21 @@ export default function GigsPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!loading && !trackedList.current) {
+      trackedList.current = true;
+      captureClientEvent('gig_viewed', {
+        role: 'REP',
+        surface: 'list',
+        openCount: campaigns.length,
+      });
+    }
+  }, [loading, campaigns.length]);
+
   async function apply(campaignId: string) {
     setBusyId(campaignId);
     setNotice(null);
+    captureClientEvent('gig_viewed', { role: 'REP', surface: 'apply', campaignId });
     const res = await fetch(`/api/campaigns/${campaignId}/apply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

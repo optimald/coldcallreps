@@ -8,6 +8,7 @@ import {
   priceIdForBrandLeadPlan,
   type BrandLeadPlanKey,
 } from '@/lib/product';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -95,6 +96,14 @@ export async function POST(req: Request) {
           leadPlan: planKey,
         },
       },
+    });
+
+    trackEvent(profile.id, 'subscription_checkout_started', {
+      role: 'BRAND',
+      checkoutKind: 'lead_plan',
+      brandId,
+      planKey,
+      interval,
     });
 
     return NextResponse.json({ url: session.url });

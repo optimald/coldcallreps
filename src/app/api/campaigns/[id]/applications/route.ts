@@ -10,6 +10,7 @@ import {
   notifyAsync,
   parseBrandDefaults,
 } from '@/lib/notifications';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /** Brand manager lists applicants. */
 export async function GET(
@@ -202,6 +203,22 @@ export async function PATCH(
       slug: campaign.brand.slug,
       logoUrl: campaign.brand.logoUrl,
     };
+
+    if (status === 'ACTIVE' && !wasAlreadyActive) {
+      trackEvent(app.user.id, 'campaign_accepted', {
+        role: 'REP',
+        campaignId: campaign.id,
+        brandId: campaign.brand.id,
+        applicationId: app.id,
+      });
+      trackEvent(profile.id, 'sdr_application_accepted', {
+        role: 'BRAND',
+        campaignId: campaign.id,
+        brandId: campaign.brand.id,
+        applicationId: app.id,
+        sdrUserId: app.user.id,
+      });
+    }
 
     if (sendEmail && status === 'ACTIVE') {
       notifyAsync({

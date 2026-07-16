@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/roles';
 import { auditAppointmentClaim } from '@/lib/appointment-audit';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/campaigns/[id]/claims
@@ -166,6 +167,24 @@ export async function POST(
     const paid = await releaseAppointmentClaimPayout(claim.id);
     if (!paid.ok) {
       console.warn('[claims] auto payout', paid.error);
+    }
+
+    trackEvent(profile.id, 'appointment_claimed', {
+      role: 'REP',
+      campaignId,
+      claimId: claim.id,
+      auditScore: audit.score,
+      brandId: campaign.brand.id,
+    });
+    if (campaign.brand.ownerId) {
+      trackEvent(campaign.brand.ownerId, 'appointment_verified', {
+        role: 'BRAND',
+        campaignId,
+        claimId: claim.id,
+        repUserId: profile.id,
+        auditScore: audit.score,
+        brandId: campaign.brand.id,
+      });
     }
 
     const { notifyAsync } = await import('@/lib/notifications');

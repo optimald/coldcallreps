@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { requireUser } from '@/lib/auth';
 import { PLAN, priceIdForTier, type PaidPlanKey } from '@/lib/product';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -95,6 +96,14 @@ export async function POST(req: Request) {
         interval,
         ...(tier === 'TEAM' ? { seats: String(seats) } : {}),
       },
+    });
+
+    trackEvent(profile.id, 'subscription_checkout_started', {
+      role: 'REP',
+      checkoutKind: 'subscription',
+      tier,
+      interval,
+      seats: tier === 'TEAM' ? seats : 1,
     });
 
     return NextResponse.json({ url: session.url });

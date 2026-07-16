@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { requireUser } from '@/lib/auth';
 import { MINUTE_PACKS, priceIdForPack, type MinutePackKey } from '@/lib/product';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -73,6 +74,14 @@ export async function POST(req: Request) {
         pack: pack.key,
         target,
       },
+    });
+
+    trackEvent(profile.id, 'subscription_checkout_started', {
+      role: 'REP',
+      checkoutKind: 'minute_pack',
+      pack: pack.key,
+      minutes: pack.minutes,
+      target,
     });
 
     return NextResponse.json({ url: session.url });

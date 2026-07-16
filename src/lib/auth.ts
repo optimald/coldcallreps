@@ -5,6 +5,7 @@ import { TRIAL_MINUTES } from '@/lib/product';
 import { effectiveRole, isSuperadmin, type AppRole } from '@/lib/roles';
 import { assertOps, isOpsStaff, type OpsCapability } from '@/lib/admin-ops';
 import { ensureRepProfile } from '@/lib/profile-slug';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function makeReferralCode(userId: string): string {
   const suffix = userId.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
@@ -114,6 +115,14 @@ export async function requireUser(opts?: {
     (profile.accountStatus === 'SUSPENDED' || profile.accountStatus === 'BANNED')
   ) {
     throw new Error('ACCOUNT_RESTRICTED');
+  }
+
+  if (createdProfile) {
+    trackEvent(profile.id, 'profile_created', {
+      role: profile.platformRole === 'BRAND' || profile.platformRole === 'RECRUITER' ? 'BRAND' : 'REP',
+      plan: profile.plan,
+      referredByCode: profile.referredByCode,
+    });
   }
 
   return profile;

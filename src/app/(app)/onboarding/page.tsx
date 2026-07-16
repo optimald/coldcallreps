@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import BrandMark from '@/components/BrandMark';
 import { SIGNUP_HOME_KEY, SIGNUP_PATHS, SIGNUP_ROLE_KEY, type SignupPath } from '@/lib/signup-paths';
+import { captureClientEvent } from '@/lib/posthog/client';
 
 /**
  * Post-signup account type chooser — SDR vs Brand.
@@ -30,6 +31,7 @@ export default function OnboardingChoosePage() {
   async function choose(path: SignupPath) {
     setBusy(path.id);
     setMsg('');
+    captureClientEvent('onboarding_role_selected', { role: path.role });
     try {
       sessionStorage.setItem(SIGNUP_ROLE_KEY, path.role);
       sessionStorage.setItem(SIGNUP_HOME_KEY, path.home);

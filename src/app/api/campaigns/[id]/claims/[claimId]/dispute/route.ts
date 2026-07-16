@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/roles';
 import { writeAudit } from '@/lib/audit';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 type Ctx = { params: Promise<{ id: string; claimId: string }> };
 
@@ -154,6 +155,15 @@ export async function POST(req: Request, ctx: Ctx) {
           forAudience: 'sdr',
         },
         idempotencyKey: `claim.dispute:brand:${claim.id}`,
+      });
+
+      trackEvent(profile.id, 'payout_disputed', {
+        role: 'BRAND',
+        campaignId,
+        claimId: claim.id,
+        payoutId: payout.id,
+        repUserId: claim.repUserId,
+        source: 'claim_dispute',
       });
 
       return NextResponse.json({

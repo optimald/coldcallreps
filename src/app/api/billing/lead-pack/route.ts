@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageBrand } from '@/lib/roles';
 import { LEAD_PACKS, priceIdForLeadPack, type LeadPackKey } from '@/lib/product';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -81,6 +82,14 @@ export async function POST(req: Request) {
         pack: pack.key,
         credits: String(pack.credits),
       },
+    });
+
+    trackEvent(profile.id, 'subscription_checkout_started', {
+      role: 'BRAND',
+      checkoutKind: 'lead_pack',
+      brandId,
+      pack: pack.key,
+      credits: pack.credits,
     });
 
     return NextResponse.json({ url: session.url });

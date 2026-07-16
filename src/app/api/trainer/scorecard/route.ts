@@ -10,8 +10,10 @@ import {
   VERIFY_SCORE_THRESHOLD,
 } from '@/lib/integrity-gate';
 import { dispatchWebhooks } from '@/lib/webhooks';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { deductMinutes, getMinuteBalance } from '@/lib/minutes';
+import { captureException } from '@/lib/observability';
+import { PRACTICE_GATE_SCORE, trackEvent, trackStreakMilestone } from '@/lib/posthog/analytics';
 
 const SCORING_RUBRIC = `
 You are an expert sales coach evaluating a cold call transcript.
@@ -309,7 +311,10 @@ export async function POST(req: Request) {
 
     const { savedSession, deducted } = txResult;
 
+    trackStreakMilestone(profile.id, streak);
+
     // Auto-verify: only truly clean sessions (null or empty flags) count
+    let becameVerified = false;
     if (!blocked && overallScore >= VERIFY_SCORE_THRESHOLD && !integrityFlags.length) {
       const rep = await prisma.repProfile.findUnique({ where: { userId: profile.id } });
       if (rep && !rep.verified) {
@@ -326,8 +331,17 @@ export async function POST(req: Request) {
             where: { id: rep.id },
             data: { verified: true },
           });
+          becameVerified = true;
         }
       }
+    }
+
+    if (becameVerified) {
+      trackEvent(profile.id, 'rep_verified', {
+        role: 'REP',
+        sessionId: savedSession.id,
+        overallScore,
+      });
     }
 
     const awards = await applyPostSessionAwards({
@@ -352,6 +366,31 @@ export async function POST(req: Request) {
         blocked,
       },
     });
+
+    trackEvent(profile.id, 'practice_session_completed', {
+      role: 'REP',
+      sessionId: savedSession.id,
+      overallScore,
+      focusArea,
+      duration: Number(duration || 0),
+      isFirstSession: priorSessionCount === 0,
+      blocked,
+      clearedGate: !blocked && overallScore >= PRACTICE_GATE_SCORE,
+      pointsEarned,
+      brandId: trustedBrandId,
+      packId: trustedPackId,
+    });
+
+    if (!blocked && overallScore >= PRACTICE_GATE_SCORE) {
+      trackEvent(profile.id, 'practice_gate_cleared', {
+        role: 'REP',
+        sessionId: savedSession.id,
+        overallScore,
+        focusArea,
+        brandId: trustedBrandId,
+        packId: trustedPackId,
+      });
+    }
 
     return NextResponse.json({
       scorecard,

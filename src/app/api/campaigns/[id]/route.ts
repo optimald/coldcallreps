@@ -14,6 +14,11 @@ import { shouldAutoDeactivate, statusWhenActivating } from '@/lib/campaign-sched
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { lockEscrowForCampaign } from '@/lib/escrow';
 import { notifyAsync, notifyCampaignSdrs } from '@/lib/notifications';
+import { trackEvent } from '@/lib/posthog/analytics';
+import {
+  DEFAULT_CALLING_TIMEZONE,
+  normalizeCallingHoursMinutes,
+} from '@/lib/calling-hours';
 
 const campaignInclude = {
   brand: { select: { id: true, name: true, slug: true, logoUrl: true } },
@@ -75,6 +80,15 @@ export async function GET(
 
     const spend = await loadOneCampaignSpend(campaign.id);
     const { applications, brand, ...rest } = campaign;
+    if (!manage) {
+      trackEvent(profile.id, 'gig_viewed', {
+        role: 'REP',
+        campaignId: campaign.id,
+        brandId: brand.id,
+        campaignStatus: campaign.status,
+        hasApplication,
+      });
+    }
     return NextResponse.json({
       campaign: serializeCampaign({
         ...rest,
@@ -478,6 +492,13 @@ export async function PATCH(
     const nextStatus = campaign.status;
 
     if (nextStatus === 'OPEN' && prevStatus !== 'OPEN') {
+      trackEvent(profile.id, 'campaign_published', {
+        role: 'BRAND',
+        campaignId: id,
+        brandId: existing.brandId,
+        budgetCents: campaign.budgetCents,
+        escrowLockedCents: campaign.escrowLockedCents,
+      });
       void notifyCampaignSdrs({
         campaignId: id,
         event: 'campaign.opened',
@@ -506,6 +527,11 @@ export async function PATCH(
         });
       }
     } else if (nextStatus === 'PAUSED' && prevStatus === 'OPEN') {
+      trackEvent(profile.id, 'campaign_paused', {
+        role: 'BRAND',
+        campaignId: id,
+        brandId: existing.brandId,
+      });
       void notifyCampaignSdrs({
         campaignId: id,
         event: 'campaign.paused',

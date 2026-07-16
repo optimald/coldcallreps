@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { captureClientEvent } from '@/lib/posthog/client';
 import Link from 'next/link';
 import { useClerk } from '@clerk/nextjs';
 import { PLAN, REFERRAL_BONUS_MINUTES, REFERRAL_REWARD_LABEL } from '@/lib/product';
@@ -79,6 +80,7 @@ export default function SettingsPage() {
   async function copyText(text: string, kind: 'code' | 'link') {
     try {
       await navigator.clipboard.writeText(text);
+      captureClientEvent('referral_shared', { kind, role: 'REP' });
       setCopied(kind);
       window.setTimeout(() => setCopied(null), 1600);
     } catch {

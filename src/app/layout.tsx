@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import PostHogProvider from '@/components/PostHogProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import ThemedClerkProvider from '@/components/ThemedClerkProvider';
 import './globals.css';
@@ -81,8 +82,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <ThemeProvider>
           <ThemedClerkProvider>
-            <GoogleAnalytics />
-            {children}
+            <PostHogProvider>
+              <GoogleAnalytics />
+              {children}
+            </PostHogProvider>
           </ThemedClerkProvider>
         </ThemeProvider>
       </body>

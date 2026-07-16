@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/roles';
 import { getOrCreateBrandWallet, lockEscrowForCampaign } from '@/lib/escrow';
 import { serializeCampaign } from '@/lib/campaigns';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/campaigns/[id]/escrow
@@ -77,6 +78,13 @@ export async function POST(
     }
 
     const spend = await loadOneCampaignSpend(id);
+    trackEvent(profile.id, 'escrow_funded', {
+      role: 'BRAND',
+      campaignId: id,
+      brandId: campaign.brandId,
+      amountCents,
+      source: 'escrow_allocate',
+    });
     return NextResponse.json({
       campaign: serializeCampaign({ ...updated, ...spend }),
       notice: `Locked $${(amountCents / 100).toFixed(0)} to this campaign.`,

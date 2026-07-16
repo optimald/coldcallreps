@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { newGateJti, signGateToken, verifyGateToken } from '@/lib/gate-token';
 import { createMinuteHold, getMinuteBalance, markHoldStarted } from '@/lib/minutes';
 import { prisma } from '@/lib/prisma';
+import { captureException } from '@/lib/observability';
+import { isFirstTrainerSession, trackEvent, trackReturnSession } from '@/lib/posthog/analytics';
 
 /**
  * Pre-call gate: reserves 1 minute via MinuteHold + signed token.
@@ -125,6 +127,18 @@ export async function POST(req: Request) {
       j: jti,
       brandId,
       packId,
+    });
+
+    const firstSession = await isFirstTrainerSession(profile.id);
+    trackReturnSession(profile.id, profile.lastSessionDate, 'practice', {
+      isFirstSession: firstSession,
+    });
+    trackEvent(profile.id, 'practice_session_started', {
+      role: 'REP',
+      brandId,
+      packId,
+      isFirstSession: firstSession,
+      minutesRemaining: held.available,
     });
 
     return NextResponse.json({

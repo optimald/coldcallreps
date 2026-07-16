@@ -7,6 +7,7 @@ import {
   createConnectOnboardingLink,
   getStripe,
 } from '@/lib/stripe';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 function serializeConnect(profile: {
   stripeConnectAccountId: string | null;
@@ -55,6 +56,9 @@ export async function GET() {
               stripeConnectPayoutsEnabled: status.payoutsEnabled,
             },
           });
+          if (!wasReady && updated.stripeConnectPayoutsEnabled) {
+            trackEvent(profile.id, 'stripe_connect_completed', { role: 'REP' });
+          }
           return NextResponse.json({ connect: serializeConnect(updated) });
         }
       } catch (e) {
@@ -142,6 +146,13 @@ export async function POST(req: Request) {
       returnPath,
       refreshPath,
     });
+    if (startedConnect || action === 'onboard') {
+      trackEvent(profile.id, 'stripe_connect_started', {
+        role: 'REP',
+        action,
+        isNewAccount: startedConnect,
+      });
+    }
     return NextResponse.json({
       url: link.url,
       connect: serializeConnect({

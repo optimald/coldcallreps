@@ -156,7 +156,14 @@ export async function completeHubspotOAuth(code: string, state: string) {
     /* optional */
   }
 
-  return upsertHubspotConnection(userId, tokens, portalId);
+  const connection = await upsertHubspotConnection(userId, tokens, portalId);
+  const { trackEvent } = await import('@/lib/posthog/analytics');
+  trackEvent(userId, 'integration_connected', {
+    role: 'BRAND',
+    provider: 'hubspot',
+    portalId,
+  });
+  return connection;
 }
 
 async function getAccessToken(connection: CrmConnection): Promise<string> {

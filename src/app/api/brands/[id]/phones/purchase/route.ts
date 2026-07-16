@@ -7,6 +7,7 @@ import {
   areaCodeFromE164,
   configureBrandNumberWebhooks,
 } from '@/lib/brand-phone';
+import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/brands/[id]/phones/purchase
@@ -91,6 +92,13 @@ export async function POST(
     await prisma.brand.update({
       where: { id },
       data: { twilioPhoneE164: e164, twilioPhoneSid: purchased.sid },
+    });
+
+    trackEvent(profile.id, 'phone_number_purchased', {
+      role: 'BRAND',
+      brandId: id,
+      areaCode,
+      e164,
     });
 
     return NextResponse.json({ number: row });

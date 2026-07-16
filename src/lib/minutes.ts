@@ -192,7 +192,17 @@ export async function deductMinutes(
           };
         }
         const p = await tx.userProfile.findUnique({ where: { id: profile.id } });
-        return { ok: true as const, remaining: p?.minutesRemaining ?? 0, source: 'personal' as MinuteSource };
+        const remaining = p?.minutesRemaining ?? 0;
+        if (remaining === 0 && fresh.plan === 'FREE') {
+          void import('@/lib/posthog/analytics').then(({ trackEvent }) => {
+            trackEvent(profile.id, 'minutes_depleted', {
+              role: 'REP',
+              minutesUsed: p?.minutesUsed ?? 0,
+              source: 'personal',
+            });
+          });
+        }
+        return { ok: true as const, remaining, source: 'personal' as MinuteSource };
       }
       await tx.userProfile.update({
         where: { id: profile.id },
@@ -220,7 +230,17 @@ export async function deductMinutes(
       };
     }
     const p = await tx.userProfile.findUnique({ where: { id: profile.id } });
-    return { ok: true as const, remaining: p?.minutesRemaining ?? 0, source: 'personal' as MinuteSource };
+    const remaining = p?.minutesRemaining ?? 0;
+    if (remaining === 0 && fresh.plan === 'FREE') {
+      void import('@/lib/posthog/analytics').then(({ trackEvent }) => {
+        trackEvent(profile.id, 'minutes_depleted', {
+          role: 'REP',
+          minutesUsed: p?.minutesUsed ?? 0,
+          source: 'personal',
+        });
+      });
+    }
+    return { ok: true as const, remaining, source: 'personal' as MinuteSource };
   };
 
   if (opts?.tx) return run(opts.tx);
