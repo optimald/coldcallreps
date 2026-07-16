@@ -2454,6 +2454,406 @@ textarea {
   background: var(--bg);
 }
 
+/* ─── Branded split auth layout ─────────────────────────────── */
+.auth-shell--split {
+  place-items: stretch;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .auth-shell--split {
+    grid-template-columns: 1.05fr 1fr;
+  }
+}
+
+.auth-brand-panel {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  min-height: 34vh;
+  padding: clamp(1.75rem, 4vw, 3.25rem);
+  color: #fff;
+  background: #0a0f1c;
+}
+
+@media (min-width: 900px) {
+  .auth-brand-panel {
+    min-height: 100vh;
+  }
+}
+
+.auth-brand-panel__media {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #0d1526 0%, #0a0f1c 55%, #05070f 100%);
+}
+
+.auth-brand-panel__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.8) contrast(1.05) saturate(0.9) hue-rotate(95deg);
+}
+
+.auth-brand-panel__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 60% at 30% 40%, rgba(0, 229, 192, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(6, 10, 19, 0.55) 0%, rgba(6, 10, 19, 0.35) 45%, rgba(6, 10, 19, 0.85) 100%);
+}
+
+.auth-brand-panel__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 30rem;
+  margin: auto 0;
+}
+
+.auth-brand-panel__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.auth-brand-panel__eyebrow {
+  margin: 0;
+  color: #00e5c0;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.auth-brand-panel__headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.auth-brand-panel__sub {
+  margin: 0;
+  max-width: 34ch;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(0.98rem, 1.6vw, 1.08rem);
+  line-height: 1.55;
+}
+
+.auth-brand-panel__points {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.auth-brand-panel__points li {
+  position: relative;
+  padding-left: 1.6rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.auth-brand-panel__points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+  background: #00e5c0;
+  box-shadow: 0 0 14px rgba(0, 229, 192, 0.5);
+}
+
+.auth-brand-panel__foot {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
+}
+
+/* Hide the panel points on very short mobile so the form stays reachable. */
+@media (max-width: 899px) {
+  .auth-brand-panel__points {
+    display: none;
+  }
+  .auth-brand-panel__foot {
+    display: none;
+  }
+}
+
+.auth-form-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: clamp(2rem, 5vw, 3.5rem) 1.25rem;
+  background: var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand-panel__video {
+    display: none;
+  }
+}
+
+/* ─── Pricing page ──────────────────────────────────────────── */
+.pricing-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 3.5rem) clamp(1rem, 3vw, 1.5rem) 5rem;
+}
+
+.pricing-head {
+  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto 2rem;
+}
+
+.pricing-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.6rem;
+}
+
+.pricing-lede {
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.12rem);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.pricing-seg {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin: 0 auto 1.75rem;
+  padding: 0.28rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-soft);
+}
+
+.pricing-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pricing-seg__btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.pricing-seg__btn.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.pricing-note {
+  color: var(--muted);
+  text-align: center;
+  max-width: 46rem;
+  margin: 0 auto 1.75rem;
+  line-height: 1.55;
+}
+
+.pricing-grid {
+  display: grid;
+  gap: 1.15rem;
+  width: 100%;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 680px) {
+  .pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .pricing-grid--4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .pricing-grid--3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.5rem 1.35rem;
+}
+
+.plan-card--featured {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), var(--shadow-float, none);
+}
+
+.plan-card__ribbon {
+  position: absolute;
+  top: -0.7rem;
+  left: 1.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.plan-card__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.plan-card__price {
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 800;
+  margin: 0.35rem 0 0.25rem;
+  line-height: 1;
+}
+
+.plan-card__unit {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 0.15rem;
+}
+
+.plan-card__features {
+  list-style: none;
+  margin: 1rem 0 1.35rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  color: var(--ink-secondary);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.plan-card__features li {
+  position: relative;
+  padding-left: 1.35rem;
+}
+
+.plan-card__features li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.65);
+}
+
+.plan-card__cta {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.pricing-fees {
+  margin: 3.25rem auto 0;
+  max-width: 46rem;
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-soft);
+  text-align: center;
+}
+
+.pricing-fees__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin: 0 0 0.4rem;
+}
+
+.pricing-fees__lede {
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+}
+
+.pricing-fees__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin-bottom: 1.25rem;
+}
+
+@media (min-width: 620px) {
+  .pricing-fees__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.pricing-fee strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.pricing-fee span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+
+.pricing-fees__example {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.pricing-foot {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 2.5rem;
+}
+
 /* Clerk primary must keep on-accent text (global button inherit broke contrast). */
 .cl-formButtonPrimary,
 .cl-formButtonPrimary.cl-button,
@@ -2722,8 +3122,10 @@ html[data-color-scheme='dark'] .cl-footer img {
   margin-inline: auto;
 }
 
-.auth-shell > .cl-rootBox {
-  width: min(480px, 100%);
+.auth-shell > .cl-rootBox,
+.auth-form-col > .cl-rootBox,
+.auth-form-col .signup-form-wrap {
+  width: min(460px, 100%);
   margin-inline: auto;
 }
 

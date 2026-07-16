@@ -14,6 +14,11 @@ function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Fail safe: if IntersectionObserver is unavailable, reveal immediately.
+    if (typeof IntersectionObserver === 'undefined') {
+      el.classList.add('is-in');
+      return;
+    }
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -24,7 +29,12 @@ function Reveal({
       { threshold: 0.12 }
     );
     io.observe(el);
-    return () => io.disconnect();
+    // Safety net: never leave a section hidden if the observer never fires.
+    const failsafe = window.setTimeout(() => el.classList.add('is-in'), 1500);
+    return () => {
+      io.disconnect();
+      window.clearTimeout(failsafe);
+    };
   }, []);
   return (
     <div ref={ref} className={`lp-reveal ${className}`.trim()} {...rest}>
@@ -232,6 +242,10 @@ const LEAD_ROWS = [
 export default function HomePageClient() {
   return (
     <main className="lp-athletic">
+      {/* No-JS: scroll-reveal never runs, so force content visible. */}
+      <noscript>
+        <style>{`.lp-reveal{opacity:1!important;transform:none!important}`}</style>
+      </noscript>
       {/* 3.2 Hero */}
       <section className="lp-ath-hero lp-ath-hero--center lp-ath-hero--signal" aria-labelledby="lp-hero-title">
         <div className="lp-ath-hero__media" aria-hidden>
@@ -295,7 +309,7 @@ export default function HomePageClient() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.22 }}
           >
-            Cold calling reps who put in the reps to grow your business.
+            Cold calling reps who put in the reps — so you don’t have to pick up the phone.
           </motion.p>
         </div>
       </section>

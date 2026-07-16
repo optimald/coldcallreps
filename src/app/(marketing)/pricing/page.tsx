@@ -6,10 +6,8 @@ import {
   REFERRAL_REWARD_LABEL,
   TRIAL_MINUTES,
 } from '@/lib/product';
-import {
-  PLATFORM_FEE_EXAMPLES,
-  PLATFORM_FEE_SUMMARY,
-} from '@/lib/platform-fees';
+import { PLATFORM_FEE_EXAMPLES } from '@/lib/platform-fees';
+import PricingSwitch from './PricingSwitch';
 
 const REP_CARDS = [
   {
@@ -64,7 +62,6 @@ const BRAND_CARDS = [
       ...LEAD_PACKS.map((p) => `${p.credits.toLocaleString()} credits · $${p.priceUsd}`),
       '12-month shelf life · burn after allotment = 0',
       'Campaign escrow separate (outcomes + optional base pay)',
-      PLATFORM_FEE_SUMMARY,
     ],
   },
 ];
@@ -106,56 +103,31 @@ function PlanCard({
 }) {
   const isOrg = plan.key === 'TEAM';
   const cta = ctaFor(plan.key);
+  const featured = Boolean(plan.highlight);
+  const unit =
+    plan.priceUnit ||
+    (isOrg ? '/user/mo' : plan.key.startsWith('BRAND') && plan.key !== 'BRAND_PACKS' ? '/mo' : '');
+
   return (
-    <div
-      style={{
-        background: 'var(--bg-elevated)',
-        border: cta.primary || plan.highlight
-          ? '1px solid rgba(var(--accent-rgb), 0.45)'
-          : '1px solid var(--line)',
-        borderRadius: 16,
-        padding: '1.5rem',
-      }}
-    >
-      <p
-        style={{
-          color: 'var(--muted)',
-          margin: 0,
-          fontSize: '0.75rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-        }}
-      >
-        {plan.audience} · {plan.label}
-      </p>
-      <p
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '2.2rem',
-          fontWeight: 800,
-          margin: '0.4rem 0',
-        }}
-      >
+    <div className={`plan-card${featured ? ' plan-card--featured' : ''}`}>
+      {featured ? <span className="plan-card__ribbon">Most popular</span> : null}
+      <p className="plan-card__label">{plan.label}</p>
+      <p className="plan-card__price">
         {plan.price === 0 ? (
           'Free'
         ) : (
           <>
-            {plan.pricePrefix || ''}
-            ${isOrg ? plan.price.toFixed(2) : plan.price}
-            <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--muted)' }}>
-              {plan.priceUnit || (isOrg ? '/user/mo' : plan.key.startsWith('BRAND') && plan.key !== 'BRAND_PACKS' ? '/mo' : '')}
-            </span>
+            {plan.pricePrefix || ''}${isOrg ? plan.price.toFixed(2) : plan.price}
+            {unit ? <span className="plan-card__unit">{unit}</span> : null}
           </>
         )}
       </p>
-      <ul style={{ margin: '1rem 0 1.25rem', paddingLeft: '1.1rem', color: 'var(--muted)' }}>
+      <ul className="plan-card__features">
         {plan.features.map((f) => (
-          <li key={f} style={{ marginBottom: '0.35rem' }}>
-            {f}
-          </li>
+          <li key={f}>{f}</li>
         ))}
       </ul>
-      <Link href={cta.href} className={cta.primary ? 'btn' : 'btn-ghost'}>
+      <Link href={cta.href} className={`${cta.primary ? 'btn' : 'btn-ghost'} plan-card__cta`}>
         {cta.label}
       </Link>
     </div>
@@ -163,106 +135,79 @@ function PlanCard({
 }
 
 export default function PricingPage() {
-  return (
-    <main
-      style={{
-        padding: 'clamp(1.75rem, 4vw, 3rem) clamp(1rem, 3vw, 1.5rem) 5rem',
-        maxWidth: 1100,
-        margin: '0 auto',
-      }}
-    >
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(1.75rem, 5vw, 2.4rem)',
-          marginBottom: '0.5rem',
-        }}
-      >
-        Pricing
-      </h1>
-      <p style={{ color: 'var(--muted)', marginBottom: '2.5rem', maxWidth: 720 }}>
-        SDRs buy practice minutes. Brands buy enriched lead credits for Generate Leads (imports stay
-        free) and fund campaign escrow to pay reps for outcomes and optional base pay (weekly,
-        bi-weekly, or monthly). Refer a friend — you both get {REFERRAL_REWARD_LABEL}.
+  const sdrPanel = (
+    <>
+      <p className="pricing-note">
+        Reps train for a few dollars a month — Free ({TRIAL_MINUTES} min), Starter $
+        {PLAN.STARTER.price}/mo, Pro ${PLAN.PRO.price}/mo. Running brand campaigns is always free for
+        reps. Refer a friend and you both get {REFERRAL_REWARD_LABEL}.
       </p>
-
-      <h2
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.35rem',
-          marginBottom: '0.75rem',
-        }}
-      >
-        For SDRs
-      </h2>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.25rem', maxWidth: 640 }}>
-        Free practice ({TRIAL_MINUTES} min), Starter ${PLAN.STARTER.price}/mo, Pro $
-        {PLAN.PRO.price}/mo. Brand deals are free for reps.
-      </p>
-      <div className="auto-fit-grid" style={{ gap: '1.25rem', marginBottom: '3rem' }}>
+      <div className="pricing-grid pricing-grid--4">
         {REP_CARDS.map((plan) => (
           <PlanCard key={plan.key} plan={plan} />
         ))}
       </div>
+    </>
+  );
 
-      <h2
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.35rem',
-          marginBottom: '0.75rem',
-        }}
-      >
-        For brands
-      </h2>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.25rem', maxWidth: 720 }}>
-        Free includes {BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo. Brand Lead Plan $
-        {BRAND_LEAD_PLAN.LEAD_MONTHLY.priceUsd}/mo for{' '}
-        {BRAND_LEAD_PLAN.LEAD_MONTHLY.allotment.toLocaleString()} · Annual $
-        {BRAND_LEAD_PLAN.LEAD_ANNUAL.priceUsd}/yr. Manage cards, charges, and escrow on{' '}
+  const brandPanel = (
+    <>
+      <p className="pricing-note">
+        Free includes {BRAND_LEAD_PLAN.FREE.allotment} enriched leads / mo (CSV imports are always
+        free). Upgrade for more enrichment credits, then fund campaign escrow to pay reps only when
+        they deliver. Manage cards and escrow on{' '}
         <Link href="/billing" className="soft-link">
           billing
         </Link>
-        ; pick a plan on{' '}
+        {' · '}
         <Link href="/subscribe/brand" className="soft-link">
-          subscribe
+          pick a plan
         </Link>
         .
       </p>
-      <div className="auto-fit-grid" style={{ gap: '1.25rem' }}>
+      <div className="pricing-grid pricing-grid--3">
         {BRAND_CARDS.map((plan) => (
           <PlanCard key={plan.key} plan={plan} />
         ))}
       </div>
+    </>
+  );
 
-      <section
-        style={{
-          marginTop: '3rem',
-          padding: '1.5rem 0',
-          borderTop: '1px solid var(--border, rgba(0,0,0,0.08))',
-          maxWidth: 720,
-        }}
-      >
-        <h2
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '1.35rem',
-            marginBottom: '0.75rem',
-          }}
-        >
-          Campaign payout fees
-        </h2>
-        <p style={{ color: 'var(--muted)', marginBottom: '0.75rem' }}>{PLATFORM_FEE_SUMMARY}</p>
-        <ul style={{ color: 'var(--muted)', margin: '0 0 0.75rem', paddingLeft: '1.2rem' }}>
-          <li>20% platform fee on SDR payouts</li>
-          <li>Capped at $30 per outcome payout</li>
-          <li>Base pay fee caps: $40/wk · $75/bi-weekly · $150/mo (~$150/mo max on base)</li>
-        </ul>
-        <p style={{ color: 'var(--muted)', margin: 0, fontSize: '0.9rem' }}>
-          {PLATFORM_FEE_EXAMPLES}
+  return (
+    <main className="pricing-page">
+      <header className="pricing-head">
+        <h1 className="pricing-title">Simple pricing</h1>
+        <p className="pricing-lede">
+          Reps pay a few dollars a month to train. Brands pay per result — only when a rep books a
+          meeting or delivers a qualified lead.
         </p>
+      </header>
+
+      <PricingSwitch sdr={sdrPanel} brand={brandPanel} />
+
+      <section className="pricing-fees">
+        <h2 className="pricing-fees__title">How campaign fees work</h2>
+        <p className="pricing-fees__lede">
+          One platform fee, capped so it never balloons. Reps keep the rest.
+        </p>
+        <div className="pricing-fees__grid">
+          <div className="pricing-fee">
+            <strong>20%</strong>
+            <span>Platform fee on SDR payouts</span>
+          </div>
+          <div className="pricing-fee">
+            <strong>$30</strong>
+            <span>Max fee per outcome payout</span>
+          </div>
+          <div className="pricing-fee">
+            <strong>$40 · $75 · $150</strong>
+            <span>Base-pay fee caps · wk / bi-weekly / mo</span>
+          </div>
+        </div>
+        <p className="pricing-fees__example">{PLATFORM_FEE_EXAMPLES}</p>
       </section>
 
-      <p style={{ color: 'var(--muted)', marginTop: '2.5rem', fontSize: '0.9rem' }}>
+      <p className="pricing-foot">
         <Link href="/for/reps" className="soft-link">
           For reps
         </Link>

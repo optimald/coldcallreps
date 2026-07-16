@@ -42,7 +42,7 @@ export default async function DashboardPage() {
   const isBrand = role === 'BRAND' || role === 'RECRUITER';
   const isManager = role === 'MANAGER';
 
-  const greetingName = profile.displayName || ROLE_LABELS[role] || 'there';
+  const greetingName = profile.displayName || 'there';
 
   if (isBrand) {
     const { cookies } = await import('next/headers');

@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { SignUp } from '@clerk/nextjs';
 import ClerkAuthShell from '@/components/ClerkAuthShell';
-import BrandMark from '@/components/BrandMark';
 import {
   SIGNUP_HOME_KEY,
   SIGNUP_ROLE_KEY,
@@ -55,7 +54,6 @@ export default function SignUpClient() {
       >
         {!hideMarketingChrome ? (
           <div className="signup-form-wrap__path">
-            <BrandMark href="/" size="md" />
             <p className="signup-form-wrap__tagline">Create your account to get started.</p>
           </div>
         ) : null}

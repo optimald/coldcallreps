@@ -2,10 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import BrandMark from '@/components/BrandMark';
+
+const PANEL_COPY = {
+  'sign-in': {
+    eyebrow: 'Welcome back',
+    headline: 'Put in the reps.',
+    sub: 'Train on AI voice calls, prove your score, and get paid to run outbound for real brands.',
+  },
+  'sign-up': {
+    eyebrow: 'Train · Prove · Get paid',
+    headline: 'Start putting in the reps.',
+    sub: 'Practice real cold calls with live AI voice coaching. Hit the score. Unlock paid campaigns.',
+  },
+} as const;
+
+const PANEL_POINTS = [
+  'Live AI voice practice on real brand offers',
+  'Objective scorecards prove you’re ready',
+  'Pay-per-result campaigns — earn when you deliver',
+] as const;
 
 /**
- * Wraps Clerk SignIn/SignUp and surfaces recovery help if the Frontend API
- * host fails to load (often stale NXDOMAIN cache after DNS was just added).
+ * Wraps Clerk SignIn/SignUp in a branded split layout and surfaces recovery
+ * help if the Frontend API host fails to load (often stale NXDOMAIN cache
+ * after DNS was just added).
  */
 export default function ClerkAuthShell({
   children,
@@ -16,6 +37,7 @@ export default function ClerkAuthShell({
   mode: 'sign-in' | 'sign-up';
   wide?: boolean;
 }) {
+  const copy = PANEL_COPY[mode];
   const [showHelp, setShowHelp] = useState(false);
   const [probeFailed, setProbeFailed] = useState(false);
 
@@ -72,9 +94,40 @@ export default function ClerkAuthShell({
   }, []);
 
   return (
-    <main className={`auth-shell${wide ? ' auth-shell--wide' : ''}`}>
-      {children}
-      {showHelp && (
+    <main className={`auth-shell auth-shell--split${wide ? ' auth-shell--wide' : ''}`}>
+      <aside className="auth-brand-panel" aria-hidden={false}>
+        <div className="auth-brand-panel__media" aria-hidden>
+          <video
+            className="auth-brand-panel__video"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          >
+            <source src="/media/hero.mp4" type="video/mp4" />
+          </video>
+          <div className="auth-brand-panel__scrim" />
+        </div>
+        <div className="auth-brand-panel__content">
+          <BrandMark href="/" />
+          <div className="auth-brand-panel__copy">
+            <p className="auth-brand-panel__eyebrow">{copy.eyebrow}</p>
+            <h1 className="auth-brand-panel__headline">{copy.headline}</h1>
+            <p className="auth-brand-panel__sub">{copy.sub}</p>
+            <ul className="auth-brand-panel__points">
+              {PANEL_POINTS.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="auth-brand-panel__foot">Cold calling reps who put in the reps.</p>
+        </div>
+      </aside>
+
+      <div className="auth-form-col">
+        {children}
+        {showHelp && (
         <div className="auth-shell__help" role="alert">
           <p className="auth-shell__help-title">
             {probeFailed ? 'Auth can’t reach Clerk yet' : 'Auth is taking longer than usual'}
@@ -120,7 +173,8 @@ export default function ClerkAuthShell({
             {mode === 'sign-up' ? ' · trying sign-up' : ' · trying sign-in'}
           </p>
         </div>
-      )}
+        )}
+      </div>
     </main>
   );
 }

@@ -87,6 +87,8 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
   const heroTone = role.key === 'brands' ? 'brand' : role.key === 'reps' ? 'reps' : 'teams';
   const showReps = role.key === 'reps';
   const showProofBar = role.key === 'brands';
+  // Reps get the dedicated "grind" cut; other roles use the flagship hero.
+  const heroVideo = role.key === 'reps' ? '/media/hero-reps.mp4' : '/media/hero.mp4';
 
   return (
     <main className="lp-athletic">
@@ -96,7 +98,7 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
       >
         <div className="lp-ath-hero__media" aria-hidden>
           <video className="lp-ath-hero__video" autoPlay muted loop playsInline preload="metadata">
-            <source src="/media/hero.mp4" type="video/mp4" />
+            <source src={heroVideo} type="video/mp4" />
           </video>
         </div>
         <div className="lp-ath-hero__fx" aria-hidden>

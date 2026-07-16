@@ -18,7 +18,8 @@ export async function generateMetadata({
   const role = ROLE_LANDINGS[raw as RoleLandingKey];
   if (!role) return { title: 'Not found' };
   return {
-    title: `${role.title} | ColdCallReps`,
+    // Root layout template already appends " | ColdCallReps"; avoid doubling it.
+    title: role.title,
     description: role.sub,
     openGraph: {
       title: `${role.title} — ColdCallReps`,

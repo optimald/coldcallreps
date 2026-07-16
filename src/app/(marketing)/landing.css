@@ -615,23 +615,173 @@
   transform: translateY(0);
 }
 
-.mkt-nav-links {
-  display: none;
+/* No-JS + reduced-motion: never leave content hidden behind the reveal. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
-.mkt-nav-pricing-mobile {
-  display: inline;
+/* ─── Marketing nav ─────────────────────────────────────────── */
+.mkt-header__nav {
+  gap: 0.65rem;
+}
+
+.mkt-nav-links,
+.mkt-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  font-size: 0.9rem;
+}
+
+.mkt-nav-link {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.mkt-nav-link:hover {
+  color: var(--ink);
+}
+
+.mkt-nav-cta {
+  white-space: nowrap;
+}
+
+/* Hamburger — hidden on desktop */
+.mkt-nav-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mkt-nav-burger__box {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 18px;
+  height: 14px;
+}
+
+.mkt-nav-burger__box i {
+  display: block;
+  height: 2px;
+  width: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform 0.22s ease, opacity 0.18s ease;
+}
+
+.mkt-nav-burger__box.is-open i:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.mkt-nav-burger__box.is-open i:nth-child(2) {
+  opacity: 0;
+}
+
+.mkt-nav-burger__box.is-open i:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.mkt-nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  border: 0;
+  padding: 0;
+  background: rgba(4, 8, 14, 0.55);
+  backdrop-filter: blur(2px);
+  animation: mkt-fade 0.18s ease;
+}
+
+.mkt-nav-drawer {
+  position: fixed;
+  z-index: 46;
+  top: 0.75rem;
+  right: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 4.25rem 1rem 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-panel, var(--bg-elevated));
+  box-shadow: var(--shadow-float, 0 18px 40px rgba(0, 0, 0, 0.35));
+  animation: mkt-drop 0.2s ease;
+}
+
+.mkt-nav-drawer__link {
+  padding: 0.85rem 0.5rem;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.mkt-nav-drawer__link:hover {
+  background: var(--bg-hover);
+}
+
+.mkt-nav-drawer__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.mkt-nav-drawer__btn {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.mkt-nav-drawer__user {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@keyframes mkt-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mkt-drop {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mobile: collapse inline nav into the drawer */
+@media (max-width: 899px) {
+  .mkt-nav-links,
+  .mkt-nav-actions .mkt-nav-link--signin {
+    display: none;
+  }
+
+  .mkt-nav-burger {
+    display: inline-flex;
+  }
 }
 
 @media (min-width: 900px) {
-  .mkt-nav-links {
-    display: flex;
-    gap: 0.95rem;
-    align-items: center;
-    font-size: 0.9rem;
-  }
-
-  .mkt-nav-pricing-mobile {
+  .mkt-nav-drawer,
+  .mkt-nav-scrim {
     display: none;
   }
 }
@@ -834,6 +984,11 @@ body:has(.lp-athletic) .mkt-footer a {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* Static athletic backdrop shown before the video loads / when motion is
+     reduced, so the headline never sits on a bright flash or a blank frame. */
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 40%, rgba(0, 229, 192, 0.08), transparent 60%),
+    linear-gradient(160deg, #0d1526 0%, #0a0f1c 55%, #05070f 100%);
 }
 
 .lp-ath-hero__video {
@@ -1572,8 +1727,10 @@ main:has(> .lp-athletic) > .lp-wrap {
 
 .lp-ath-hero__scrim--center {
   background:
-    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(6, 10, 19, 0.25) 0%, rgba(6, 10, 19, 0.72) 70%, rgba(6, 10, 19, 0.92) 100%),
-    linear-gradient(180deg, rgba(6, 10, 19, 0.55) 0%, transparent 28%, transparent 55%, rgba(6, 10, 19, 0.85) 100%);
+    /* Soft core behind the headline — enough contrast, without crushing the lifter */
+    radial-gradient(ellipse 46% 34% at 50% 46%, rgba(4, 8, 14, 0.55) 0%, rgba(4, 8, 14, 0.28) 55%, transparent 80%),
+    radial-gradient(ellipse 75% 65% at 50% 45%, rgba(6, 10, 19, 0.28) 0%, rgba(6, 10, 19, 0.62) 72%, rgba(6, 10, 19, 0.88) 100%),
+    linear-gradient(180deg, rgba(6, 10, 19, 0.5) 0%, rgba(6, 10, 19, 0.12) 30%, rgba(6, 10, 19, 0.12) 52%, rgba(6, 10, 19, 0.8) 100%);
 }
 
 .lp-ath-hero__overlay--center {
@@ -2571,9 +2728,17 @@ main:has(> .lp-athletic) > .lp-wrap {
   line-height: 1.02;
 }
 
-/* Hero signal motif treatment */
+/* Hero signal motif treatment — keep the athletic tint but let the lifter read */
 .lp-ath-hero--signal .lp-ath-hero__video {
-  filter: brightness(0.42) contrast(1.12) saturate(0.55) hue-rotate(145deg);
+  /* Video A is already dark — lift enough for the lifter/bar to read */
+  filter: brightness(0.85) contrast(1.05) saturate(0.9) hue-rotate(95deg);
+}
+
+/* Reduced motion: don't autoplay footage — fall back to the static backdrop. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-ath-hero__video {
+    display: none;
+  }
 }
 
 .lp-ath-hero__signal {
