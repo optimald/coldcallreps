@@ -1,0 +1,128 @@
+schemaVersion: 1.0.0
+siteId: coldcallreps
+mode: audit
+productionOrigin: https://coldcallreps.com
+repositoryRoot: /Users/pulse/Documents/pulse-apps/TROJAN/coldcallreps.com
+
+brand:
+  name: Cold Call Reps
+  legalName: Cold Call Reps
+  description: >-
+    Human cold outreach marketplace. AI-trained SDRs dial never-contacted leads;
+    brands fund escrow and pay for verified booked meetings or qualified leads.
+  primaryEntityUrl: https://coldcallreps.com/
+  parentOrganization: null
+  sameAs: []
+
+audiences:
+  - id: brand-founders
+    name: Brand founders and operators
+    tasks:
+      - Hire human cold callers without building an in-house SDR team
+      - Pay for booked meetings or qualified leads with escrow protection
+      - Post campaigns and fund outcome-based pay
+    evidence:
+      - ev-llms-product
+      - ev-pricing-page
+
+  - id: sdr-reps
+    name: SDRs and appointment setters
+    tasks:
+      - Practice cold calls with AI voice trainer
+      - Apply to brand campaigns and get paid for results
+      - Build a public profile and track earnings
+    evidence:
+      - ev-llms-product
+      - ev-pricing-page
+
+  - id: recruiters
+    name: Recruiters and team leads
+    tasks:
+      - Source reps for outbound campaigns
+      - Manage team plans and recruiting workflows
+    evidence:
+      - ev-for-recruiters
+
+products:
+  - id: marketplace
+    name: Cold Call Reps marketplace
+    scope: >-
+      Humans place live outbound dials for brands. AI coaches practice only.
+      Outcome pay for book/qualify; optional base pay. Platform fee 20% capped
+      per outcome and on base pay schedules. Not a closer marketplace.
+    owner: product
+    pricingUrl: https://coldcallreps.com/pricing
+
+  - id: voice-trainer
+    name: AI voice trainer
+    scope: Gatekeeper and objection practice for reps; not live brand dialing.
+    owner: product
+    pricingUrl: https://coldcallreps.com/pricing
+
+markets:
+  - country: US
+    regions: []
+    languages:
+      - en-US
+    localPresence: false
+
+technology:
+  framework: Next.js App Router
+  contentSource: src/app/(marketing) plus public/llms.txt
+  deployment: Vercel
+  analytics:
+    - posthog
+  searchConsoles: []
+
+approvers:
+  - name: product-owner
+    roles:
+      - editorial
+      - technical
+  - name: deployment-owner
+    roles:
+      - deployment
+
+riskClass: standard
+
+crawlerPolicy:
+  - purpose: search
+    path: /robots.txt
+    notes: Allow public marketing; disallow app desks and /api/
+  - purpose: retrieval_experiment
+    path: /llms.txt
+    notes: Factual site summary; treat as experimental AEO surface
+
+launch:
+  targetDate: null
+  environments:
+    - local
+    - preview
+    - production
+  initialUrlInventory:
+    - https://coldcallreps.com/
+    - https://coldcallreps.com/pricing
+    - https://coldcallreps.com/for/brands
+    - https://coldcallreps.com/for/reps
+    - https://coldcallreps.com/for/recruiters
+    - https://coldcallreps.com/gigs
+    - https://coldcallreps.com/developers
+    - https://coldcallreps.com/llms.txt
+  analyticsRequired:
+    - sign_up_started
+    - sign_up_completed
+  blockedAccess:
+    - Google Search Console credentials
+  knownRisks:
+    - Limited indexable marketing surface today; guides section not yet shipped
+    - Dynamic gig and profile URLs need explicit indexation policy
+  successHypotheses:
+    seo: >-
+      All 12 guides indexed with hub; brand-hire and rep-earn cohorts receiving
+      qualified impressions within 90 days of wave 3 ship (GSC + analytics).
+    aeo: >-
+      Top 12 customer questions in prompt-benchmark.yaml answered on canonical
+      URLs with entity facts matching pricing and llms.txt (quarterly n>=36).
+    geo: >-
+      Accurate citation of fee caps and escrow mechanics in retrieval tests
+      (experimental; quarterly benchmark with stop rule).

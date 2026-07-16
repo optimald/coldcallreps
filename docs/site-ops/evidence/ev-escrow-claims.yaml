@@ -1,0 +1,14 @@
+schemaVersion: 1.0.0
+id: ev-escrow-claims
+classification: documented
+claim: >-
+  Brands fund campaign escrow; reps submit claims for booked meetings or qualified
+  leads; payouts follow verification and platform fee policy.
+source:
+  type: repository_file
+  locator: public/llms.txt
+  retrievedAt: 2026-07-16
+scope: Public product description; verify against terms and campaign flows before legal claims
+owner: product
+confidence: medium
+status: active

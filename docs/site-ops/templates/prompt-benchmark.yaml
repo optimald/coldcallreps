@@ -1,0 +1,85 @@
+schemaVersion: 1.0.0
+benchmarkId: prompt-benchmark-coldcallreps-v1
+siteId: coldcallreps
+version: 1
+owner: product
+startedAt: null
+endedAt: null
+
+engines:
+  - name: replace-with-engine
+    mode: default
+    locale: en-US
+
+promptSet:
+  - id: pb-01-hire
+    audienceId: brand-founders
+    prompt: How do I hire cold callers and pay only for results?
+    canonicalUrl: https://coldcallreps.com/guides/hire-cold-callers
+    repeats: 3
+  - id: pb-02-gigs
+    audienceId: sdr-reps
+    prompt: Where can I find paid cold calling gigs?
+    canonicalUrl: https://coldcallreps.com/guides/cold-calling-gigs
+    repeats: 3
+  - id: pb-03-escrow
+    audienceId: brand-founders
+    prompt: How does escrow work on a cold calling marketplace?
+    canonicalUrl: https://coldcallreps.com/guides/campaign-escrow-and-claims
+    repeats: 3
+  - id: pb-04-fees
+    audienceId: brand-founders
+    prompt: What fees does Cold Call Reps charge on payouts?
+    canonicalUrl: https://coldcallreps.com/guides/platform-fees-and-payouts
+    repeats: 3
+  - id: pb-05-pay-per-meeting
+    audienceId: brand-founders
+    prompt: Is pay per appointment better than hiring an SDR?
+    canonicalUrl: https://coldcallreps.com/guides/pay-per-appointment-setting
+    repeats: 3
+  - id: pb-06-rep-earn
+    audienceId: sdr-reps
+    prompt: How do cold callers get paid per booked meeting?
+    canonicalUrl: https://coldcallreps.com/guides/get-paid-per-meeting-cold-calling
+    repeats: 3
+  - id: pb-07-campaigns
+    audienceId: brand-founders
+    prompt: How do outbound campaigns work from post to payout?
+    canonicalUrl: https://coldcallreps.com/guides/how-campaigns-work
+    repeats: 3
+  - id: pb-08-practice
+    audienceId: sdr-reps
+    prompt: Can I practice cold calls with AI before calling real leads?
+    canonicalUrl: https://coldcallreps.com/guides/ai-cold-call-practice
+    repeats: 3
+  - id: pb-09-marketplace
+    audienceId: brand-founders
+    prompt: What is an appointment setting marketplace?
+    canonicalUrl: https://coldcallreps.com/guides/appointment-setting-marketplace
+    repeats: 3
+  - id: pb-10-no-sdr
+    audienceId: brand-founders
+    prompt: How do I do outbound without hiring an in-house SDR team?
+    canonicalUrl: https://coldcallreps.com/guides/hire-outbound-without-in-house-sdr
+    repeats: 3
+  - id: pb-11-agency
+    audienceId: brand-founders
+    prompt: Cold call marketplace vs outbound agency — what is the difference?
+    canonicalUrl: https://coldcallreps.com/guides/cold-call-reps-vs-outbound-agency
+    repeats: 3
+  - id: pb-12-apply
+    audienceId: sdr-reps
+    prompt: How do SDR applications work on cold calling platforms?
+    canonicalUrl: https://coldcallreps.com/guides/sdr-applications-and-approval
+    repeats: 3
+
+metrics:
+  - citation_rate
+  - factual_accuracy
+  - brand_mention
+
+stopRule: Stop if factual error rate exceeds 10% on fee or escrow claims in two consecutive runs.
+
+limitations:
+  - n=3 per prompt per engine is a directional sample only
+  - Citation does not imply ranking or conversion

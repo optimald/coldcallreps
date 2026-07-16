@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/blog-ops/site-profile.schema.json",
+  "title": "SEO AEO GEO Site Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "siteId",
+    "mode",
+    "brand",
+    "audiences",
+    "products",
+    "markets",
+    "technology",
+    "approvers",
+    "riskClass",
+    "crawlerPolicy"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "siteId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$" },
+    "mode": { "enum": ["launch", "audit"] },
+    "productionOrigin": { "type": ["string", "null"], "format": "uri" },
+    "repositoryRoot": { "type": "string", "minLength": 1 },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "legalName", "description", "primaryEntityUrl"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "legalName": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "primaryEntityUrl": { "type": "string", "format": "uri" },
+        "parentOrganization": { "type": ["string", "null"] },
+        "sameAs": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "audiences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "tasks", "evidence"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name": { "type": "string", "minLength": 1 },
+          "tasks": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        }
+      }
+    },
+    "products": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "scope", "owner"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name": { "type": "string" },
+          "scope": { "type": "string" },
+          "owner": { "type": "string" },
+          "pricingUrl": { "type": ["string", "null"], "format": "uri" }
+        }
+      }
+    },
+    "markets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["country", "languages"],
+        "properties": {
+          "country": { "type": "string", "pattern": "^[A-Z]{2}$" },
+          "regions": { "type": "array", "items": { "type": "string" } },
+          "languages": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "localPresence": { "type": "boolean" }
+        }
+      }
+    },
+    "technology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["framework", "contentSource", "deployment"],
+      "properties": {
+        "framework": { "type": "string" },
+        "contentSource": { "type": "string" },
+        "deployment": { "type": "string" },
+        "analytics": { "type": "array", "items": { "type": "string" } },
+        "searchConsoles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "approvers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "roles"],
+        "properties": {
+          "name": { "type": "string" },
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": ["editorial", "technical", "legal", "security", "medical", "financial", "deployment"]
+            }
+          }
+        }
+      }
+    },
+    "riskClass": { "enum": ["standard", "ymyl", "regulated", "safety_critical"] },
+    "crawlerPolicy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["userAgent", "purpose", "decision", "reviewedAt", "evidenceId"],
+        "properties": {
+          "userAgent": { "type": "string" },
+          "purpose": { "enum": ["search", "retrieval", "training", "unknown"] },
+          "decision": { "enum": ["allow", "disallow", "undecided"] },
+          "reviewedAt": { "type": "string", "format": "date-time" },
+          "evidenceId": { "type": "string" }
+        }
+      }
+    }
+  }
+}

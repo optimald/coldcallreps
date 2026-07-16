@@ -1,0 +1,14 @@
+schemaVersion: 1.0.0
+id: ev-platform-fees
+classification: documented
+claim: >-
+  Platform fee is 20% with caps per outcome and on base pay schedules as
+  implemented in product source.
+source:
+  type: repository_file
+  locator: src/lib/platform-fees.ts
+  retrievedAt: 2026-07-16
+scope: In-app fee calculation at time of retrieval
+owner: product
+confidence: high
+status: active

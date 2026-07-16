@@ -1,0 +1,14 @@
+schemaVersion: 1.0.0
+id: ev-llms-product
+classification: documented
+claim: >-
+  Cold Call Reps is a human cold outreach marketplace with AI practice, escrow,
+  outcome-based pay, and capped platform fees as described in public/llms.txt.
+source:
+  type: repository_file
+  locator: public/llms.txt
+  retrievedAt: 2026-07-16
+scope: Public marketing summary at time of retrieval
+owner: product
+confidence: high
+status: active

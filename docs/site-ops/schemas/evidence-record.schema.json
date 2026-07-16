@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/blog-ops/evidence-record.schema.json",
+  "title": "SEO AEO GEO Evidence Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "classification",
+    "claim",
+    "source",
+    "retrievedAt",
+    "scope",
+    "owner",
+    "confidence",
+    "status"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "id": { "type": "string", "pattern": "^ev-[a-z0-9-]+$" },
+    "classification": { "enum": ["documented", "observed", "experimental"] },
+    "claim": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "locator", "title", "publisher"],
+      "properties": {
+        "type": { "enum": ["primary_documentation", "primary_research", "analytics", "server_log", "customer_research", "controlled_test", "expert_review", "other"] },
+        "locator": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "publisher": { "type": "string", "minLength": 1 },
+        "publishedAt": { "type": ["string", "null"], "format": "date-time" },
+        "contentHash": { "type": ["string", "null"] }
+      }
+    },
+    "retrievedAt": { "type": "string", "format": "date-time" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appliesTo", "market", "timeRange"],
+      "properties": {
+        "appliesTo": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "market": { "type": ["string", "null"] },
+        "timeRange": { "type": ["string", "null"] },
+        "sampleSize": { "type": ["integer", "null"], "minimum": 0 },
+        "methodology": { "type": ["string", "null"] }
+      }
+    },
+    "owner": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": ["string", "null"] },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "status": { "enum": ["active", "superseded", "expired", "disputed"] },
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "competingExplanations": { "type": "array", "items": { "type": "string" } },
+    "supersedes": { "type": ["string", "null"] },
+    "reviewBy": { "type": ["string", "null"], "format": "date" },
+    "experiment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["hypothesis", "baseline", "metric", "endDate", "stopRule"],
+      "properties": {
+        "hypothesis": { "type": "string" },
+        "baseline": { "type": "string" },
+        "metric": { "type": "string" },
+        "endDate": { "type": "string", "format": "date" },
+        "stopRule": { "type": "string" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "classification": { "const": "experimental" } } },
+      "then": { "required": ["experiment"] }
+    }
+  ]
+}

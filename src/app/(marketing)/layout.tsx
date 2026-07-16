@@ -22,6 +22,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Link href="/#meet-the-reps">Meet the reps</Link>
             <Link href="/gigs">Brand deals</Link>
             <Link href="/pricing">Pricing</Link>
+            <Link href="/guides">Guides</Link>
             <Link href="/developers">Developers</Link>
           </div>
           <div className="mkt-footer-col">

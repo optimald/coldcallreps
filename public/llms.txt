@@ -30,6 +30,24 @@ Cold calling is a numbers game for brands (volume of first-touch dials). For SDR
 - https://coldcallreps.com/sitemap.xml
 - https://coldcallreps.com/robots.txt
 
+## Guides
+
+Task-focused guides. Claims trace to product source and the platform fee policy (20%, capped at $30/outcome and $40/wk · $75/bi-weekly · $150/mo on base). Humans dial live; AI is practice and claim audit only.
+
+- https://coldcallreps.com/guides — guides hub (browse by brand hire, rep earn, trust & mechanics)
+- https://coldcallreps.com/guides/hire-cold-callers — hire humans for first-touch dials with outcome-based pay
+- https://coldcallreps.com/guides/cold-calling-gigs — find paid cold calling campaigns online
+- https://coldcallreps.com/guides/campaign-escrow-and-claims — how brand escrow, claim audit, and disputes work
+- https://coldcallreps.com/guides/platform-fees-and-payouts — the 20% fee, caps, and Stripe payouts explained
+- https://coldcallreps.com/guides/pay-per-appointment-setting — when pay-per-meeting beats salaried SDRs
+- https://coldcallreps.com/guides/get-paid-per-meeting-cold-calling — how reps earn on booked meetings and qualified leads
+- https://coldcallreps.com/guides/how-campaigns-work — end-to-end lifecycle: post → apply → dial → claim → payout
+- https://coldcallreps.com/guides/ai-cold-call-practice — AI voice practice before live human dials
+- https://coldcallreps.com/guides/appointment-setting-marketplace — what an appointment-setting marketplace is
+- https://coldcallreps.com/guides/hire-outbound-without-in-house-sdr — run outbound without a full-time SDR hire
+- https://coldcallreps.com/guides/cold-call-reps-vs-outbound-agency — marketplace vs outbound agency comparison
+- https://coldcallreps.com/guides/sdr-applications-and-approval — how rep applications, quality gate, and access work
+
 ## Out of scope (by design)
 
 - Closing / closer compensation (separate from book-or-qualify)

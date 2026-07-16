@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/blog-ops/audit-report.schema.json",
+  "title": "SEO AEO GEO Audit Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "run",
+    "scope",
+    "summary",
+    "scorecards",
+    "checks",
+    "findings",
+    "blockedChecks",
+    "approvalsRequired",
+    "nextReviewAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mode", "cadence", "startedAt", "completedAt", "agent", "repositoryRevision"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^run-[a-zA-Z0-9._-]+$" },
+        "mode": { "enum": ["launch", "audit"] },
+        "cadence": { "enum": ["launch", "weekly", "monthly", "quarterly", "ad_hoc"] },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "agent": { "type": "string" },
+        "repositoryRevision": { "type": "string" },
+        "deploymentId": { "type": ["string", "null"] },
+        "previousRunId": { "type": ["string", "null"] }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["siteId", "origins", "contentCount", "cohorts"],
+      "properties": {
+        "siteId": { "type": "string" },
+        "origins": { "type": "array", "items": { "type": "string", "format": "uri" } },
+        "contentCount": { "type": "integer", "minimum": 0 },
+        "cohorts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "critical", "high", "medium", "low", "statement"],
+      "properties": {
+        "status": { "enum": ["pass", "conditional_pass", "fail", "blocked"] },
+        "critical": { "type": "integer", "minimum": 0 },
+        "high": { "type": "integer", "minimum": 0 },
+        "medium": { "type": "integer", "minimum": 0 },
+        "low": { "type": "integer", "minimum": 0 },
+        "statement": { "type": "string" }
+      }
+    },
+    "scorecards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seo", "aeo", "geo"],
+      "properties": {
+        "seo": { "$ref": "#/$defs/scorecard" },
+        "aeo": { "$ref": "#/$defs/scorecard" },
+        "geo": { "$ref": "#/$defs/scorecard" }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "blockedChecks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["checkId", "reason", "needed"],
+        "properties": {
+          "checkId": { "type": "string" },
+          "reason": { "type": "string" },
+          "needed": { "type": "string" }
+        }
+      }
+    },
+    "approvalsRequired": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["findingId", "role", "action"],
+        "properties": {
+          "findingId": { "type": "string" },
+          "role": { "enum": ["editorial", "technical", "legal", "security", "medical", "financial", "deployment"] },
+          "action": { "type": "string" }
+        }
+      }
+    },
+    "nextReviewAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "unit", "source", "period", "sampleSize"],
+      "properties": {
+        "name": { "type": "string" },
+        "value": { "type": ["number", "string", "null"] },
+        "unit": { "type": "string" },
+        "source": { "type": "string" },
+        "period": { "type": "string" },
+        "sampleSize": { "type": ["integer", "null"], "minimum": 0 },
+        "previousValue": { "type": ["number", "string", "null"] },
+        "limitations": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "scorecard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "metrics"],
+      "properties": {
+        "status": { "enum": ["pass", "partial", "fail", "blocked", "not_applicable"] },
+        "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "domain", "area", "status", "evidence", "checkedAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "domain": { "enum": ["seo", "aeo", "geo", "cross_domain"] },
+        "area": { "type": "string" },
+        "status": { "enum": ["pass", "partial", "fail", "not_applicable", "blocked"] },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": ["string", "null"] },
+        "checkedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "domain",
+        "severity",
+        "title",
+        "observed",
+        "affected",
+        "evidenceIds",
+        "competingHypotheses",
+        "remediation",
+        "owner",
+        "validation",
+        "approvalRequired"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^finding-[a-zA-Z0-9._-]+$" },
+        "domain": { "enum": ["seo", "aeo", "geo", "cross_domain"] },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "title": { "type": "string" },
+        "observed": { "type": "string" },
+        "affected": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "evidenceIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "competingHypotheses": { "type": "array", "items": { "type": "string" } },
+        "remediation": { "type": "string" },
+        "owner": { "type": "string" },
+        "dueAt": { "type": ["string", "null"], "format": "date-time" },
+        "validation": { "type": "string" },
+        "rollback": { "type": ["string", "null"] },
+        "approvalRequired": { "type": "boolean" }
+      }
+    }
+  }
+}

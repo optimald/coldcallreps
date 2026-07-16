@@ -1,0 +1,103 @@
+schemaVersion: 1.0.0
+contentId: content-replace-with-slug
+workingTitle: Replace with accurate working title
+plannedUrl: https://coldcallreps.com/guides/replace-with-slug
+contentType: guide
+owner: product
+reviewers: []
+riskClass: standard
+
+audience:
+  audienceId: brand-founders
+  task: Replace with the single primary task
+  evidenceIds:
+    - ev-llms-product
+
+purpose:
+  userOutcome: What the reader can do after reading
+  businessOutcome: Measurable sign-up or campaign post intent
+  primaryConversion: /sign-up?role=BRAND
+
+questionInventory:
+  primary: Replace with main question
+  followUps: []
+  sources:
+    - customer
+    - query_data
+
+originalContribution:
+  type: expert_analysis
+  description: Marketplace-specific workflow, escrow explanation, or verified comparison
+  evidenceIds: []
+
+claimLedger:
+  - claim: Example — Platform fee is 20% capped at $30 per outcome
+    evidenceIds:
+      - ev-platform-fees
+    scope: As documented on /pricing and product source at ship date
+    reviewer: product-owner
+
+outline:
+  - section: Direct answer
+    purpose: Resolve the primary task in the first screen
+  - section: How Cold Call Reps handles it
+    purpose: Escrow, humans dial, claim audit, payouts
+  - section: Limitations
+    purpose: What we do not do (closers, AI live dials, etc.)
+  - section: Next step
+    purpose: CTA to sign-up or /gigs
+
+seo:
+  canonicalPurpose: Why this URL exists separately from /for/brands or /pricing
+  primaryTopic: Replace
+  relatedTopics: []
+  internalDiscoveryFrom:
+    - /guides
+    - /for/brands
+  internalLinksTo:
+    - /pricing
+    - /sign-up?role=BRAND
+  indexingIntent: index
+
+aeo:
+  directAnswerRequired: true
+  entityFactsUsed:
+    - marketplace
+    - platform fee caps
+  supportedSchemaCandidates:
+    - FAQPage
+    - WebPage
+  accessibilityNotes: []
+
+geo:
+  benchmarkPromptIds: []
+  fanOutQuestions: []
+  corroboratingEvidenceIds: []
+  expectedCitationUnit: Specific fee or escrow fact worth citing
+
+publicationGate:
+  audienceTask:
+    status: blocked
+    evidence: Complete before drafting
+  distinctValue:
+    status: blocked
+    evidence: Complete before drafting
+  claimIntegrity:
+    status: blocked
+    evidence: Complete before drafting
+  completeExperience:
+    status: blocked
+    evidence: Complete before drafting
+  discovery:
+    status: blocked
+    evidence: Complete before drafting
+  distinctUrlPurpose:
+    status: blocked
+    evidence: Complete before drafting
+
+measurement:
+  cohort: guides-brand
+  seoMetrics: []
+  aeoMetrics: []
+  geoMetrics: []
+  reviewAt: null

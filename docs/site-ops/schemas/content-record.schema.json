@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/blog-ops/content-record.schema.json",
+  "title": "SEO AEO GEO Content Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "url",
+    "purpose",
+    "audienceId",
+    "audienceTask",
+    "contentType",
+    "lifecycle",
+    "indexingIntent",
+    "owner",
+    "publicationGate",
+    "evidenceIds",
+    "reviewDates"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "id": { "type": "string", "pattern": "^content-[a-z0-9-]+$" },
+    "url": { "type": "string", "format": "uri" },
+    "canonicalUrl": { "type": ["string", "null"], "format": "uri" },
+    "purpose": { "type": "string", "minLength": 1 },
+    "audienceId": { "type": "string", "minLength": 1 },
+    "audienceTask": { "type": "string", "minLength": 1 },
+    "businessOutcome": { "type": ["string", "null"] },
+    "contentType": {
+      "enum": ["home", "product", "service", "category", "guide", "focused_answer", "comparison", "integration", "case_study", "tool", "policy", "about", "local", "other"]
+    },
+    "cluster": { "type": ["string", "null"] },
+    "template": { "type": ["string", "null"] },
+    "lifecycle": { "enum": ["planned", "draft", "review", "approved", "published", "update_due", "merge_candidate", "retired"] },
+    "indexingIntent": { "enum": ["index", "noindex", "redirect", "gone"] },
+    "owner": { "type": "string", "minLength": 1 },
+    "reviewers": { "type": "array", "items": { "type": "string" } },
+    "publicationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audienceTask", "distinctValue", "claimIntegrity", "completeExperience", "discovery", "distinctUrlPurpose"],
+      "properties": {
+        "audienceTask": { "$ref": "#/$defs/gateResult" },
+        "distinctValue": { "$ref": "#/$defs/gateResult" },
+        "claimIntegrity": { "$ref": "#/$defs/gateResult" },
+        "completeExperience": { "$ref": "#/$defs/gateResult" },
+        "discovery": { "$ref": "#/$defs/gateResult" },
+        "distinctUrlPurpose": { "$ref": "#/$defs/gateResult" }
+      }
+    },
+    "evidenceIds": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^ev-[a-z0-9-]+$" },
+      "uniqueItems": true
+    },
+    "internalDiscoveryFrom": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "uniqueItems": true
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "source", "answerLocation"],
+        "properties": {
+          "question": { "type": "string" },
+          "source": { "enum": ["customer", "sales", "support", "query_data", "research", "other"] },
+          "answerLocation": { "type": "string" }
+        }
+      }
+    },
+    "conversionEvents": { "type": "array", "items": { "type": "string" } },
+    "reviewDates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publishedAt", "lastReviewedAt", "nextReviewAt"],
+      "properties": {
+        "publishedAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastModifiedAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastReviewedAt": { "type": ["string", "null"], "format": "date-time" },
+        "nextReviewAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  },
+  "$defs": {
+    "gateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": { "enum": ["pass", "fail", "blocked"] },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

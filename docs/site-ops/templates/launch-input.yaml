@@ -1,0 +1,77 @@
+schemaVersion: 1.0.0
+siteId: coldcallreps
+mode: launch
+productionOrigin: https://coldcallreps.com
+repositoryRoot: /Users/pulse/Documents/pulse-apps/TROJAN/coldcallreps.com
+
+brand:
+  name: Cold Call Reps
+  legalName: Cold Call Reps
+  description: Human cold outreach marketplace with AI practice and outcome-based pay.
+  primaryEntityUrl: https://coldcallreps.com/
+  parentOrganization: null
+  sameAs: []
+
+audiences:
+  - id: brand-founders
+    name: Brand founders
+    tasks:
+      - Hire cold callers with escrow and outcome pay
+    evidence:
+      - ev-llms-product
+  - id: sdr-reps
+    name: SDRs and setters
+    tasks:
+      - Get paid cold calling gigs with training
+    evidence:
+      - ev-llms-product
+
+products:
+  - id: marketplace
+    name: Cold Call Reps marketplace
+    scope: Humans dial; brands pay for book/qualify; platform fee capped.
+    owner: product
+    pricingUrl: https://coldcallreps.com/pricing
+
+markets:
+  - country: US
+    regions: []
+    languages:
+      - en-US
+    localPresence: false
+
+technology:
+  framework: Next.js
+  contentSource: src/app/(marketing)/guides
+  deployment: Vercel
+  analytics:
+    - posthog
+  searchConsoles: []
+
+approvers:
+  - name: product-owner
+    roles:
+      - editorial
+      - technical
+      - deployment
+
+riskClass: standard
+
+crawlerPolicy: []
+
+launch:
+  targetDate: null
+  environments:
+    - local
+    - preview
+    - production
+  initialUrlInventory:
+    - https://coldcallreps.com/guides
+  analyticsRequired:
+    - sign_up_completed
+  blockedAccess: []
+  knownRisks: []
+  successHypotheses:
+    seo: First 3 guides indexed and receiving brand/rep intent impressions in 60 days.
+    aeo: Top customer questions answered on-site with matching llms.txt facts.
+    geo: Quarterly prompt sample shows accurate fee/escrow citations.

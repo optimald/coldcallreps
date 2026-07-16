@@ -1,10 +1,20 @@
 import type { MetadataRoute } from 'next';
+import { GUIDE_SLUGS } from '@/lib/guides';
 
 const SITE = (process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com').replace(/\/$/, '');
 
 /** Public marketing URLs for search engines. Auth/app desks are omitted. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
+
+  const guideEntries = [
+    { path: '/guides', changeFrequency: 'weekly' as const, priority: 0.7 },
+    ...GUIDE_SLUGS.map((slug) => ({
+      path: `/guides/${slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+  ];
 
   const entries: { path: string; changeFrequency: MetadataRoute.Sitemap[0]['changeFrequency']; priority: number }[] =
     [
@@ -23,6 +33,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       { path: '/sign-up', changeFrequency: 'monthly', priority: 0.8 },
       { path: '/sign-in', changeFrequency: 'monthly', priority: 0.5 },
       { path: '/llms.txt', changeFrequency: 'monthly', priority: 0.4 },
+      ...guideEntries,
     ];
 
   return entries.map(({ path, changeFrequency, priority }) => ({
