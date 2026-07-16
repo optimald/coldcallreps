@@ -49,6 +49,7 @@ export async function GET() {
           status.detailsSubmitted !== profile.stripeConnectDetailsSubmitted ||
           status.payoutsEnabled !== profile.stripeConnectPayoutsEnabled
         ) {
+          const wasReady = profile.stripeConnectPayoutsEnabled;
           const updated = await prisma.userProfile.update({
             where: { id: profile.id },
             data: {
