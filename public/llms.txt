@@ -1,0 +1,41 @@
+# Cold Call Reps
+
+> Human cold outreach marketplace: AI-trained SDRs dial never-contacted leads to qualify or book appointments. Brands fund escrow and pay for verified results.
+
+Cold calling is a numbers game for brands (volume of first-touch dials). For SDRs it is skill, speed, and consistency — with no hard earning ceiling on outcome pay.
+
+## Product
+
+- AI voice trainer + live coach for gatekeeper / decision-maker practice
+- Quality-gated applications to brand campaigns
+- Dialer, booking attribution, AI claim audit, Stripe Connect payouts
+- Campaign outcomes: per booked meeting, per qualified lead, tiered accelerator
+- Optional base pay: weekly, bi-weekly, or monthly (stacks with outcome pay)
+- Platform fee: 20%, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base
+
+## Who it is for
+
+- Brands / founders: post campaigns; humans call Maps-scale / outbound lists with no prior email or LinkedIn touch; pay for qualify or book (not the close)
+- SDRs / appointment setters: train, apply, get paid for results (global signup including PH and remote)
+
+## Key URLs
+
+- https://coldcallreps.com/
+- https://coldcallreps.com/for/brands
+- https://coldcallreps.com/for/reps
+- https://coldcallreps.com/pricing
+- https://coldcallreps.com/gigs
+- https://coldcallreps.com/terms
+- https://coldcallreps.com/privacy
+- https://coldcallreps.com/sitemap.xml
+- https://coldcallreps.com/robots.txt
+
+## Out of scope (by design)
+
+- Closing / closer compensation (separate from book-or-qualify)
+- AI voice agents placing live brand calls (humans dial; AI coaches practice)
+
+## Contact
+
+- https://coldcallreps.com/sign-up
+- support@coldcallreps.com

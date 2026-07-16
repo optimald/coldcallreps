@@ -87,8 +87,13 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
   const heroTone = role.key === 'brands' ? 'brand' : role.key === 'reps' ? 'reps' : 'teams';
   const showReps = role.key === 'reps';
   const showProofBar = role.key === 'brands';
-  // Reps get the dedicated "grind" cut; other roles use the flagship hero.
-  const heroVideo = role.key === 'reps' ? '/media/hero-reps.mp4' : '/media/hero.mp4';
+  // Role-specific hero cuts; teams keeps the flagship.
+  const heroVideo =
+    role.key === 'reps'
+      ? '/media/hero-reps.mp4'
+      : role.key === 'brands'
+        ? '/media/hero-brands.mp4'
+        : '/media/hero.mp4';
 
   return (
     <main className="lp-athletic">
