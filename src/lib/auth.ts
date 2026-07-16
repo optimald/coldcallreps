@@ -22,8 +22,10 @@ export async function requireUser(opts?: {
   }
 
   let profile = await prisma.userProfile.findUnique({ where: { id: userId } });
+  let createdProfile = false;
 
   if (!profile) {
+    createdProfile = true;
     const user = await currentUser();
     const email = user?.emailAddresses?.[0]?.emailAddress || null;
     const displayName =

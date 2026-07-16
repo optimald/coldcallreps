@@ -10,9 +10,8 @@ import {
   VERIFY_SCORE_THRESHOLD,
 } from '@/lib/integrity-gate';
 import { dispatchWebhooks } from '@/lib/webhooks';
-import { rateLimitAsync } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit';
 import { deductMinutes, getMinuteBalance } from '@/lib/minutes';
-import { captureException } from '@/lib/observability';
 import { PRACTICE_GATE_SCORE, trackEvent, trackStreakMilestone } from '@/lib/posthog/analytics';
 
 const SCORING_RUBRIC = `
@@ -255,6 +254,10 @@ export async function POST(req: Request) {
       badges = [];
     }
     if (newBadge && !badges.includes(newBadge)) badges.push(newBadge);
+
+    const priorSessionCount = await prisma.trainerSession.count({
+      where: { userId: profile.id },
+    });
 
     // Atomic: deduct minutes THEN create session (or both in one tx)
     const txResult = await prisma.$transaction(async (tx) => {

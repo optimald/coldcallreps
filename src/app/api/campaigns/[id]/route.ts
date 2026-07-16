@@ -15,10 +15,6 @@ import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { lockEscrowForCampaign } from '@/lib/escrow';
 import { notifyAsync, notifyCampaignSdrs } from '@/lib/notifications';
 import { trackEvent } from '@/lib/posthog/analytics';
-import {
-  DEFAULT_CALLING_TIMEZONE,
-  normalizeCallingHoursMinutes,
-} from '@/lib/calling-hours';
 
 const campaignInclude = {
   brand: { select: { id: true, name: true, slug: true, logoUrl: true } },

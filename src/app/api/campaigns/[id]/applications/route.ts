@@ -183,6 +183,9 @@ export async function PATCH(
       });
     }
 
+    const wasAlreadyActive =
+      app.status === 'ACTIVE' || app.status === 'ACCEPTED' || app.status === 'COMPLETED';
+
     const updated = await prisma.campaignApplication.update({
       where: { id: applicationId },
       data: {

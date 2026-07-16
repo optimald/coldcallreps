@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
-import { rateLimitAsync } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit';
 import { newGateJti, signGateToken, verifyGateToken } from '@/lib/gate-token';
 import { createMinuteHold, getMinuteBalance, markHoldStarted } from '@/lib/minutes';
 import { prisma } from '@/lib/prisma';
-import { captureException } from '@/lib/observability';
 import { isFirstTrainerSession, trackEvent, trackReturnSession } from '@/lib/posthog/analytics';
 
 /**

@@ -24,7 +24,6 @@ import {
 } from '@/lib/campaign-tiers';
 import { lockEscrowForCampaign } from '@/lib/escrow';
 import { isBasePayCadence, PLATFORM_FEE_BPS } from '@/lib/platform-fees';
-import { parseCallingHoursBody } from '@/lib/calling-hours';
 import { brandCampaignCount, trackEvent } from '@/lib/posthog/analytics';
 
 async function serializeWithSpend<T extends { id: string }>(
