@@ -271,3 +271,50 @@ export async function creditPersonalMinutes(userId: string, minutes: number) {
     data: { minutesRemaining: { increment: minutes } },
   });
 }
+
+/**
+ * Bill elapsed practice time when a call ends without a scorecard.
+ * Idempotent if hold already consumed.
+ */
+export async function settleAbandonedHold(opts: {
+  userId: string;
+  holdId: string;
+  durationSecs?: number;
+}): Promise<
+  | { ok: true; billed: number; remaining: number; alreadySettled?: boolean }
+  | { ok: false; error: string }
+> {
+  const hold = await prisma.minuteHold.findUnique({ where: { id: opts.holdId } });
+  if (!hold || hold.userId !== opts.userId) {
+    return { ok: false, error: 'Hold not found' };
+  }
+  if (hold.consumedAt) {
+    const profile = await prisma.userProfile.findUnique({ where: { id: opts.userId } });
+    const balance = profile ? await getMinuteBalance(profile) : null;
+    return {
+      ok: true,
+      billed: 0,
+      remaining: balance?.available ?? 0,
+      alreadySettled: true,
+    };
+  }
+
+  let elapsedSecs = Math.max(0, Math.floor(opts.durationSecs ?? 0));
+  if (elapsedSecs <= 0 && hold.startedAt) {
+    elapsedSecs = Math.max(0, Math.floor((Date.now() - hold.startedAt.getTime()) / 1000));
+  }
+  const minutes = Math.max(1, Math.ceil(elapsedSecs / 60) || 1);
+
+  const profile = await prisma.userProfile.findUnique({ where: { id: opts.userId } });
+  if (!profile) return { ok: false, error: 'Profile not found' };
+
+  const deducted = await deductMinutes(profile, minutes, { holdId: opts.holdId });
+  if (!deducted.ok) {
+    await prisma.minuteHold.updateMany({
+      where: { id: opts.holdId, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    return { ok: false, error: deducted.error };
+  }
+  return { ok: true, billed: minutes, remaining: deducted.remaining };
+}

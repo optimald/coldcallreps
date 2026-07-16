@@ -95,6 +95,7 @@ export async function POST(req: Request) {
         : undefined;
 
     let accountId = profile.stripeConnectAccountId;
+    const startedConnect = !accountId;
 
     if (!accountId) {
       const account = await createConnectAccount({
