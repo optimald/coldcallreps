@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrandId } from '@/lib/brand-acl';
+import { canManageBrand } from '@/lib/roles';
 import { writeAudit } from '@/lib/audit';
 import { trackEvent } from '@/lib/posthog/analytics';
 
