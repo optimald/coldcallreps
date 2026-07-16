@@ -54,6 +54,7 @@ export default function GigsPage() {
     tone: 'ok' | 'warn';
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const trackedList = useRef(false);
 
   async function load() {
     setLoading(true);
