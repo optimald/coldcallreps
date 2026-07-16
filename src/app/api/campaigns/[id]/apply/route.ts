@@ -7,7 +7,6 @@ import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { assertCanApplyToCampaign } from '@/lib/apply-gate';
 import { notifyAsync } from '@/lib/notifications';
 import { trackEvent } from '@/lib/posthog/analytics';
-import { trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST — SDR applies to an OPEN campaign after AI trainer gate.
