@@ -42,7 +42,8 @@
     "postinstall": "prisma generate",
     "deploy:clips": "npm run deploy --prefix workers/clips-r2",
     "trigger:dev": "npx trigger.dev@latest dev",
-    "trigger:deploy": "npx trigger.dev@latest deploy"
+    "trigger:deploy": "npx trigger.dev@latest deploy",
+    "seo:audit-sitemap": "npx tsx scripts/audit-google-sitemap.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1084.0",
@@ -76,6 +77,7 @@
     "@types/ws": "^8.18.1",
     "prisma": "^6.5.0",
     "trigger.dev": "^4.5.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "googleapis": "^173.0.0"
   }
 }

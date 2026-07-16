@@ -13,6 +13,8 @@
 | Marketing route inventory | `src/app/(marketing)/` |
 | Product truth for claims | `src/lib/product.ts`, `src/lib/platform-fees.ts` |
 | Emit audit report | `reports/site-ops/run-<timestamp>/` (new path only) |
+| Search Console sitemap audit | `npx tsx scripts/audit-google-sitemap.ts` (after implementation) |
+| IndexNow dry run | `npx tsx scripts/submit-indexnow.ts` (after implementation) |
 
 ## Allowed with human approval
 
@@ -35,6 +37,9 @@
 ## GSC / analytics
 
 Mark `blocked` when credentials are missing. Do not guess indexation or conversion rates.
+Follow [`search-indexing.md`](./search-indexing.md) when creating or running the sitemap
+audit and IndexNow scripts. A live IndexNow POST requires `--send`; the default must
+remain dry-run. Do not create a Google force-index script for ordinary pages.
 
 ## Report outputs
 

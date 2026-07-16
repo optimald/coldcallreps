@@ -10,6 +10,7 @@ expand discoverability, and audit public URLs without inventing marketplace clai
 | [`content-plan.md`](./content-plan.md) | Priority URL backlog and cohorts |
 | [`scorecards.md`](./scorecards.md) | Separate SEO / AEO / GEO measurement |
 | [`automation-contract.md`](./automation-contract.md) | Safe repo commands and boundaries |
+| [`search-indexing.md`](./search-indexing.md) | Create the Google sitemap audit and IndexNow submission scripts |
 | [`.cursor/skills/seo-aeo-geo-site-ops/SKILL.md`](../../.cursor/skills/seo-aeo-geo-site-ops/SKILL.md) | Agent router |
 
 ## Modes

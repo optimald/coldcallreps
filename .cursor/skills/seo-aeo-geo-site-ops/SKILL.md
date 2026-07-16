@@ -31,9 +31,10 @@ Ask one focused question if the mode is unclear. Do not mix launch state with au
 2. `docs/site-ops/SOP.md` — strategy, content clusters, Publication Gate
 3. `docs/site-ops/site-profile.yaml` — brand, audiences, products (do not invent facts)
 4. `docs/site-ops/content-plan.md` — priority URLs and cohorts
-5. Matching checklist in `docs/site-ops/checklists/`
-6. Schemas in `docs/site-ops/schemas/` when emitting records or reports
-7. Prior state in `docs/site-ops/state/` and `reports/site-ops/`
+5. `docs/site-ops/search-indexing.md` — Google sitemap audit and IndexNow implementation/runbook
+6. Matching checklist in `docs/site-ops/checklists/`
+7. Schemas in `docs/site-ops/schemas/` when emitting records or reports
+8. Prior state in `docs/site-ops/state/` and `reports/site-ops/`
 
 ## Content Mode Workflow
 
