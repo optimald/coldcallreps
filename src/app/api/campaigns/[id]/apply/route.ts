@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrandId } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/brand-acl';
 import { isCampaignDialEligible, practiceHref } from '@/lib/campaigns';
 import { loadOneCampaignSpend } from '@/lib/campaign-spend';
 import { assertCanApplyToCampaign } from '@/lib/apply-gate';

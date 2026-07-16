@@ -349,20 +349,6 @@ export function canManageBrand(
   return brandOwnerId === profile.id;
 }
 
-/** Owner or superadmin. BrandMember ACL lands with the members schema migration. */
-export async function canManageBrandId(
-  profile: Pick<UserProfile, 'id' | 'platformRole' | 'email'>,
-  brandId: string
-): Promise<boolean> {
-  if (isSuperadmin(profile)) return true;
-  const { prisma } = await import('@/lib/prisma');
-  const brand = await prisma.brand.findUnique({
-    where: { id: brandId },
-    select: { ownerId: true },
-  });
-  return Boolean(brand?.ownerId && brand.ownerId === profile.id);
-}
-
 
 /**
  * Brand desk pages: owners always; platform demo-* brands when desk is in Demo mode

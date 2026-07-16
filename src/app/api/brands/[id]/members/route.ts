@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canManageBrand, canManageBrandId } from '@/lib/roles';
+import { canManageBrand } from '@/lib/roles';
+import { canManageBrandId } from '@/lib/brand-acl';
 
 type Ctx = { params: Promise<{ id: string }> };
 
