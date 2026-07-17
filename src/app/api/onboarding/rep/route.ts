@@ -7,7 +7,7 @@ import {
   homeForMode,
   serializeUnlockedRoles,
 } from '@/lib/role-mode';
-import { trackEvent } from '@/lib/posthog/analytics';
+import { syncPersonProfile, trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/onboarding/rep
@@ -109,6 +109,7 @@ export async function POST(req: Request) {
         role: 'REP',
         redirectTo: homeForMode('REP'),
       });
+      syncPersonProfile(updated);
     }
 
     return NextResponse.json({

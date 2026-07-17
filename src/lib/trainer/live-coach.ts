@@ -72,6 +72,7 @@ export async function generateLiveCoachHint(options: {
   playbookBlock?: string | null;
   /** Pro/Team get the priority coach model. */
   priority?: boolean;
+  distinctId?: string | null;
 }): Promise<LiveCoachHint> {
   const {
     transcript,
@@ -84,6 +85,7 @@ export async function generateLiveCoachHint(options: {
     coachMemoryBlock,
     playbookBlock,
     priority = false,
+    distinctId,
   } = options;
 
   if (transcript.length === 0) {
@@ -124,6 +126,8 @@ Trainee's next spoken line only — must be different from prior coach lines:`;
     temperature: 0.4,
     jsonMode: true,
     model: priority ? COACH_MODEL_PRIORITY : COACH_MODEL,
+    distinctId,
+    spanName: 'trainer_live_coach',
   });
   return parseCoachResponse(raw);
 }

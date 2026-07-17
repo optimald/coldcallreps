@@ -65,6 +65,7 @@ export async function POST(req: Request) {
         coachMemoryBlock,
         playbookBlock,
         priority,
+        distinctId: userId,
       });
       return NextResponse.json({ hint, source: 'llm', priority });
     } catch (llmErr) {

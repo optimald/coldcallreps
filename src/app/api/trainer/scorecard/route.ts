@@ -12,6 +12,7 @@ import {
 import { dispatchWebhooks } from '@/lib/webhooks';
 import { rateLimit } from '@/lib/rate-limit';
 import { deductMinutes, getMinuteBalance } from '@/lib/minutes';
+import { captureException } from '@/lib/observability';
 import { PRACTICE_GATE_SCORE, trackEvent, trackStreakMilestone } from '@/lib/posthog/analytics';
 
 const SCORING_RUBRIC = `
@@ -196,7 +197,12 @@ export async function POST(req: Request) {
       const evaluationText = await runLLM(
         SCORING_RUBRIC,
         `Evaluate this cold call transcript:\n\n${transcript}`,
-        { temperature: 0.1, jsonMode: true }
+        {
+          temperature: 0.1,
+          jsonMode: true,
+          distinctId: profile.id,
+          spanName: 'trainer_scorecard',
+        }
       );
       cleanJson = extractJsonObject(evaluationText);
       scorecard = JSON.parse(cleanJson);
@@ -421,6 +427,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     }
     console.error('Scorecard error:', error);
+    captureException(error, { route: 'scorecard' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

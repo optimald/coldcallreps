@@ -10,7 +10,7 @@ import {
   resolveBrandLogoFromWebsite,
 } from '@/lib/fetch-brand-logo';
 import { normalizeLogoUrlInput } from '@/lib/brand-logo-upload';
-import { trackEvent } from '@/lib/posthog/analytics';
+import { identifyBrandGroup, syncPersonProfile, trackEvent } from '@/lib/posthog/analytics';
 
 /**
  * POST /api/onboarding/brand
@@ -142,6 +142,11 @@ export async function POST(req: Request) {
         brandSlug: result.brand.slug,
         redirectTo: `/brands/${result.brand.slug}`,
       });
+      identifyBrandGroup(result.brand.id, {
+        name: result.brand.name,
+        slug: result.brand.slug,
+      });
+      syncPersonProfile(result.updated);
     }
 
     return NextResponse.json({

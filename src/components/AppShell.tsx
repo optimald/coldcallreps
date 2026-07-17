@@ -36,6 +36,10 @@ import {
   getDemoTeam,
 } from '@/lib/demo/brand-demo-data';
 import type { ShellBootstrap } from '@/lib/shell-bootstrap';
+import {
+  setClientGroup,
+  syncClientPersonProperties,
+} from '@/lib/posthog/client';
 
 const FALLBACK = NAV_SECTIONS_BY_ROLE.REP;
 const SIDEBAR_COLLAPSED_KEY = 'ccr-sidebar-collapsed';
@@ -306,6 +310,14 @@ export default function AppShell({
   }, [deskMode, isBrandDesk, selectedBrand, switcherBrands, ownedBrands, pathname]);
 
   useEffect(() => {
+    if (!selectedBrand || deskMode === 'demo') return;
+    setClientGroup('brand', selectedBrand.id, {
+      name: selectedBrand.name,
+      slug: selectedBrand.slug,
+    });
+  }, [selectedBrand, deskMode]);
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
       if (stored === '1' || stored === 'true') setSidebarCollapsed(true);
@@ -349,6 +361,22 @@ export default function AppShell({
           plan: d.plan || prev.plan || 'FREE',
           profileSlug: d.profileSlug || prev.profileSlug,
         }));
+
+        if (d.id || d.platformRole || d.plan) {
+          syncClientPersonProperties({
+            role:
+              d.platformRole === 'BRAND' || d.platformRole === 'RECRUITER' ? 'BRAND' : 'REP',
+            platform_role: d.platformRole,
+            plan: d.plan,
+            minutes_remaining: d.minutesRemaining,
+            minutes_used: d.minutesUsed,
+            current_streak: d.currentStreak,
+            total_points: d.totalPoints,
+            onboarded: Boolean(d.repOnboardedAt ?? d.onboarded),
+            has_subscription: Boolean(d.hasSubscription),
+            connect_payouts_enabled: Boolean(d.connect?.ready || d.connect?.payoutsEnabled),
+          });
+        }
 
         const r = (d.platformRole || initial?.role || role) as AppRole;
         if (r === 'BRAND' || r === 'RECRUITER') {

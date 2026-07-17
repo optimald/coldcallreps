@@ -30,6 +30,7 @@ function PostHogIdentify() {
       posthog.identify(user.id, {
         email: user.primaryEmailAddress?.emailAddress,
         name: user.fullName || user.username,
+        clerk_created_at: user.createdAt?.toISOString?.() ?? user.createdAt,
       });
     } else {
       posthog.reset();

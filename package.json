@@ -43,7 +43,8 @@
     "deploy:clips": "npm run deploy --prefix workers/clips-r2",
     "trigger:dev": "npx trigger.dev@latest dev",
     "trigger:deploy": "npx trigger.dev@latest deploy",
-    "seo:audit-sitemap": "npx tsx scripts/audit-google-sitemap.ts"
+    "seo:audit-sitemap": "npx tsx scripts/audit-google-sitemap.ts",
+    "posthog:setup": "npx tsx scripts/setup-posthog.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1084.0",
