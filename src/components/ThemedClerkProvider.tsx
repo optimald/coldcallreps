@@ -3,6 +3,7 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
+import ResolvePendingOrgTask from '@/components/ResolvePendingOrgTask';
 
 type CssVars = {
   accent: string;
@@ -140,5 +141,16 @@ export default function ThemedClerkProvider({ children }: { children: ReactNode 
     [vars]
   );
 
-  return <ClerkProvider appearance={appearance}>{children}</ClerkProvider>;
+  return (
+    <ClerkProvider
+      appearance={appearance}
+      // Orgs are optional for product flows (brand setup, campaigns). Membership
+      // required leaves sessions `pending` on choose-organization; do not treat
+      // that as signed-out or the app is unusable until the task clears.
+      treatPendingAsSignedOut={false}
+    >
+      <ResolvePendingOrgTask />
+      {children}
+    </ClerkProvider>
+  );
 }

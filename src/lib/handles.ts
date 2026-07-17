@@ -36,6 +36,7 @@ export const RESERVED_HANDLES = new Set([
   'reps',
   'recruiters',
   'sessions',
+  'session-tasks',
   'settings',
   'sign-in',
   'sign-up',

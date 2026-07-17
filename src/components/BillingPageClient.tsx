@@ -319,10 +319,24 @@ export default function BillingPageClient() {
   const [creditsBrandId, setCreditsBrandId] = useState('');
   const [creditsType, setCreditsType] = useState('');
   const [creditsSort, setCreditsSort] = useState<'newest' | 'oldest' | 'amount'>('newest');
+  const brandDeepLink = (searchParams.get('brand') || '').trim();
 
   useEffect(() => {
     setBrandTab(parseBillingTab(searchParams.get('tab')));
   }, [searchParams]);
+
+  // Deep-link /billing?brand=slug|id from brand desk (/brands/:id/billing).
+  useEffect(() => {
+    if (!brandDeepLink || !ledgerBrands.length) return;
+    const key = brandDeepLink.toLowerCase();
+    const match = ledgerBrands.find(
+      (b) => b.id === brandDeepLink || (b.slug || '').toLowerCase() === key
+    );
+    if (match && filterBrandId !== match.id) {
+      setFilterBrandId(match.id);
+      setFundBrandId(match.id);
+    }
+  }, [brandDeepLink, ledgerBrands, filterBrandId]);
 
   function selectBrandTab(next: BrandBillingTab) {
     setBrandTab(next);

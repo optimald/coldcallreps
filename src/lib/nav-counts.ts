@@ -45,7 +45,9 @@ export async function loadBrandNavCounts(brandId: string): Promise<BrandNavCount
         status: { in: ['initiated', 'ringing', 'in-progress', 'in_progress'] },
       },
     }),
-    prisma.campaign.count({ where: { brandId, status: 'OPEN' } }),
+    prisma.campaign.count({
+      where: { brandId, status: { in: ['DRAFT', 'OPEN', 'PAUSED'] } },
+    }),
     prisma.playbook.count({ where: { brandId } }),
     prisma.campaignApplication.count({
       where: { campaign: { brandId }, status: 'APPLIED' },

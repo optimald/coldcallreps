@@ -14,6 +14,7 @@ const isPublicRoute = createRouteMatcher([
   '/robots.txt',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/session-tasks(.*)',
   '/media(.*)',
   '/r/(.*)',
   '/t/(.*)',
@@ -25,6 +26,9 @@ const isPublicRoute = createRouteMatcher([
   '/api/profile/handle(.*)',
   '/api/clips/media(.*)',
   '/api/brands(.*)',
+  '/api/me(.*)',
+  '/api/setup(.*)',
+  '/api/onboarding(.*)',
   '/api/arena(.*)',
   '/api/jobs(.*)',
   '/api/tournaments(.*)',
@@ -41,12 +45,23 @@ const isPublicRoute = createRouteMatcher([
   // Meeting attribution: prospect lands on Cal success redirect (token is the credential)
   '/book(.*)',
   '/api/bookings/(.*)',
+  '/api/health(.*)',
+  '/api/cron/(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  // Vanity handles (/jane), profile + team APIs require sign-in.
+  // Vanity handles (/jane) and app routes require a signed-in user.
+  // Do NOT use auth.protect() here: Clerk's protect() hard-rejects
+  // sessionStatus === 'pending' (choose-organization task) even when
+  // treatPendingAsSignedOut is false, which trapped users on /sign-in/tasks.
+  // Orgs are optional for brand/campaign flows — pending is still authenticated.
   if (!isPublicRoute(req)) {
-    await auth.protect();
+    const { userId, redirectToSignIn } = await auth({
+      treatPendingAsSignedOut: false,
+    });
+    if (!userId) {
+      return redirectToSignIn();
+    }
   }
 
   const requestHeaders = new Headers(req.headers);

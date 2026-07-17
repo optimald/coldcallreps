@@ -16,7 +16,10 @@ function makeReferralCode(userId: string): string {
 export async function requireUser(opts?: {
   allowSuspended?: boolean;
 }): Promise<UserProfile> {
-  const { userId, orgId } = await auth();
+  // Pending sessions (Clerk choose-organization task) still identify a user.
+  // Default treatPendingAsSignedOut would make auth() look signed-out and break
+  // setup/onboarding while the org picker is stuck.
+  const { userId, orgId } = await auth({ treatPendingAsSignedOut: false });
   if (!userId) {
     throw new Error('UNAUTHORIZED');
   }

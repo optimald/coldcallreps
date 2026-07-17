@@ -6,7 +6,10 @@ import ClerkAuthShell from '@/components/ClerkAuthShell';
 export default function SignInPage() {
   return (
     <ClerkAuthShell mode="sign-in">
-      <SignIn />
+      <SignIn
+        fallbackRedirectUrl="/dashboard"
+        forceRedirectUrl="/dashboard"
+      />
     </ClerkAuthShell>
   );
 }
