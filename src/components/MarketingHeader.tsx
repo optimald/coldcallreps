@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import BrandMark from '@/components/BrandMark';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 
 const NAV_LINKS = [
-  { href: '/for', label: 'Who it’s for' },
-  { href: '/for/reps', label: 'Sales Reps' },
-  { href: '/for/brands', label: 'Brand Founders' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/for/reps', label: 'For SDRs' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/guides', label: 'Guides' },
 ] as const;
 
 /** Marketing top nav — brand always in the header, drawer menu on mobile. */
@@ -44,28 +44,12 @@ export default function MarketingHeader() {
               {link.label}
             </Link>
           ))}
-          <SignedIn>
-            <Link href="/gigs" className="mkt-nav-link">
-              Brand deals
-            </Link>
-          </SignedIn>
         </div>
 
         <div className="mkt-nav-actions">
-          <SignedOut>
-            <Link href="/sign-in" className="mkt-nav-link mkt-nav-link--signin">
-              Sign in
-            </Link>
-            <Link href="/sign-up?role=REP" className="btn mkt-nav-cta">
-              Start free
-            </Link>
-          </SignedOut>
-          <SignedIn>
-            <Link href="/dashboard" className="mkt-nav-link mkt-nav-link--signin">
-              Dashboard
-            </Link>
-            <UserButton />
-          </SignedIn>
+          <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-cta">
+            Start free
+          </a>
         </div>
 
         <button
@@ -97,29 +81,10 @@ export default function MarketingHeader() {
                 {link.label}
               </Link>
             ))}
-            <SignedIn>
-              <Link href="/gigs" className="mkt-nav-drawer__link">
-                Brand deals
-              </Link>
-              <Link href="/dashboard" className="mkt-nav-drawer__link">
-                Dashboard
-              </Link>
-            </SignedIn>
             <div className="mkt-nav-drawer__actions">
-              <SignedOut>
-                <Link href="/sign-in" className="btn-ghost mkt-nav-drawer__btn">
-                  Sign in
-                </Link>
-                <Link href="/sign-up?role=REP" className="btn mkt-nav-drawer__btn">
-                  Start free
-                </Link>
-              </SignedOut>
-              <SignedIn>
-                <div className="mkt-nav-drawer__user">
-                  <UserButton />
-                  <span>Account</span>
-                </div>
-              </SignedIn>
+              <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-drawer__btn">
+                Start free
+              </a>
             </div>
           </div>
         </>

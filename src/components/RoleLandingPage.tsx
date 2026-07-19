@@ -54,29 +54,6 @@ function ScorecardMock() {
   );
 }
 
-function EscrowMock() {
-  return (
-    <BrowserFrame title="coldcallreps.com/campaigns · escrow">
-      <div className="lp-ath-mockui lp-ath-mockui--payout">
-        <p className="lp-ath-mockui__label">Campaign funded</p>
-        <h3>Escrow ready</h3>
-        <p className="lp-ath-mockui__detail">Booked meeting · $175 / result · ICP gate on</p>
-        <div className="lp-ath-mockui__escrow">
-          <div>
-            <span>Funded</span>
-            <strong>$1,750</strong>
-          </div>
-          <div>
-            <span>Status</span>
-            <strong className="is-ok">Held</strong>
-          </div>
-        </div>
-        <p className="lp-ath-mockui__pass">Released only when the result is verified</p>
-      </div>
-    </BrowserFrame>
-  );
-}
-
 const REPS = [
   { handle: '@setter_north', stat: '94', label: 'Integrity score', detail: 'Gatekeeper → DM', tone: 'a' },
   { handle: '@booked_west', stat: '212', label: 'Practice calls', detail: 'Campaign unlocked', tone: 'b' },
@@ -84,26 +61,15 @@ const REPS = [
 ] as const;
 
 export default function RoleLandingPage({ role }: { role: RoleLanding }) {
-  const heroTone = role.key === 'brands' ? 'brand' : role.key === 'reps' ? 'reps' : 'teams';
-  const showReps = role.key === 'reps';
-  const showProofBar = role.key === 'brands';
-  // Role-specific hero cuts; teams keeps the flagship.
-  const heroVideo =
-    role.key === 'reps'
-      ? '/media/hero-reps.mp4'
-      : role.key === 'brands'
-        ? '/media/hero-brands.mp4'
-        : '/media/hero.mp4';
-
   return (
     <main className="lp-athletic">
       <section
-        className={`lp-ath-hero lp-ath-hero--role lp-ath-hero--${heroTone}`}
+        className="lp-ath-hero lp-ath-hero--role lp-ath-hero--reps"
         aria-labelledby="lp-role-hero-title"
       >
         <div className="lp-ath-hero__media" aria-hidden>
           <video className="lp-ath-hero__video" autoPlay muted loop playsInline preload="metadata">
-            <source src={heroVideo} type="video/mp4" />
+            <source src="/media/hero-reps.mp4" type="video/mp4" />
           </video>
         </div>
         <div className="lp-ath-hero__fx" aria-hidden>
@@ -147,11 +113,9 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
             ))}
           </div>
 
-          {role.key === 'reps' || role.key === 'brands' ? (
-            <div className="lp-ath-role-outcomes__visual">
-              {role.key === 'reps' ? <ScorecardMock /> : <EscrowMock />}
-            </div>
-          ) : null}
+          <div className="lp-ath-role-outcomes__visual">
+            <ScorecardMock />
+          </div>
         </div>
       </section>
 
@@ -173,52 +137,48 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
         </div>
       </section>
 
-      {showReps ? (
-        <section className="lp-ath-reps" aria-labelledby="lp-role-reps">
-          <p className="lp-ath-kicker lp-ath-kicker--center">Meet the reps</p>
-          <h2 id="lp-role-reps" className="lp-ath-h2 lp-ath-h2--center lp-ath-h2--wide">
-            Real humans. Proven scores.
-          </h2>
-          <p className="lp-ath-reps__note">
-            Illustrative scorecards from the practice gym — anonymized handles, not paid endorsements.
-          </p>
-          <div className="lp-ath-reps__grid">
-            {REPS.map((rep) => (
-              <article key={rep.handle} className="lp-ath-reps__card">
-                <span className={`lp-ath-reps__avatar lp-ath-reps__avatar--${rep.tone}`} aria-hidden>
-                  {rep.handle.slice(1, 3).toUpperCase()}
-                </span>
-                <p className="lp-ath-reps__badge">Top performer</p>
-                <strong className="lp-ath-reps__handle">{rep.handle}</strong>
-                <p className="lp-ath-reps__stat">
-                  <em>{rep.stat}</em>
-                  <span>{rep.label}</span>
-                </p>
-                <p className="lp-ath-reps__detail">{rep.detail}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <section className="lp-ath-reps" aria-labelledby="lp-role-reps">
+        <p className="lp-ath-kicker lp-ath-kicker--center">Meet the reps</p>
+        <h2 id="lp-role-reps" className="lp-ath-h2 lp-ath-h2--center lp-ath-h2--wide">
+          Real humans. Proven scores.
+        </h2>
+        <p className="lp-ath-reps__note">
+          Illustrative scorecards from the practice gym — anonymized handles, not paid endorsements.
+        </p>
+        <div className="lp-ath-reps__grid">
+          {REPS.map((rep) => (
+            <article key={rep.handle} className="lp-ath-reps__card">
+              <span className={`lp-ath-reps__avatar lp-ath-reps__avatar--${rep.tone}`} aria-hidden>
+                {rep.handle.slice(1, 3).toUpperCase()}
+              </span>
+              <p className="lp-ath-reps__badge">Top performer</p>
+              <strong className="lp-ath-reps__handle">{rep.handle}</strong>
+              <p className="lp-ath-reps__stat">
+                <em>{rep.stat}</em>
+                <span>{rep.label}</span>
+              </p>
+              <p className="lp-ath-reps__detail">{rep.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-      {showProofBar ? (
-        <section className="lp-ath-proofbar" aria-label="Platform proof">
-          <div className="lp-ath-proofbar__grid">
-            <div>
-              <strong>20%</strong>
-              <span>Fee capped ($30 / outcome)</span>
-            </div>
-            <div>
-              <strong>Escrow</strong>
-              <span>Pay only when verified</span>
-            </div>
-            <div>
-              <strong>Human + AI</strong>
-              <span>Trained reps, live coaching</span>
-            </div>
+      <section className="lp-ath-proofbar" aria-label="Why reps join">
+        <div className="lp-ath-proofbar__grid">
+          <div>
+            <strong>Free start</strong>
+            <span>Practice minutes to prove yourself</span>
           </div>
-        </section>
-      ) : null}
+          <div>
+            <strong>$0 deals</strong>
+            <span>Brand campaigns free for reps</span>
+          </div>
+          <div>
+            <strong>Per result</strong>
+            <span>Paid when outcomes verify</span>
+          </div>
+        </div>
+      </section>
 
       {/* Pricing */}
       <section className="lp-ath-role-pricing" aria-labelledby="lp-role-pricing">

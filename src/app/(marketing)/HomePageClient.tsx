@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import './landing.css';
 
 function Reveal({
@@ -101,32 +101,32 @@ function MockPractice() {
   );
 }
 
-function MockLeads() {
+function MockDeals() {
   return (
-    <BrowserFrame title="coldcallreps.com · Lead Finder">
+    <BrowserFrame title="coldcallreps.com · Brand deals">
       <div className="lp-ath-mockui lp-ath-mockui--leads">
         <div className="lp-ath-mockui__bar">
-          <span>Lead Finder</span>
-          <em>ICP · Commercial · Midwest</em>
+          <span>Open deals</span>
+          <em>Qualified · Booked meeting</em>
         </div>
         <div className="lp-ath-mockui__statrow">
           <div>
-            <strong>298</strong>
-            <span>matched</span>
+            <strong>$175</strong>
+            <span>/ meeting</span>
           </div>
           <div>
-            <strong>94%</strong>
-            <span>reachable</span>
+            <strong>12</strong>
+            <span>open deals</span>
           </div>
         </div>
         <ul className="lp-ath-mockui__queue">
           <li className="is-active">
-            <strong>Apex Plumbing</strong>
-            <span>Owner · Chicago · Ready</span>
+            <strong>Aegis Pipeline</strong>
+            <span>B2B SaaS · Mid-market · Ready</span>
           </li>
           <li>
             <strong>Northline Freight</strong>
-            <span>VP Ops · Dallas · Ready</span>
+            <span>Local services · High volume · Ready</span>
           </li>
         </ul>
       </div>
@@ -136,22 +136,22 @@ function MockLeads() {
 
 function MockPayout() {
   return (
-    <BrowserFrame title="coldcallreps.com/campaigns">
+    <BrowserFrame title="coldcallreps.com/earnings">
       <div className="lp-ath-mockui lp-ath-mockui--payout">
         <p className="lp-ath-mockui__label">Result verified</p>
         <h3>Meeting booked</h3>
         <p className="lp-ath-mockui__detail">Discovery · Thu 2:00p · ICP confirmed</p>
         <div className="lp-ath-mockui__escrow">
           <div>
-            <span>Escrow</span>
-            <strong>$175</strong>
+            <span>Your payout</span>
+            <strong>$140</strong>
           </div>
           <div>
             <span>Status</span>
             <strong className="is-ok">Released</strong>
           </div>
         </div>
-        <p className="lp-ath-mockui__pass">Pay per result · brand charged only on success</p>
+        <p className="lp-ath-mockui__pass">Get paid when the result is verified</p>
       </div>
     </BrowserFrame>
   );
@@ -159,18 +159,18 @@ function MockPayout() {
 
 const FEATURES = [
   {
-    title: 'Trained SDRs',
-    body: "Independent reps practice realistic calls on your exact offer using AI voice simulation until they're ready.",
+    title: 'AI Voice Practice',
+    body: 'Run realistic cold calls with a live AI coach. Gatekeepers, objections, and asks — until your scorecard proves you’re sharp.',
     Mock: MockPractice,
   },
   {
-    title: 'Ready-to-Call Leads',
-    body: 'Enrich your list or find new prospects with one click — clean, researched, and dial-ready.',
-    Mock: MockLeads,
+    title: 'Brand Deals',
+    body: 'Clear the quality gate, then apply to paid campaigns. Dial leads for founders who fund escrow — brand deals stay free for reps.',
+    Mock: MockDeals,
   },
   {
-    title: 'Pay Per Result',
-    body: 'Set your own price per qualified lead or booked meeting. Only pay for success.',
+    title: 'Get Paid Per Result',
+    body: 'Earn on qualified leads or booked meetings. No salary ceiling — skill, speed, and consistency decide what you make.',
     Mock: MockPayout,
   },
 ] as const;
@@ -178,23 +178,23 @@ const FEATURES = [
 const STEPS = [
   {
     n: '01',
-    title: 'Post Your Campaign',
-    body: 'Share your offer and set your price per result.',
+    title: 'Train',
+    body: 'Practice with AI voice on real brand offers until your openers and asks are clean.',
   },
   {
     n: '02',
-    title: 'Get Matched',
-    body: 'Only high-scoring, trained SDRs can apply.',
+    title: 'Prove',
+    body: 'Hit the score gate. Build a profile brands trust.',
   },
   {
     n: '03',
-    title: 'Reps Execute',
-    body: 'They call using our workspace with live AI coaching.',
+    title: 'Apply',
+    body: 'Unlock paid brand deals and pick campaigns that fit your strengths.',
   },
   {
     n: '04',
-    title: 'Receive Results',
-    body: 'Booked meetings land on your calendar.',
+    title: 'Get Paid',
+    body: 'Dial live leads. Get paid when meetings or qualified sets are verified.',
   },
 ] as const;
 
@@ -234,11 +234,6 @@ const REPS = [
   },
 ] as const;
 
-const LEAD_ROWS = [
-  { name: 'Apex Plumbing', title: 'Owner · Chicago', score: '94', status: 'Ready' },
-  { name: 'Northline Freight', title: 'VP Ops · Dallas', score: '91', status: 'Ready' },
-] as const;
-
 export default function HomePageClient() {
   return (
     <main className="lp-athletic">
@@ -246,7 +241,7 @@ export default function HomePageClient() {
       <noscript>
         <style>{`.lp-reveal{opacity:1!important;transform:none!important}`}</style>
       </noscript>
-      {/* 3.2 Hero */}
+      {/* Hero */}
       <section className="lp-ath-hero lp-ath-hero--center lp-ath-hero--signal" aria-labelledby="lp-hero-title">
         <div className="lp-ath-hero__media" aria-hidden>
           <video
@@ -275,7 +270,7 @@ export default function HomePageClient() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            Stop cold calling yourself.
+            Train. Prove. Get Paid.
           </motion.h1>
 
           <motion.p
@@ -284,9 +279,8 @@ export default function HomePageClient() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
           >
-            Get booked meetings from real SDRs who trained on <em>your</em> product with AI voice
-            practice. Only high-scoring reps run your campaigns. You pay only when they deliver
-            results.
+            For SDRs and appointment setters who want training and brand deals. Practice with AI
+            voice, prove your score, then get paid to call leads — no earning ceiling.
           </motion.p>
 
           <motion.div
@@ -295,12 +289,12 @@ export default function HomePageClient() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.16 }}
           >
-            <Link href="/sign-up?role=BRAND" className="lp-ath-btn lp-ath-btn--primary">
-              Post a Campaign
-            </Link>
-            <Link href="/sign-up?role=REP" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
-              Join as an SDR
-            </Link>
+            <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
+              Start free as an SDR
+            </a>
+            <a href="#how-it-works" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
+              How it works
+            </a>
           </motion.div>
 
           <motion.p
@@ -309,16 +303,16 @@ export default function HomePageClient() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.22 }}
           >
-            Cold calling reps who put in the reps — so you don’t have to pick up the phone.
+            Free practice to start · brand deals free for reps · paid per verified result
           </motion.p>
         </div>
       </section>
 
-      {/* 3.3 Feature screenshots — Option A */}
+      {/* Value */}
       <section className="lp-ath-features" id="value" aria-labelledby="lp-value-title">
         <Reveal>
           <h2 id="lp-value-title" className="lp-ath-h2 lp-ath-h2--billboard">
-            You build the product. We deliver the calls.
+            Put in the reps. Unlock the deals.
           </h2>
         </Reveal>
 
@@ -341,7 +335,7 @@ export default function HomePageClient() {
         </div>
       </section>
 
-      {/* 3.4 How It Works — light zone */}
+      {/* How it works */}
       <section className="lp-ath-steps lp-ath-zone--light" id="how-it-works" aria-labelledby="lp-steps-title">
         <Reveal>
           <h2 id="lp-steps-title" className="lp-ath-h2 lp-ath-h2--center">
@@ -361,15 +355,15 @@ export default function HomePageClient() {
         </div>
       </section>
 
-      {/* 3.5 Meet the Reps */}
+      {/* Meet the reps */}
       <section className="lp-ath-reps" id="meet-the-reps" aria-labelledby="lp-reps-title">
         <Reveal>
-          <p className="lp-ath-kicker lp-ath-kicker--center">Meet the reps</p>
+          <p className="lp-ath-kicker lp-ath-kicker--center">The standard</p>
           <h2 id="lp-reps-title" className="lp-ath-h2 lp-ath-h2--center lp-ath-h2--wide">
-            Real humans. Proven scores.
+            Scores that unlock paid work.
           </h2>
           <p className="lp-ath-reps__note">
-            Illustrative scorecards from the practice gym — anonymized handles, not paid endorsements.
+            Illustrative practice scorecards — anonymized handles, not paid endorsements.
           </p>
         </Reveal>
 
@@ -391,98 +385,57 @@ export default function HomePageClient() {
         </div>
       </section>
 
-      {/* 3.6 For SDRs */}
+      {/* Mid CTA */}
       <section className="lp-ath-sdr" id="for-sdrs" aria-labelledby="lp-sdr-title">
         <Reveal className="lp-ath-sdr__inner">
-          <p className="lp-ath-kicker">For SDRs</p>
+          <p className="lp-ath-kicker">Recruiting SDRs</p>
           <h2 id="lp-sdr-title" className="lp-ath-h2">
-            Train. Prove. Get Paid.
+            Training + brand deals in one path.
           </h2>
           <p className="lp-ath-sub lp-ath-sdr__sub">
-            Practice on real brand offers. Build your score. Unlock paid campaigns and earn per
-            result.
+            Start free. Practice until you pass. Apply to campaigns and earn per verified result.
           </p>
           <div className="lp-ath-cta lp-ath-cta--left">
-            <Link href="/sign-up?role=REP" className="lp-ath-btn lp-ath-btn--primary">
+            <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
               Join as an SDR
-            </Link>
-            <Link href="/sign-up?role=REP" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
-              Start Free Practice
-            </Link>
+            </a>
+            <a href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
+              See practice pricing
+            </a>
           </div>
         </Reveal>
       </section>
 
-      {/* 3.7 Lead Finder — light zone, supporting */}
-      <section
-        className="lp-ath-finder lp-ath-finder--compact lp-ath-zone--light"
-        id="lead-fuel"
-        aria-labelledby="lp-finder-title"
-      >
-        <div className="lp-ath-finder__grid">
-          <Reveal>
-            <p className="lp-ath-kicker">Optional fuel</p>
-            <h2 id="lp-finder-title" className="lp-ath-h2">
-              Find Better Leads in One Click
-            </h2>
-            <p className="lp-ath-sub lp-ath-finder__sub">
-              Need a list? Enrich yours or find new prospects — then let trained reps dial.
-            </p>
-          </Reveal>
-
-          <Reveal className="lp-ath-finder__mock lp-ath-finder__mock--compact" aria-hidden>
-            <div className="lp-ath-finder__bar">
-              <span>Lead Finder</span>
-              <em>1-click enrich</em>
-            </div>
-            <ul className="lp-ath-finder__list">
-              {LEAD_ROWS.map((row) => (
-                <li key={row.name}>
-                  <div>
-                    <strong>{row.name}</strong>
-                    <span>{row.title}</span>
-                  </div>
-                  <div className="lp-ath-finder__meta">
-                    <em>{row.score}</em>
-                    <b className="is-ready">{row.status}</b>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* 3.8 Proof bar — only non-fabricated facts */}
-      <section className="lp-ath-proofbar" aria-label="Platform proof">
+      {/* Proof bar */}
+      <section className="lp-ath-proofbar" aria-label="Why reps join">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>20%</strong>
-            <span>Fee capped ($30 / outcome)</span>
+            <strong>Free start</strong>
+            <span>Practice minutes to prove yourself</span>
           </div>
           <div>
-            <strong>Escrow</strong>
-            <span>Pay only when verified</span>
+            <strong>$0 deals</strong>
+            <span>Brand campaigns free for reps</span>
           </div>
           <div>
-            <strong>Human + AI</strong>
-            <span>Trained reps, live coaching</span>
+            <strong>Per result</strong>
+            <span>Paid when outcomes verify</span>
           </div>
         </div>
       </section>
 
-      {/* 3.9 Final CTA */}
+      {/* Final CTA */}
       <section className="lp-ath-final lp-ath-final--climax" aria-labelledby="lp-final-title">
         <Reveal>
           <h2 id="lp-final-title" className="lp-ath-h2 lp-ath-h2--xl">
-            Ready to get outbound without doing the calling?
+            Ready to train, prove, and get paid?
           </h2>
-          <Link href="/sign-up?role=BRAND" className="lp-ath-btn lp-ath-btn--primary lp-ath-btn--xl">
-            Post a Campaign
-          </Link>
+          <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary lp-ath-btn--xl">
+            Start free as an SDR
+          </a>
           <div className="lp-ath-final__alt">
-            <Link href="/sign-up?role=REP">or join as an SDR →</Link>
-            <Link href="/sign-up?role=REP">or start free practice →</Link>
+            <a href="/for/reps">see the full SDR path →</a>
+            <a href="/pricing">or check practice pricing →</a>
           </div>
         </Reveal>
       </section>

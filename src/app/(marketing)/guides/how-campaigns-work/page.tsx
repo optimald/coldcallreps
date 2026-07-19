@@ -124,8 +124,8 @@ export default function Page() {
           <Link href="/guides/platform-fees-and-payouts">platform fees and payouts</Link>. For how
           reps get approved, read{' '}
           <Link href="/guides/sdr-applications-and-approval">SDR applications and approval</Link>.
-          Brands can start on <Link href="/for/brands">for brands</Link>; reps on{' '}
-          <Link href="/for/reps">for reps</Link>.
+          New SDRs can start on the{' '}
+          <Link href="/for/reps">SDR path</Link>.
         </p>
       </section>
 

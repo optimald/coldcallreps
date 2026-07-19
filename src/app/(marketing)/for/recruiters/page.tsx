@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Recruiter landing demoted — founders/brands own talent + campaigns. */
+/** Recruiter landing removed — this site recruits SDRs. */
 export default function ForRecruitersRedirect() {
-  redirect('/for/brands');
+  redirect('/for/reps');
 }

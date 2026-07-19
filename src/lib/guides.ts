@@ -7,6 +7,8 @@
  * and public/llms.txt. Do not invent pricing here.
  */
 
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+
 export type GuideCategoryId = 'brand-hire' | 'rep-earn' | 'trust-mechanics';
 
 export type GuideCta = {
@@ -109,8 +111,8 @@ export const GUIDES: readonly Guide[] = [
       'cold-call-reps-vs-outbound-agency',
     ],
     ctas: [
-      { href: '/sign-up?role=BRAND', label: 'Post a campaign', primary: true },
-      { href: '/gigs', label: 'See open brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free as an SDR', primary: true },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'See open brand deals' },
     ],
     keywords: [
       'hire cold callers',
@@ -170,8 +172,8 @@ export const GUIDES: readonly Guide[] = [
       'sdr-applications-and-approval',
     ],
     ctas: [
-      { href: '/sign-up?role=REP', label: 'Start free — get paid', primary: true },
-      { href: '/gigs', label: 'Browse brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free — get paid', primary: true },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
     ],
     keywords: [
       'cold calling gigs',
@@ -186,7 +188,7 @@ export const GUIDES: readonly Guide[] = [
           'No. Joining and running brand campaigns is free for reps once you clear the quality gate. Paid plans buy AI practice minutes and coaching tools — they are not required to earn on campaigns.',
         links: [
           { href: '/pricing', label: 'See pricing' },
-          { href: '/gigs', label: 'Open brand deals' },
+          { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Open brand deals' },
         ],
       },
       {
@@ -226,7 +228,7 @@ export const GUIDES: readonly Guide[] = [
     directAnswer:
       'Escrow on Cold Call Reps holds a brand’s campaign budget until a rep’s outcome is verified. The flow is fund → dial → claim → audit → pay: brands fund escrow up front, reps dial and submit claims, an AI post-call audit checks the evidence, and only passing claims release money to the rep via Stripe Connect.',
     related: ['platform-fees-and-payouts', 'how-campaigns-work', 'hire-cold-callers'],
-    ctas: [{ href: '/sign-up?role=BRAND', label: 'Fund a campaign', primary: true }],
+    ctas: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start earning', primary: true }],
     keywords: [
       'cold calling escrow marketplace',
       'appointment setting escrow',
@@ -326,7 +328,7 @@ export const GUIDES: readonly Guide[] = [
     related: ['hire-cold-callers', 'platform-fees-and-payouts', 'hire-outbound-without-in-house-sdr'],
     ctas: [
       { href: '/pricing', label: 'See pricing', primary: true },
-      { href: '/sign-up?role=BRAND', label: 'Post a campaign' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Join as an SDR' },
     ],
     keywords: [
       'pay per appointment setting',
@@ -378,8 +380,8 @@ export const GUIDES: readonly Guide[] = [
       'Reps get paid per outcome: a booked meeting or a qualified lead, with tiered accelerators and optional base pay that stacks on top. You claim each outcome, it passes an AI post-call audit, and the payout releases from the brand’s funded escrow to your Stripe Connect account, minus the 20% platform fee (capped at $30 per outcome).',
     related: ['cold-calling-gigs', 'platform-fees-and-payouts', 'ai-cold-call-practice'],
     ctas: [
-      { href: '/sign-up?role=REP', label: 'Start earning', primary: true },
-      { href: '/gigs', label: 'Browse brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start earning', primary: true },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
     ],
     keywords: [
       'get paid cold calling per meeting',
@@ -430,7 +432,7 @@ export const GUIDES: readonly Guide[] = [
       'A Cold Call Reps campaign runs on one timeline: a brand posts a campaign and funds escrow, reps apply through the quality gate, approved reps dial live prospects, they claim outcomes, an AI audit verifies each claim, and payouts release from escrow via Stripe Connect. Humans place every live dial; AI handles practice and audits.',
     related: ['campaign-escrow-and-claims', 'platform-fees-and-payouts', 'sdr-applications-and-approval'],
     ctas: [
-      { href: '/for/brands', label: 'For brands', primary: true },
+      { href: '/for/reps', label: 'SDR path', primary: true },
       { href: '/for/reps', label: 'For reps' },
     ],
     keywords: [
@@ -483,7 +485,7 @@ export const GUIDES: readonly Guide[] = [
       'AI cold call practice on Cold Call Reps lets you rehearse gatekeeper and decision-maker scenarios with an AI voice trainer and live coach, then earn a score and certification that unlock live brand campaigns. The boundary is firm: AI is for practice, coaching, and claim audits only — every live brand call is placed by a human.',
     related: ['cold-calling-gigs', 'sdr-applications-and-approval', 'get-paid-per-meeting-cold-calling'],
     ctas: [
-      { href: '/sign-up?role=REP', label: 'Start practicing free', primary: true },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start practicing free', primary: true },
       { href: '/pricing', label: 'See practice plans' },
     ],
     keywords: [
@@ -539,7 +541,7 @@ export const GUIDES: readonly Guide[] = [
       'cold-call-reps-vs-outbound-agency',
       'pay-per-appointment-setting',
     ],
-    ctas: [{ href: '/sign-up?role=BRAND', label: 'Start free', primary: true }],
+    ctas: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free as an SDR', primary: true }],
     keywords: [
       'appointment setting marketplace',
       'sdr marketplace',
@@ -589,7 +591,7 @@ export const GUIDES: readonly Guide[] = [
     directAnswer:
       'You can run outbound without hiring an in-house SDR by using an outcome-based marketplace: post a campaign, fund escrow, and pay vetted human reps per booked meeting or qualified lead. This validates your offer and pipeline before you commit to fixed salary, benefits, and ramp time.',
     related: ['hire-cold-callers', 'pay-per-appointment-setting', 'cold-call-reps-vs-outbound-agency'],
-    ctas: [{ href: '/sign-up?role=BRAND', label: 'Post a campaign', primary: true }],
+    ctas: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free as an SDR', primary: true }],
     keywords: [
       'hire outbound without sdr team',
       'outbound without hiring sdr',
@@ -639,7 +641,7 @@ export const GUIDES: readonly Guide[] = [
     directAnswer:
       'Cold Call Reps is an outcome-based marketplace: you pay vetted human reps per verified meeting through escrow, with no retainer. A traditional outbound agency is a managed service you pay via retainer or monthly fee regardless of booked meetings. The core trade-off is fixed managed service (agency) versus variable, escrow-backed, pay-per-outcome cost with direct control (marketplace).',
     related: ['appointment-setting-marketplace', 'pay-per-appointment-setting', 'hire-outbound-without-in-house-sdr'],
-    ctas: [{ href: '/sign-up?role=BRAND', label: 'Start free', primary: true }],
+    ctas: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free as an SDR', primary: true }],
     keywords: [
       'cold call reps vs agency',
       'sdr marketplace vs agency',
@@ -690,8 +692,8 @@ export const GUIDES: readonly Guide[] = [
       'To get approved for a campaign on Cold Call Reps, a rep clears an apply gate — by default at least one practice session on the brand pack, a score of at least 80, and brand certification — then applies. Brands see your score, certification, and profile and approve or decline. Approval unlocks live dialing on that campaign.',
     related: ['cold-calling-gigs', 'how-campaigns-work', 'ai-cold-call-practice'],
     ctas: [
-      { href: '/sign-up?role=REP', label: 'Start your application path', primary: true },
-      { href: '/gigs', label: 'Browse brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start your application path', primary: true },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
     ],
     keywords: [
       'sdr campaign application process',

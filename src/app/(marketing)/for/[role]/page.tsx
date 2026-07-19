@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import RoleLandingPage from '@/components/RoleLandingPage';
-import { ROLE_LANDINGS, type RoleLandingKey } from '@/lib/role-landings';
-
-const KEYS = Object.keys(ROLE_LANDINGS) as RoleLandingKey[];
+import { ROLE_LANDINGS } from '@/lib/role-landings';
 
 export function generateStaticParams() {
-  return KEYS.map((role) => ({ role }));
+  return [{ role: 'reps' }];
 }
 
 export async function generateMetadata({
@@ -15,10 +13,11 @@ export async function generateMetadata({
   params: Promise<{ role: string }>;
 }): Promise<Metadata> {
   const { role: raw } = await params;
-  const role = ROLE_LANDINGS[raw as RoleLandingKey];
-  if (!role) return { title: 'Not found' };
+  if (raw !== 'reps') {
+    return { title: 'For SDRs' };
+  }
+  const role = ROLE_LANDINGS.reps;
   return {
-    // Root layout template already appends " | ColdCallReps"; avoid doubling it.
     title: role.title,
     description: role.sub,
     openGraph: {
@@ -32,7 +31,9 @@ export async function generateMetadata({
 
 export default async function ForRolePage({ params }: { params: Promise<{ role: string }> }) {
   const { role: raw } = await params;
-  const role = ROLE_LANDINGS[raw as RoleLandingKey];
-  if (!role) notFound();
-  return <RoleLandingPage role={role} />;
+  if (raw === 'brands' || raw === 'teams') {
+    redirect('/for/reps');
+  }
+  if (raw !== 'reps') notFound();
+  return <RoleLandingPage role={ROLE_LANDINGS.reps} />;
 }

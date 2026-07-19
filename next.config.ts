@@ -1,9 +1,46 @@
 import type { NextConfig } from 'next';
 
+const MARKETPOUNCE = 'https://marketpounce.com';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Required so PostHog capture endpoints that use trailing slashes (e.g. /e/) work.
   skipTrailingSlashRedirect: true,
+  async redirects() {
+    // Auth lives on MarketPounce — never host login/signup here.
+    return [
+      {
+        source: '/sign-in',
+        destination: `${MARKETPOUNCE}/sign-in`,
+        permanent: true,
+      },
+      {
+        source: '/sign-in/:path*',
+        destination: `${MARKETPOUNCE}/sign-in`,
+        permanent: true,
+      },
+      {
+        source: '/sign-up',
+        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        permanent: true,
+      },
+      {
+        source: '/sign-up/:path*',
+        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        permanent: true,
+      },
+      {
+        source: '/login',
+        destination: `${MARKETPOUNCE}/sign-in`,
+        permanent: true,
+      },
+      {
+        source: '/signup',
+        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

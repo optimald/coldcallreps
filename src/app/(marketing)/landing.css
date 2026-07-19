@@ -3362,8 +3362,8 @@ main:has(> .lp-athletic) > .lp-wrap {
 }
 
 .lp-ath-hero--brand .lp-ath-hero__video {
-  filter: brightness(0.38) contrast(1.15) saturate(0.45) hue-rotate(190deg);
-  object-position: 65% 40%;
+  filter: brightness(0.78) contrast(1.06) saturate(0.88) hue-rotate(100deg);
+  object-position: 60% 38%;
 }
 
 .lp-ath-hero--teams .lp-ath-hero__video {

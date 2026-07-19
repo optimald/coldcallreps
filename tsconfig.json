@@ -17,5 +17,16 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "workers"]
+  "exclude": [
+    "node_modules",
+    "workers",
+    "chrome-extension",
+    "qa",
+    "scripts",
+    "prisma",
+    "src/_legacy",
+    "src/trigger",
+    "trigger.config.ts",
+    "server.js"
+  ]
 }

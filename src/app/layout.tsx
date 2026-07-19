@@ -3,7 +3,6 @@ import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import PostHogProvider from '@/components/PostHogProvider';
 import { ThemeProvider } from '@/components/ThemeProvider';
-import ThemedClerkProvider from '@/components/ThemedClerkProvider';
 import './globals.css';
 
 const display = Bricolage_Grotesque({
@@ -34,7 +33,7 @@ export const metadata: Metadata = {
     template: '%s | ColdCallReps',
   },
   description:
-    'Train with AI voice. Prove your skills. Get paid to run outbound for other founders. Practice → Prove → Get Paid.',
+    'Recruiting SDRs and appointment setters: AI voice training, prove your score, unlock brand deals, and get paid per verified result.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com'),
   icons: {
     icon: [
@@ -48,7 +47,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Cold Call Reps — Train. Prove. Get Paid.',
     description:
-      'Training-first outbound marketplace: AI voice practice, quality gate, paid campaigns for bootstrapped founders.',
+      'For SDRs who want training and brand deals. Practice with AI voice, clear the quality gate, get paid to dial leads.',
     url: 'https://coldcallreps.com',
     siteName: 'ColdCallReps',
     type: 'website',
@@ -58,7 +57,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Cold Call Reps — Train. Prove. Get Paid.',
     description:
-      'Train with AI voice. Prove your skills. Get paid to run outbound for other founders.',
+      'AI voice practice, brand deals, and pay-per-result outbound for SDRs and appointment setters.',
     images: ['/og.png'],
   },
 };
@@ -81,12 +80,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }
       >
         <ThemeProvider>
-          <ThemedClerkProvider>
-            <PostHogProvider>
-              <GoogleAnalytics />
-              {children}
-            </PostHogProvider>
-          </ThemedClerkProvider>
+          <PostHogProvider>
+            <GoogleAnalytics />
+            {children}
+          </PostHogProvider>
         </ThemeProvider>
       </body>
     </html>

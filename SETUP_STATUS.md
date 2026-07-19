@@ -5,7 +5,7 @@
 - Pooled Team minutes via `OrgMinutePool` (members draw from org pool first)
 - Minute packs (one-time overage top-up): 60 min / $9, 200 min / $25
 - Audio highlights → Cloudflare R2 bucket `coldcallreps-clips`
-- CRM: workspace-link only (OAuth held)
+- CRM: HubSpot + Google Calendar OAuth when env configured (UI: Coming soon if keys missing)
 
 ## Minute tracker & overage
 - **Tracker:** yes — personal `minutesRemaining` + org pool; shown in trainer/billing/dashboard
@@ -44,6 +44,15 @@ Then Clerk Dashboard → Domains → **Deploy certificates**.
 ### Done — Google Analytics
 - Measurement ID `G-4KW9LFF6MZ` (`NEXT_PUBLIC_GA_MEASUREMENT_ID`) live on coldcallreps.com
 
+## Cron
+- Weekly digest: `GET /api/digests/weekly/send` (Mon 14:00 UTC via `vercel.json`)
+- Connect payout retry: `GET /api/cron/retry-payouts` every 30m — retries PENDING transfers when SDR Connect is ready (`CRON_SECRET`)
+
+## Brand multi-seat
+- `BrandMember` + `/api/brands/[id]/members` + settings invite UI
+- Desk pages use `canAccessBrandDeskAsync` (owner / admin / viewer)
+- Mutations use `canManageBrandId` (owner / admin)
+
 ## Maps leads (optional bonus)
 - **API:** RapidAPI **[Maps Data](https://rapidapi.com/alexanderxbx/api/maps-data)** — host `maps-data.p.rapidapi.com`, endpoint `GET /searchmaps.php`
 - Not Google Places official API; third-party Maps scrape via RapidAPI marketplace
@@ -53,10 +62,12 @@ Then Clerk Dashboard → Domains → **Deploy certificates**.
 ## Brand / affiliate admin (honest status)
 - **Have:** BRAND role, create brand + product packs, bounties, sponsored boards, certifications from high scores
 - **Have (campaign payouts):** Stripe Connect onboarding for SDRs (`/api/billing/connect`), destination-charge Checkout when brand pays an approved application (`/api/campaigns/[id]/payouts`), ~20% `platformFeeBps`, `CampaignPayout` ledger
+- **Have (integrations):** HubSpot OAuth + sync and Google Calendar OAuth when `HUBSPOT_CLIENT_*` / `GOOGLE_CLIENT_*` + `INTEGRATION_ENCRYPTION_KEY` are set. UI shows **Coming soon** only when those env vars are missing. Microsoft / Close / Salesforce remain stubs.
 - **Missing for classic affiliate programs:** commission rates, click/referral attribution to brand offers, promo codes, affiliate dashboards
 - User referrals today = minute bonuses (`/api/referrals`), not brand affiliate commissions
 - Schema patch: `npm run db:patch:connect` (Turso) + `npx prisma db push` (local)
 - Dual-mode desks (SDR ↔ Brand): `npm run db:patch:role-modes` (Turso) + `npx prisma db push` (local) + `npx prisma generate` (restart dev server)
+- Brand members (multi-seat ACL): `BrandMember` model — owner invite via `/api/brands/[id]/members`
 
 ## Manual smoke
 1. Set `RAPIDAPI_MAPS_KEY` → Search Maps → pick a “(no site)” prospect → practice call

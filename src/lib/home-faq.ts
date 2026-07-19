@@ -5,6 +5,7 @@ import {
   DEFAULT_REQUIRE_CERTIFICATION,
 } from '@/lib/campaign-tiers';
 import { PLAN, TRIAL_MINUTES } from '@/lib/product';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 
 export type HomeFaqLink = {
   href: string;
@@ -33,60 +34,58 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
   {
     question: 'What is ColdCallReps?',
     answer:
-      'ColdCallReps is an AI-first outbound training ground and marketplace. Reps practice cold calls with AI voice, prove quality with scores and certifications, then run paid campaigns for founders and brands. Humans dial live prospects — AI trains and gates quality.',
+      'ColdCallReps recruits SDRs and appointment setters. You practice cold calls with AI voice, prove quality with scores and certifications, then run paid brand deals calling leads. Humans dial live prospects — AI trains and gates quality.',
     links: [
-      { href: '/for/reps', label: 'For reps' },
-      { href: '/for/brands', label: 'For brands' },
+      { href: '/for/reps', label: 'SDR path' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
     ],
   },
   {
     question: 'How much does AI practice cost?',
-    answer: `Free includes ${TRIAL_MINUTES} practice minutes to start. Starter is $${PLAN.STARTER.price}/mo, Pro is $${PLAN.PRO.price}/mo, and Org is $${PLAN.TEAM.price}/user/mo. Brand deals stay free for reps — practice plans buy minutes and coaching tools. Train, prove, apply to brand deals, connect Stripe, get paid.`,
+    answer: `Free includes ${TRIAL_MINUTES} practice minutes to start. Starter is $${PLAN.STARTER.price}/mo, Pro is $${PLAN.PRO.price}/mo, and Org is $${PLAN.TEAM.price}/user/mo. Brand deals stay free for reps — practice plans buy minutes and coaching tools.`,
     links: [
       { href: '/pricing', label: 'See pricing' },
-      { href: '/sign-up?role=REP', label: 'Sign up as a rep' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Sign up as a rep' },
     ],
   },
   {
     question: 'Do reps pay to join campaigns?',
     answer:
-      'No. Marketplace campaigns are free for reps to join once they clear the quality gate. Brands fund payouts; reps get paid for approved results via Stripe Connect (Billing / Earnings).',
+      'No. Marketplace campaigns are free for reps once you clear the quality gate. Brands fund payouts; you get paid for approved results via Stripe Connect.',
     links: [
-      { href: '/gigs', label: 'Browse brand deals' },
-      { href: '/sign-up?role=REP', label: 'Start getting paid' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start getting paid' },
     ],
   },
   {
     question: 'What do I need before applying to a campaign?',
     answer: applyGateAnswer,
     links: [
-      { href: '/for/reps', label: 'Rep path' },
-      { href: '/gigs', label: 'Open brand deals' },
-      { href: '/sign-up?role=REP', label: 'Sign up as a rep' },
+      { href: '/for/reps', label: 'SDR path' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Sign up as a rep' },
     ],
   },
   {
-    question: 'How do brand payouts work?',
+    question: 'How do payouts work?',
     answer:
-      'Brands pay verified outcomes and optional base pay (weekly, bi-weekly, or monthly) via Stripe Connect. ColdCallReps keeps 20% as the platform fee, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base — the rest goes to the rep. Founders fund campaigns; reps finish Connect under Billing or Earnings before payouts can land.',
+      'You get paid for verified outcomes and optional base pay via Stripe Connect. The platform keeps 20% as a fee, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base — the rest goes to you.',
     links: [
-      { href: '/for/brands', label: 'For brands' },
       { href: '/pricing', label: 'Pricing' },
-      { href: '/gigs', label: 'Open brand deals' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
     ],
   },
   {
     question: 'What counts as a booked meeting?',
     answer:
       'A booked meeting is a claimed outcome that passes AI post-call audit — typically a calendar hold with a qualified decision-maker, supported by notes or transcript. Claims without enough evidence do not pay.',
-    links: [{ href: '/gigs', label: 'How brand deals pay' }],
+    links: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'How brand deals pay' }],
   },
   {
     question: 'What are the campaign payout tiers?',
     answer: `Campaigns use flat tier bands per verified set (not bidding): ${tierBandSummary}. Rates depend on ICP difficulty and gatekeeper friction.`,
     links: [
-      { href: '/gigs', label: 'Brand deals' },
-      { href: '/for/brands', label: 'Post a campaign' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Brand deals' },
+      { href: '/for/reps', label: 'SDR path' },
     ],
   },
   {

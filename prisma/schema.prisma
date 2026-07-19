@@ -114,6 +114,7 @@ model UserProfile {
   playbooks           Playbook[]
   apiKeys             ApiKey[]
   brandsOwned         Brand[]             @relation("BrandOwner")
+  brandMemberships    BrandMember[]
   auditLogs           AuditLog[]
   webhookEndpoints    WebhookEndpoint[]
   minuteHolds         MinuteHold[]
@@ -554,6 +555,7 @@ model Brand {
   productHuntImports ProductHuntImport[]
   pipelineJobs    PipelineJob[]
   leadCreditLedger BrandLeadCreditLedger[]
+  members         BrandMember[]
   /** JSON: { acceptMessage?, rejectMessage?, replyToEmail? } */
   notificationDefaultsJSON String @default("{}")
 
@@ -578,6 +580,23 @@ model Brand {
   @@index([slug])
   @@index([twilioPhoneE164])
   @@index([leadPlan])
+}
+
+/** Multi-seat brand ACL — Brand.ownerId is always admin; members with admin can manage. */
+model BrandMember {
+  id        String      @id @default(cuid())
+  brandId   String
+  brand     Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /** admin | viewer */
+  role      String      @default("admin")
+  invitedBy String?
+  createdAt DateTime    @default(now())
+
+  @@unique([brandId, userId])
+  @@index([userId])
+  @@index([brandId, role])
 }
 
 /** Brand lead-credit movements (allotment grants, pack buys, save deductions). */
@@ -901,6 +920,11 @@ model Campaign {
   /** Campaign dial window — null startsAt means immediately; null endsAt means ongoing. */
   startsAt         DateTime?
   endsAt           DateTime?
+  /** Daily calling window: minutes from midnight in callingTimezone (0–1439). Null = no daily gate. */
+  callingHoursStartMin Int?
+  callingHoursEndMin   Int?
+  /** IANA timezone for daily calling hours, e.g. America/Los_Angeles. */
+  callingTimezone      String?
   /** Capital locked from BrandWallet while campaign is OPEN. */
   escrowLockedCents Int             @default(0)
   maxAwards        Int?

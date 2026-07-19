@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { GUIDE_CATEGORIES, GUIDES, getGuidesByCategory } from '@/lib/guides';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import GuideCard from './_components/GuideCard';
 
 const SITE = 'https://coldcallreps.com';
 const URL = `${SITE}/guides`;
 
 export const metadata: Metadata = {
-  title: 'Guides — Hire Cold Callers, Earn as a Rep, How It Works',
+  title: 'Guides — Earn as an SDR, Practice, Get Paid',
   description:
-    'Cold Call Reps guides: how to hire human cold callers with outcome-based pay, how reps earn on booked meetings, and how escrow, fees, and payouts work.',
+    'Cold Call Reps guides for SDRs: AI practice, brand deals, payouts, escrow, and how to get paid per booked meeting.',
   alternates: { canonical: URL },
   openGraph: {
     title: 'Cold Call Reps Guides',
@@ -75,22 +76,18 @@ export default function GuidesHubPage() {
       })}
 
       <p className="guides-hub__foot">
-        New to the platform? Start with{' '}
-        <Link href="/for/brands" className="soft-link">
-          for brands
-        </Link>{' '}
-        or{' '}
+        Recruiting SDRs? Read the{' '}
         <Link href="/for/reps" className="soft-link">
-          for reps
+          SDR path
         </Link>
         , see{' '}
         <Link href="/pricing" className="soft-link">
-          pricing
+          practice pricing
         </Link>
-        , or browse{' '}
-        <Link href="/gigs" className="soft-link">
-          open brand deals
-        </Link>
+        , or{' '}
+        <a href={MARKETPOUNCE_SIGN_UP_REP} className="soft-link">
+          start free
+        </a>
         .
       </p>
     </main>

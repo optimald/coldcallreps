@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'sdr-applications-and-approval';
@@ -95,7 +96,7 @@ export default function Page() {
           <Link href="/guides/get-paid-per-meeting-cold-calling">how reps get paid per meeting</Link>.
           Looking for campaigns to apply to? Browse{' '}
           <Link href="/guides/cold-calling-gigs">cold calling gigs</Link> or open{' '}
-          <Link href="/gigs">brand deals</Link>.
+          <a href={MARKETPOUNCE_SIGN_UP_REP}>brand deals</a>.
         </p>
       </section>
 

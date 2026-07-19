@@ -1,6 +1,5 @@
 'use client';
 
-import { useUser } from '@clerk/nextjs';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import { Suspense, useEffect, type ReactNode } from 'react';
@@ -21,25 +20,6 @@ function PostHogPageView() {
   return null;
 }
 
-function PostHogIdentify() {
-  const { user, isLoaded } = useUser();
-
-  useEffect(() => {
-    if (!isLoaded || !process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
-    if (user) {
-      posthog.identify(user.id, {
-        email: user.primaryEmailAddress?.emailAddress,
-        name: user.fullName || user.username,
-        clerk_created_at: user.createdAt?.toISOString?.() ?? user.createdAt,
-      });
-    } else {
-      posthog.reset();
-    }
-  }, [user, isLoaded]);
-
-  return null;
-}
-
 export default function PostHogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     initPostHog();
@@ -54,7 +34,6 @@ export default function PostHogProvider({ children }: { children: ReactNode }) {
       <Suspense fallback={null}>
         <PostHogPageView />
       </Suspense>
-      <PostHogIdentify />
       {children}
     </PHProvider>
   );
