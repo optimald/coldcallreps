@@ -162,16 +162,22 @@ const FEATURES = [
     title: 'AI Voice Practice',
     body: 'Run realistic cold calls with a live AI coach. Gatekeepers, objections, and asks — until your scorecard proves you’re sharp.',
     Mock: MockPractice,
+    photo: '/people/story-train.webp',
+    alt: 'An SDR smiling while practicing a cold call with the AI voice coach',
   },
   {
     title: 'Brand Deals',
     body: 'Clear the quality gate, then apply to paid campaigns. Dial leads for founders who fund escrow — brand deals stay free for reps.',
     Mock: MockDeals,
+    photo: '/people/story-deals.webp',
+    alt: 'An SDR excited after finding a brand deal they love selling for',
   },
   {
     title: 'Get Paid Per Result',
     body: 'Earn on qualified leads or booked meetings. No salary ceiling — skill, speed, and consistency decide what you make.',
     Mock: MockPayout,
+    photo: '/people/story-paid.webp',
+    alt: 'An SDR working on her own hours and celebrating a verified payout',
   },
 ] as const;
 
@@ -198,39 +204,39 @@ const STEPS = [
   },
 ] as const;
 
-/** Anonymized illustrative scorecards — not attributed testimonials. */
+/** Illustrative rep scorecards — representative profiles, not paid endorsements. */
 const REPS = [
   {
     handle: '@setter_north',
+    photo: '/people/rep-01.webp',
     badge: 'Top performer',
     stat: '94',
     label: 'Integrity score',
     detail: 'Gatekeeper → DM',
-    tone: 'a',
   },
   {
     handle: '@booked_west',
+    photo: '/people/rep-02.webp',
     badge: 'Top performer',
     stat: '212',
     label: 'Practice calls logged',
     detail: 'Campaign unlocked',
-    tone: 'b',
   },
   {
     handle: '@dial_ridge',
+    photo: '/people/rep-03.webp',
     badge: 'Top performer',
     stat: 'Top 5%',
     label: 'Scorecard rank',
     detail: 'Objection handling',
-    tone: 'c',
   },
   {
     handle: '@close_line',
+    photo: '/people/rep-04.webp',
     badge: 'Top performer',
     stat: '91',
     label: 'Tone control',
     detail: 'Live coach sessions',
-    tone: 'd',
   },
 ] as const;
 
@@ -328,7 +334,20 @@ export default function HomePageClient() {
                 <p>{feature.body}</p>
               </div>
               <div className="lp-ath-features__visual">
-                <feature.Mock />
+                <div className="lp-ath-features__stack">
+                  <img
+                    className="lp-ath-features__photo"
+                    src={feature.photo}
+                    alt={feature.alt}
+                    loading="lazy"
+                    decoding="async"
+                    width={1200}
+                    height={900}
+                  />
+                  <div className="lp-ath-features__float">
+                    <feature.Mock />
+                  </div>
+                </div>
               </div>
             </Reveal>
           ))}
@@ -363,16 +382,22 @@ export default function HomePageClient() {
             Scores that unlock paid work.
           </h2>
           <p className="lp-ath-reps__note">
-            Illustrative practice scorecards — anonymized handles, not paid endorsements.
+            Representative rep profiles with illustrative scorecards — not paid endorsements.
           </p>
         </Reveal>
 
         <div className="lp-ath-reps__grid">
           {REPS.map((rep) => (
             <Reveal key={rep.handle} className="lp-ath-reps__card">
-              <span className={`lp-ath-reps__avatar lp-ath-reps__avatar--${rep.tone}`} aria-hidden>
-                {rep.handle.slice(1, 3).toUpperCase()}
-              </span>
+              <img
+                className="lp-ath-reps__avatar lp-ath-reps__avatar--photo"
+                src={rep.photo}
+                alt={`ColdCallReps SDR ${rep.handle}`}
+                loading="lazy"
+                decoding="async"
+                width={400}
+                height={400}
+              />
               <p className="lp-ath-reps__badge">{rep.badge}</p>
               <strong className="lp-ath-reps__handle">{rep.handle}</strong>
               <p className="lp-ath-reps__stat">
@@ -383,6 +408,47 @@ export default function HomePageClient() {
             </Reveal>
           ))}
         </div>
+      </section>
+
+      {/* Fair & transparent */}
+      <section className="lp-ath-trust lp-ath-zone--light" id="fair" aria-labelledby="lp-trust-title">
+        <Reveal className="lp-ath-trust__inner">
+          <div className="lp-ath-trust__media">
+            <img
+              src="/people/story-trust.webp"
+              alt="An SDR and a brand founder agreeing on a fair, transparent deal"
+              loading="lazy"
+              decoding="async"
+              width={1200}
+              height={675}
+            />
+          </div>
+          <div className="lp-ath-trust__copy">
+            <p className="lp-ath-kicker">Fair &amp; transparent</p>
+            <h2 id="lp-trust-title" className="lp-ath-h2">
+              Honest work. Honest pay.
+            </h2>
+            <p className="lp-ath-sub lp-ath-trust__sub">
+              No hoops, no games. Brands fund escrow up front, results are verified in the open, and
+              payouts release the moment the work checks out — keeping reps and brands honest on both
+              sides of every deal.
+            </p>
+            <ul className="lp-ath-trust__points">
+              <li>
+                <strong>Funded before you dial.</strong> Brands escrow the budget, so the money is
+                already there when you deliver.
+              </li>
+              <li>
+                <strong>Verified, not vibes.</strong> Every qualified lead or booked meeting is
+                checked against clear criteria.
+              </li>
+              <li>
+                <strong>Your hours, your ceiling.</strong> Set your own schedule and earn per
+                result — there’s no cap on what you make.
+              </li>
+            </ul>
+          </div>
+        </Reveal>
       </section>
 
       {/* Mid CTA */}
@@ -410,15 +476,15 @@ export default function HomePageClient() {
       <section className="lp-ath-proofbar" aria-label="Why reps join">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>Free start</strong>
-            <span>Practice minutes to prove yourself</span>
+            <strong>Free training minutes</strong>
+            <span>Practice to prove yourself</span>
           </div>
           <div>
-            <strong>$0 deals</strong>
-            <span>Brand campaigns free for reps</span>
+            <strong>$0 to join</strong>
+            <span>Brand campaigns are free for reps</span>
           </div>
           <div>
-            <strong>Per result</strong>
+            <strong>Earn payment per result</strong>
             <span>Paid when outcomes verify</span>
           </div>
         </div>

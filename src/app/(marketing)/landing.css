@@ -3499,3 +3499,118 @@ main:has(> .lp-athletic) > .lp-wrap {
   line-height: 1.45;
   color: var(--ath-muted);
 }
+
+/* Human photo + mock UI stack (feature rows) */
+.lp-ath-features__stack {
+  position: relative;
+  isolation: isolate;
+}
+
+.lp-ath-features__photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+}
+
+.lp-ath-features__float {
+  margin-top: -3.25rem;
+  margin-left: auto;
+  width: min(88%, 27rem);
+  position: relative;
+  z-index: 2;
+}
+
+@media (min-width: 620px) {
+  .lp-ath-features__float {
+    margin-top: -4rem;
+    margin-right: -0.75rem;
+  }
+}
+
+.lp-ath-features__row--flip .lp-ath-features__float {
+  margin-left: -0.75rem;
+  margin-right: auto;
+}
+
+/* Real portraits in Meet the reps */
+.lp-ath-reps__avatar--photo {
+  width: 3.25rem;
+  height: 3.25rem;
+  object-fit: cover;
+  border: 1px solid rgba(0, 229, 192, 0.35);
+  box-shadow: 0 0 0 3px rgba(0, 229, 192, 0.08);
+}
+
+/* Fair & transparent trust band */
+.lp-ath-trust {
+  padding: clamp(4.5rem, 11vw, 7.5rem) var(--ath-pad);
+}
+
+.lp-ath-trust__inner {
+  max-width: 80rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(2rem, 5vw, 3.5rem);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .lp-ath-trust__inner {
+    grid-template-columns: 1.05fr 0.95fr;
+  }
+}
+
+.lp-ath-trust__media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgba(10, 15, 28, 0.22);
+}
+
+.lp-ath-trust__sub {
+  margin: 0.85rem 0 1.5rem;
+  max-width: 46ch;
+}
+
+.lp-ath-trust__points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.lp-ath-trust__points li {
+  position: relative;
+  padding-left: 1.85rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: rgba(10, 15, 28, 0.62);
+}
+
+.lp-ath-trust__points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.38rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  background: #0d9f88;
+  box-shadow: 0 0 0 4px rgba(13, 159, 136, 0.14);
+}
+
+.lp-ath-trust__points strong {
+  color: #0a0f1c;
+  font-weight: 700;
+}

@@ -5,11 +5,20 @@
  *   npx tsx scripts/audit-google-sitemap.ts
  *   npx tsx scripts/audit-google-sitemap.ts --inspect
  *   npx tsx scripts/audit-google-sitemap.ts --submit-sitemap
+ *
+ * Auth: mints a service-account JWT and exchanges it for an access token using
+ * Node's native fetch. This intentionally avoids the `googleapis`/`gaxios`
+ * client, which fails with "Premature close" on the token stream under newer
+ * Node runtimes. All Search Console calls are the documented REST endpoints.
  */
+import { createSign } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { google } from 'googleapis';
 import { GUIDE_SLUGS } from '../src/lib/guides';
+
+const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
+const GSC_BASE = 'https://searchconsole.googleapis.com';
+const SCOPE = 'https://www.googleapis.com/auth/webmasters';
 
 function loadEnvLocal() {
   const loadEnvFile = (process as NodeJS.Process & {
@@ -48,6 +57,11 @@ interface InspectionRow {
   error: string | null;
 }
 
+interface ServiceAccountKey {
+  client_email: string;
+  private_key: string;
+}
+
 function parseArgs(argv: string[]) {
   return {
     inspect: argv.includes('--inspect'),
@@ -77,10 +91,97 @@ function extractLocs(xml: string): string[] {
 function hostAllowed(url: string, expectedHost: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && (parsed.hostname === expectedHost || parsed.hostname === `www.${expectedHost}`);
+    return (
+      parsed.protocol === 'https:' &&
+      (parsed.hostname === expectedHost || parsed.hostname === `www.${expectedHost}`)
+    );
   } catch {
     return false;
   }
+}
+
+function base64url(input: string | Buffer): string {
+  return Buffer.from(input).toString('base64url');
+}
+
+/** Mint a service-account JWT and exchange it for an OAuth access token. */
+async function getAccessToken(key: ServiceAccountKey): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claim = base64url(
+    JSON.stringify({
+      iss: key.client_email,
+      scope: SCOPE,
+      aud: TOKEN_ENDPOINT,
+      iat: now,
+      exp: now + 3600,
+    }),
+  );
+  const signer = createSign('RSA-SHA256');
+  signer.update(`${header}.${claim}`);
+  signer.end();
+  const signature = signer.sign(key.private_key).toString('base64url');
+  const assertion = `${header}.${claim}.${signature}`;
+
+  const res = await fetch(TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  });
+  const body = (await res.json()) as { access_token?: string; error_description?: string; error?: string };
+  if (!res.ok || !body.access_token) {
+    throw new Error(
+      `Token exchange failed (HTTP ${res.status}): ${body.error_description || body.error || 'no access_token'}`,
+    );
+  }
+  return body.access_token;
+}
+
+interface SitemapEntry {
+  path?: string;
+  errors?: string | number;
+  warnings?: string | number;
+  lastSubmitted?: string;
+  lastDownloaded?: string;
+  contents?: unknown;
+}
+
+async function listSitemaps(token: string, siteUrl: string): Promise<SitemapEntry[]> {
+  const url = `${GSC_BASE}/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/sitemaps`;
+  const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`sitemaps.list HTTP ${res.status}: ${await res.text()}`);
+  const data = (await res.json()) as { sitemap?: SitemapEntry[] };
+  return data.sitemap ?? [];
+}
+
+async function submitSitemapFeed(token: string, siteUrl: string, feedpath: string): Promise<void> {
+  const url = `${GSC_BASE}/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/sitemaps/${encodeURIComponent(feedpath)}`;
+  const res = await fetch(url, { method: 'PUT', headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`sitemaps.submit HTTP ${res.status}: ${await res.text()}`);
+}
+
+async function inspectUrl(token: string, siteUrl: string, inspectionUrl: string) {
+  const url = `${GSC_BASE}/v1/urlInspection/index:inspect`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ inspectionUrl, siteUrl }),
+  });
+  if (!res.ok) throw new Error(`urlInspection HTTP ${res.status}: ${await res.text()}`);
+  return (await res.json()) as {
+    inspectionResult?: {
+      indexStatusResult?: {
+        coverageState?: string;
+        verdict?: string;
+        lastCrawlTime?: string;
+        pageFetchState?: string;
+        robotsTxtState?: string;
+      };
+    };
+  };
 }
 
 async function main() {
@@ -96,6 +197,7 @@ async function main() {
       `Credentials file not found at ${credentialsPath}. Copy the service-account JSON there first.`,
     );
   }
+  const key = JSON.parse(readFileSync(credentialsPath, 'utf8')) as ServiceAccountKey;
 
   const checkedAt = new Date().toISOString();
   const runId = `run-${checkedAt.replace(/[:.]/g, '-')}`;
@@ -127,12 +229,6 @@ async function main() {
     (url) => !normalizedLive.has(url.replace(/\/$/, '')),
   );
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: credentialsPath,
-    scopes: ['https://www.googleapis.com/auth/webmasters'],
-  });
-  const searchconsole = google.searchconsole({ version: 'v1', auth });
-
   let searchConsole: {
     status: Status;
     submitted: boolean;
@@ -154,16 +250,18 @@ async function main() {
   };
 
   try {
+    const token = await getAccessToken(key);
+
     if (submitSitemap) {
-      await searchconsole.sitemaps.submit({ siteUrl, feedpath: sitemapUrl });
+      await submitSitemapFeed(token, siteUrl, sitemapUrl);
       searchConsole.submitResult = 'submitted';
       console.log(`Submitted sitemap to Search Console: ${sitemapUrl}`);
     }
 
-    const listed = await searchconsole.sitemaps.list({ siteUrl });
+    const sitemaps = await listSitemaps(token, siteUrl);
     const match =
-      listed.data.sitemap?.find((item) => item.path === sitemapUrl) ??
-      listed.data.sitemap?.find((item) => (item.path || '').includes('sitemap.xml')) ??
+      sitemaps.find((item) => item.path === sitemapUrl) ??
+      sitemaps.find((item) => (item.path || '').includes('sitemap.xml')) ??
       null;
 
     if (!match) {
@@ -212,45 +310,50 @@ async function main() {
   }
 
   const inspections: InspectionRow[] = [];
-  if (inspect) {
-    const sample = requiredGuideUrls.slice(0, 5);
-    for (const url of sample) {
-      try {
-        const result = await searchconsole.urlInspection.index.inspect({
-          requestBody: {
-            inspectionUrl: url,
-            siteUrl,
-          },
-        });
-        const indexStatus = result.data.inspectionResult?.indexStatusResult;
-        inspections.push({
-          url,
-          status: 'pass',
-          coverageState: indexStatus?.coverageState ?? null,
-          indexStatusVerdict: indexStatus?.verdict ?? null,
-          lastCrawlTime: indexStatus?.lastCrawlTime ?? null,
-          pageFetchState: indexStatus?.pageFetchState ?? null,
-          robotsTxtState: indexStatus?.robotsTxtState ?? null,
-          error: null,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        inspections.push({
-          url,
-          status: 'blocked',
-          coverageState: null,
-          indexStatusVerdict: null,
-          lastCrawlTime: null,
-          pageFetchState: null,
-          robotsTxtState: null,
-          error: message,
-        });
-        blockedChecks.push({
-          checkId: `url-inspection:${url}`,
-          reason: message,
-          needed: 'URL Inspection permission/quota, or re-run without --inspect.',
-        });
+  if (inspect && searchConsole.status !== 'blocked') {
+    try {
+      const token = await getAccessToken(key);
+      const sample = requiredGuideUrls.slice(0, 5);
+      for (const url of sample) {
+        try {
+          const result = await inspectUrl(token, siteUrl, url);
+          const indexStatus = result.inspectionResult?.indexStatusResult;
+          inspections.push({
+            url,
+            status: 'pass',
+            coverageState: indexStatus?.coverageState ?? null,
+            indexStatusVerdict: indexStatus?.verdict ?? null,
+            lastCrawlTime: indexStatus?.lastCrawlTime ?? null,
+            pageFetchState: indexStatus?.pageFetchState ?? null,
+            robotsTxtState: indexStatus?.robotsTxtState ?? null,
+            error: null,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          inspections.push({
+            url,
+            status: 'blocked',
+            coverageState: null,
+            indexStatusVerdict: null,
+            lastCrawlTime: null,
+            pageFetchState: null,
+            robotsTxtState: null,
+            error: message,
+          });
+          blockedChecks.push({
+            checkId: `url-inspection:${url}`,
+            reason: message,
+            needed: 'URL Inspection permission/quota, or re-run without --inspect.',
+          });
+        }
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      blockedChecks.push({
+        checkId: 'url-inspection-auth',
+        reason: message,
+        needed: 'Service-account access for URL Inspection on GSC_SITE_URL.',
+      });
     }
   }
 
@@ -279,6 +382,11 @@ async function main() {
   console.log(`Live sitemap URLs: ${liveUrls.length}`);
   console.log(`Missing guide URLs: ${missingGuideUrls.length}`);
   console.log(`Search Console status: ${searchConsole.status}`);
+  if (searchConsole.status !== 'blocked') {
+    console.log(
+      `  errors: ${searchConsole.errors} · warnings: ${searchConsole.warnings} · lastDownloaded: ${searchConsole.lastDownloaded}`,
+    );
+  }
   if (missingGuideUrls.length) {
     for (const url of missingGuideUrls) console.log(`  missing: ${url}`);
   }

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "content-home",
+  "url": "https://coldcallreps.com/",
+  "canonicalUrl": "https://coldcallreps.com/",
+  "purpose": "Recruit SDRs and appointment setters with a human-centric train-prove-get-paid narrative and transparent, escrow-backed outcome pay.",
+  "audienceId": "sdr-reps",
+  "audienceTask": "Decide whether to join Cold Call Reps to train, prove skill, and earn per verified result on brand deals.",
+  "businessOutcome": "sign_up_started",
+  "contentType": "home",
+  "cluster": null,
+  "template": "src/app/(marketing)/HomePageClient.tsx",
+  "lifecycle": "published",
+  "indexingIntent": "index",
+  "owner": "product-owner",
+  "reviewers": ["product-owner"],
+  "publicationGate": {
+    "audienceTask": {
+      "status": "pass",
+      "evidence": "Primary JTBD documented: SDRs evaluating training + paid brand deals with no earning ceiling."
+    },
+    "distinctValue": {
+      "status": "pass",
+      "evidence": "Home is the canonical rep-recruiting entry; feature rows now pair real SDR imagery with product mock UI and a distinct 'Fair & transparent' mechanism section."
+    },
+    "claimIntegrity": {
+      "status": "pass",
+      "evidence": "Claims '$0 to join / brand campaigns free for reps', 'no cap on earnings', 'brands fund escrow up front', and 'verified results' trace to public/llms.txt and src/lib/product.ts (ev-llms-product, ev-platform-fees). No numeric performance metrics fabricated; rep cards labeled illustrative/not paid endorsements."
+    },
+    "completeExperience": {
+      "status": "pass",
+      "evidence": "Direct value prop, mechanism (train/prove/apply/get paid), fairness limitations (verified, escrow), and CTAs to marketpounce sign-up and /pricing."
+    },
+    "discovery": {
+      "status": "pass",
+      "evidence": "Linked from global header/footer, sitemap priority 1.0, and internal links to /for/reps and /pricing."
+    },
+    "distinctUrlPurpose": {
+      "status": "pass",
+      "evidence": "Home does not duplicate /for/reps (deep SDR path) or /pricing (plans); it frames and routes to both."
+    }
+  },
+  "evidenceIds": ["ev-llms-product", "ev-platform-fees"],
+  "internalDiscoveryFrom": [
+    "https://coldcallreps.com/for/reps",
+    "https://coldcallreps.com/pricing",
+    "https://coldcallreps.com/guides"
+  ],
+  "questions": [
+    {
+      "question": "Does it cost anything to join brand campaigns as a rep?",
+      "source": "sales",
+      "answerLocation": "Proof bar '$0 to join' + 'Fair & transparent' section"
+    },
+    {
+      "question": "Is there a cap on what I can earn?",
+      "source": "sales",
+      "answerLocation": "Hero sub + 'Your hours, your ceiling' trust point"
+    },
+    {
+      "question": "How do I know the pay is fair and I will actually get paid?",
+      "source": "support",
+      "answerLocation": "'Honest work. Honest pay.' section (escrow funded, verified, released)"
+    }
+  ],
+  "conversionEvents": ["sign_up_started", "sign_up_completed"],
+  "reviewDates": {
+    "publishedAt": null,
+    "lastModifiedAt": "2026-07-20T19:45:46.000Z",
+    "lastReviewedAt": "2026-07-20T19:45:46.000Z",
+    "nextReviewAt": "2026-10-18T19:45:46.000Z"
+  }
+}

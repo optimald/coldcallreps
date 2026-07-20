@@ -1,14 +1,18 @@
 {
   "schemaVersion": "1.0.0",
   "siteId": "coldcallreps",
-  "lastRunId": "run-2026-07-20T20-31-46-459Z",
-  "lastRunCompletedAt": "2026-07-20T20:31:46.459Z",
-  "gscStatus": "pass",
-  "gscNote": "GSC is connected (service key at .secrets/google-search-console.json). Sampled guide URLs are Submitted and indexed. Corrects the 'blocked' status in run-2026-07-20T19-45-46-000Z, which was wrong: googleapis/gaxios fails on Node 26, so audit-google-sitemap.ts now uses native fetch for the token exchange.",
-  "nextWeeklyAt": "2026-07-27T19:45:46.000Z",
-  "nextMonthlyAt": "2026-08-20T19:45:46.000Z",
-  "nextQuarterlyAt": "2026-10-20T19:45:46.000Z",
+  "runId": "run-2026-07-20T19-45-46-000Z",
+  "cadence": "weekly",
+  "previousRunId": "run-2026-07-16T23-15-50-956Z",
+  "completedAt": "2026-07-20T19:45:46.000Z",
+  "status": "conditional_pass",
   "openFindings": [],
+  "resolvedFindings": [
+    "finding-llms-dead-urls",
+    "finding-state-pointer-stale",
+    "finding-indexnow-missing",
+    "finding-home-edit-unrecorded"
+  ],
   "contentPlanVersion": "1.0.0",
   "publishedGuideUrls": [
     "https://coldcallreps.com/guides",
@@ -24,5 +28,8 @@
     "https://coldcallreps.com/guides/hire-outbound-without-in-house-sdr",
     "https://coldcallreps.com/guides/cold-call-reps-vs-outbound-agency",
     "https://coldcallreps.com/guides/sdr-applications-and-approval"
-  ]
+  ],
+  "nextWeeklyAt": "2026-07-27T19:45:46.000Z",
+  "nextMonthlyAt": "2026-08-20T19:45:46.000Z",
+  "nextQuarterlyAt": "2026-10-20T19:45:46.000Z"
 }

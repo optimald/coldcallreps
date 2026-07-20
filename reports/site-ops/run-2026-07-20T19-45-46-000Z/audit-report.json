@@ -1,0 +1,252 @@
+{
+  "schemaVersion": "1.0.0",
+  "run": {
+    "id": "run-2026-07-20T19-45-46-000Z",
+    "mode": "audit",
+    "cadence": "weekly",
+    "startedAt": "2026-07-20T19:35:00.000Z",
+    "completedAt": "2026-07-20T19:45:46.000Z",
+    "agent": "cursor-agent",
+    "repositoryRevision": "a755237",
+    "deploymentId": null,
+    "previousRunId": "run-2026-07-16T23-15-50-956Z"
+  },
+  "scope": {
+    "siteId": "coldcallreps",
+    "origins": ["https://coldcallreps.com"],
+    "contentCount": 20,
+    "cohorts": ["home", "for-reps", "pricing", "guides"]
+  },
+  "summary": {
+    "status": "conditional_pass",
+    "critical": 0,
+    "high": 1,
+    "medium": 2,
+    "low": 1,
+    "statement": "Weekly regression audit after a human-centric homepage revision. Build, robots, and sitemap pass. llms.txt drift (dead /gigs and redirecting /for/brands) was found and remediated this run. State pointer was stale and IndexNow support was missing; both addressed. Homepage claim edits trace to product truth and were recorded. GSC/analytics remain blocked (no credentials)."
+  },
+  "scorecards": {
+    "seo": {
+      "status": "partial",
+      "metrics": [
+        {
+          "name": "indexable_url_inventory",
+          "value": 20,
+          "unit": "urls",
+          "source": "src/app/sitemap.ts + GUIDE_SLUGS",
+          "period": "2026-07-20",
+          "sampleSize": 20
+        },
+        {
+          "name": "guide_urls_in_sitemap",
+          "value": 13,
+          "unit": "urls",
+          "source": "reports/site-ops/run-2026-07-16 google-sitemap-audit.json",
+          "period": "2026-07-20",
+          "sampleSize": 13
+        },
+        {
+          "name": "gsc_indexation",
+          "value": null,
+          "unit": "urls",
+          "source": "blocked: no Google Search Console credentials",
+          "period": "2026-07-20",
+          "sampleSize": null,
+          "limitations": ["No GSC service account configured; indexation not verifiable"]
+        }
+      ],
+      "notes": [
+        "sitemap.ts uses new Date() for lastModified on every build; acceptable but not per-URL truthful lastmod.",
+        "site-profile.yaml launch.initialUrlInventory still lists aspirational /for/brands, /gigs, /developers not served on this reps-only site."
+      ]
+    },
+    "aeo": {
+      "status": "pass",
+      "metrics": [
+        {
+          "name": "llms_txt_live_url_accuracy",
+          "value": "100%",
+          "unit": "percent",
+          "source": "curl HEAD checks against localhost:3000 after fix",
+          "period": "2026-07-20",
+          "sampleSize": 8
+        },
+        {
+          "name": "home_faq_jsonld_present",
+          "value": "true",
+          "unit": "boolean",
+          "source": "src/lib/home-faq.ts + src/app/(marketing)/page.tsx",
+          "period": "2026-07-20",
+          "sampleSize": 1
+        }
+      ],
+      "notes": [
+        "llms.txt Key URLs now list only live/canonical pages (/, /for/reps, /pricing, /guides, /terms, /privacy, /sitemap.xml, /robots.txt).",
+        "New homepage 'Fair & transparent' copy asserts escrow-funded, verified, no-cap and $0-to-join claims consistent with llms.txt and product source."
+      ]
+    },
+    "geo": {
+      "status": "pass",
+      "metrics": [
+        {
+          "name": "claim_integrity_home_edits",
+          "value": "pass",
+          "unit": "gate",
+          "source": "ev-llms-product, ev-platform-fees",
+          "period": "2026-07-20",
+          "sampleSize": 4
+        }
+      ],
+      "notes": [
+        "Homepage claims ($0 to join / free for reps, no earning cap, escrow funded up front, verified results) trace to ev-llms-product and ev-platform-fees.",
+        "Prompt benchmark and citation sampling remain experimental (quarterly cadence)."
+      ]
+    }
+  },
+  "checks": [
+    {
+      "id": "chk-build",
+      "domain": "cross_domain",
+      "area": "production build",
+      "status": "pass",
+      "evidence": ["next build: 26/26 static pages generated, exit 0"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-robots",
+      "domain": "seo",
+      "area": "robots app-route leakage",
+      "status": "pass",
+      "evidence": ["src/app/robots.ts disallows /api/, /admin/, /dashboard, /brands/, /practice, /earnings, /trainer, etc."],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-sitemap",
+      "domain": "seo",
+      "area": "sitemap coverage",
+      "status": "pass",
+      "evidence": ["sitemap.ts includes hub + 12 GUIDE_SLUGS + core marketing; prior audit missingGuideUrls: []"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-llms-urls",
+      "domain": "aeo",
+      "area": "llms.txt URL accuracy",
+      "status": "pass",
+      "reason": "Dead /gigs (404) and redirecting /for/brands (307) removed from Key URLs this run.",
+      "evidence": ["curl /gigs -> 404 before fix", "public/llms.txt updated to live URLs only"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-internal-links",
+      "domain": "seo",
+      "area": "broken internal links",
+      "status": "pass",
+      "evidence": ["grep of src/app and src/lib for /gigs and /for/brands hrefs: no matches"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-home-faq-jsonld",
+      "domain": "aeo",
+      "area": "FAQ JSON-LD matches visible copy",
+      "status": "pass",
+      "evidence": ["src/lib/home-faq.ts consumed by page.tsx; unchanged this run"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-claim-edits",
+      "domain": "geo",
+      "area": "material claim edits require evidence",
+      "status": "pass",
+      "evidence": ["Homepage trust-section claims recorded in content-home.json against ev-llms-product, ev-platform-fees"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    },
+    {
+      "id": "chk-gsc",
+      "domain": "seo",
+      "area": "GSC queries and indexation",
+      "status": "blocked",
+      "reason": "No Google Search Console credentials configured.",
+      "evidence": ["site-profile.yaml technology.searchConsoles: []"],
+      "checkedAt": "2026-07-20T19:45:46.000Z"
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding-llms-dead-urls",
+      "domain": "aeo",
+      "severity": "high",
+      "title": "llms.txt listed URLs that 404 or redirect",
+      "observed": "public/llms.txt Key URLs listed https://coldcallreps.com/gigs (returns 404) and https://coldcallreps.com/for/brands (returns 307 redirect) on a reps-recruiting-only site.",
+      "affected": ["https://coldcallreps.com/llms.txt"],
+      "evidenceIds": ["ev-llms-product"],
+      "competingHypotheses": [
+        "Intentional forward-reference to future brand/gig surfaces",
+        "Copied from a fuller marketplace profile that spans marketpounce.com"
+      ],
+      "remediation": "Removed /gigs and /for/brands from Key URLs; added /guides. Applied in this run.",
+      "owner": "product-owner",
+      "dueAt": null,
+      "validation": "curl of remaining llms.txt Key URLs returns 200 (or intentional redirect for /sign-up).",
+      "rollback": "git revert of public/llms.txt change",
+      "approvalRequired": false
+    },
+    {
+      "id": "finding-state-pointer-stale",
+      "domain": "cross_domain",
+      "severity": "medium",
+      "title": "state/latest.json never updated after prior run",
+      "observed": "docs/site-ops/state/latest.json had lastRunId: null and publishedGuideUrls: [] despite a 2026-07-16 sitemap audit and 13 live guides.",
+      "affected": ["docs/site-ops/state/latest.json"],
+      "evidenceIds": ["ev-llms-product"],
+      "competingHypotheses": ["Prior run emitted a report but skipped SOP step 8"],
+      "remediation": "Updated state pointer with lastRunId, completedAt, next cadence dates, and publishedGuideUrls. Applied in this run.",
+      "owner": "product-owner",
+      "dueAt": null,
+      "validation": "state/latest.json lastRunId matches this run id and publishedGuideUrls has 13 entries.",
+      "rollback": "git revert of state/latest.json change",
+      "approvalRequired": false
+    },
+    {
+      "id": "finding-indexnow-missing",
+      "domain": "seo",
+      "severity": "medium",
+      "title": "IndexNow submission script and key not implemented",
+      "observed": "search-indexing.md sections 3-4 require scripts/submit-indexnow.ts and a public key file; neither existed, and no seo:* package scripts were present.",
+      "affected": ["scripts/submit-indexnow.ts", "package.json"],
+      "evidenceIds": ["ev-llms-product"],
+      "competingHypotheses": ["Only the Google sitemap audit half was implemented previously"],
+      "remediation": "Added scripts/submit-indexnow.ts (dry-run default, HTTPS+host+robots validation), public IndexNow key file, and seo:audit-sitemap / seo:indexnow package scripts. Applied in this run.",
+      "owner": "product-owner",
+      "dueAt": null,
+      "validation": "npx tsx scripts/submit-indexnow.ts prints dry-run URL list without POSTing.",
+      "rollback": "Remove scripts/submit-indexnow.ts, key file, and package script entries",
+      "approvalRequired": false
+    },
+    {
+      "id": "finding-home-edit-unrecorded",
+      "domain": "cross_domain",
+      "severity": "low",
+      "title": "Homepage revision shipped outside content mode",
+      "observed": "Human-centric homepage images, a new 'Fair & transparent' section, and proof-bar copy changes were made without a content brief, evidence check, content record, or report.",
+      "affected": ["https://coldcallreps.com/"],
+      "evidenceIds": ["ev-llms-product", "ev-platform-fees"],
+      "competingHypotheses": ["Fast iterative design pass preceding formal recording"],
+      "remediation": "Created content-records/content-home.json this run; verified new claims trace to product truth (no fabricated metrics).",
+      "owner": "product-owner",
+      "dueAt": null,
+      "validation": "content-home.json publicationGate all pass; claims present in llms.txt/product source.",
+      "rollback": "None required; record-only",
+      "approvalRequired": false
+    }
+  ],
+  "blockedChecks": [
+    {
+      "checkId": "chk-gsc",
+      "reason": "No Google Search Console credentials configured for coldcallreps.com.",
+      "needed": "Service-account key at .secrets/google-search-console.json + GSC_SITE_URL in .env.local"
+    }
+  ],
+  "approvalsRequired": [],
+  "nextReviewAt": "2026-07-27T19:45:46.000Z"
+}

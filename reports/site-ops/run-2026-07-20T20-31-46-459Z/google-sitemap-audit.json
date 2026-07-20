@@ -1,0 +1,97 @@
+{
+  "runId": "run-2026-07-20T20-31-46-459Z",
+  "checkedAt": "2026-07-20T20:31:46.459Z",
+  "siteUrl": "sc-domain:coldcallreps.com",
+  "sitemapUrl": "https://coldcallreps.com/sitemap.xml",
+  "liveUrlCount": 19,
+  "requiredGuideUrls": [
+    "https://coldcallreps.com/guides",
+    "https://coldcallreps.com/guides/hire-cold-callers",
+    "https://coldcallreps.com/guides/cold-calling-gigs",
+    "https://coldcallreps.com/guides/campaign-escrow-and-claims",
+    "https://coldcallreps.com/guides/platform-fees-and-payouts",
+    "https://coldcallreps.com/guides/pay-per-appointment-setting",
+    "https://coldcallreps.com/guides/get-paid-per-meeting-cold-calling",
+    "https://coldcallreps.com/guides/how-campaigns-work",
+    "https://coldcallreps.com/guides/ai-cold-call-practice",
+    "https://coldcallreps.com/guides/appointment-setting-marketplace",
+    "https://coldcallreps.com/guides/hire-outbound-without-in-house-sdr",
+    "https://coldcallreps.com/guides/cold-call-reps-vs-outbound-agency",
+    "https://coldcallreps.com/guides/sdr-applications-and-approval"
+  ],
+  "missingGuideUrls": [],
+  "foreignHostUrls": [],
+  "searchConsole": {
+    "status": "pass",
+    "submitted": true,
+    "errors": 0,
+    "warnings": 0,
+    "lastSubmitted": "2026-07-16T23:15:51.885Z",
+    "lastDownloaded": "2026-07-20T02:41:10.562Z",
+    "contents": [
+      {
+        "type": "web",
+        "submitted": "19",
+        "indexed": "0"
+      }
+    ],
+    "submitResult": null
+  },
+  "inspections": [
+    {
+      "url": "https://coldcallreps.com/guides",
+      "status": "pass",
+      "coverageState": "Submitted and indexed",
+      "indexStatusVerdict": "PASS",
+      "lastCrawlTime": "2026-07-17T16:17:58Z",
+      "pageFetchState": "SUCCESSFUL",
+      "robotsTxtState": "ALLOWED",
+      "error": null
+    },
+    {
+      "url": "https://coldcallreps.com/guides/hire-cold-callers",
+      "status": "pass",
+      "coverageState": "Submitted and indexed",
+      "indexStatusVerdict": "PASS",
+      "lastCrawlTime": "2026-07-17T21:23:50Z",
+      "pageFetchState": "SUCCESSFUL",
+      "robotsTxtState": "ALLOWED",
+      "error": null
+    },
+    {
+      "url": "https://coldcallreps.com/guides/cold-calling-gigs",
+      "status": "pass",
+      "coverageState": "Submitted and indexed",
+      "indexStatusVerdict": "PASS",
+      "lastCrawlTime": "2026-07-17T23:52:59Z",
+      "pageFetchState": "SUCCESSFUL",
+      "robotsTxtState": "ALLOWED",
+      "error": null
+    },
+    {
+      "url": "https://coldcallreps.com/guides/campaign-escrow-and-claims",
+      "status": "pass",
+      "coverageState": "Submitted and indexed",
+      "indexStatusVerdict": "PASS",
+      "lastCrawlTime": "2026-07-17T22:46:11Z",
+      "pageFetchState": "SUCCESSFUL",
+      "robotsTxtState": "ALLOWED",
+      "error": null
+    },
+    {
+      "url": "https://coldcallreps.com/guides/platform-fees-and-payouts",
+      "status": "pass",
+      "coverageState": "Submitted and indexed",
+      "indexStatusVerdict": "PASS",
+      "lastCrawlTime": "2026-07-17T22:26:43Z",
+      "pageFetchState": "SUCCESSFUL",
+      "robotsTxtState": "ALLOWED",
+      "error": null
+    }
+  ],
+  "blockedChecks": [],
+  "notes": [
+    "Submission and inspection do not guarantee indexing.",
+    "Google Indexing API must not be used for ordinary marketing or guide pages."
+  ]
+}
