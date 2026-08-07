@@ -87,14 +87,13 @@ export default function Page() {
       </section>
 
       <section>
-        <h2 className="guide-h2">What practice costs</h2>
+        <h2 className="guide-h2">Practice is free for reps</h2>
         <p>
-          Practice is where the plans matter — not the gigs. Free includes practice minutes to start;
-          Starter is $7/mo and Pro is $29/mo for more minutes and coaching tools. Running brand
-          campaigns stays free for reps, so plans only ever buy practice, never campaign access. See
-          the <Link href="/pricing">pricing page</Link> for the full breakdown, and{' '}
-          <Link href="/guides/get-paid-per-meeting-cold-calling">how reps get paid</Link> for the
-          earning side.
+          Free AI practice is how you polish and clear the quality gate — brands fund escrow and pay
+          you for verified results. Optional paid plans only buy extra practice volume for teams or
+          heavy use; they never unlock campaigns. See{' '}
+          <Link href="/pricing">free to train</Link> and{' '}
+          <Link href="/guides/get-paid-per-meeting-cold-calling">how reps get paid</Link>.
         </p>
       </section>
 

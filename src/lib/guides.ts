@@ -185,9 +185,9 @@ export const GUIDES: readonly Guide[] = [
       {
         question: 'Do I have to pay to take a cold calling gig?',
         answer:
-          'No. Joining and running brand campaigns is free for reps once you clear the quality gate. Paid plans buy AI practice minutes and coaching tools — they are not required to earn on campaigns.',
+          'No. Joining and running brand campaigns is free for reps once you clear the quality gate. Brands fund payouts. Optional paid practice is never required to earn.',
         links: [
-          { href: '/pricing', label: 'See pricing' },
+          { href: '/pricing', label: 'Free to train' },
           { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Open brand deals' },
         ],
       },
@@ -277,7 +277,7 @@ export const GUIDES: readonly Guide[] = [
     directAnswer:
       'Cold Call Reps charges a 20% platform fee on SDR payouts, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base pay. Reps keep the rest. Payouts run through Stripe Connect and release from campaign escrow when a claim passes audit. Example: a $75 booked meeting costs $15 in fee; a $2,000/mo base costs $150, not $400.',
     related: ['campaign-escrow-and-claims', 'get-paid-per-meeting-cold-calling', 'how-campaigns-work'],
-    ctas: [{ href: '/pricing', label: 'See full pricing', primary: true }],
+    ctas: [{ href: '/pricing', label: 'Free to train', primary: true }],
     keywords: [
       'cold call reps fees',
       'appointment setting platform fees',
@@ -327,7 +327,7 @@ export const GUIDES: readonly Guide[] = [
       'Pay-per-appointment setting means you pay only when a rep books a qualified meeting, instead of paying a fixed SDR salary regardless of results. On Cold Call Reps you set an outcome payout, fund escrow, and pay per verified meeting — so your cost scales with results and unbooked dials do not drain payroll.',
     related: ['hire-cold-callers', 'platform-fees-and-payouts', 'hire-outbound-without-in-house-sdr'],
     ctas: [
-      { href: '/pricing', label: 'See pricing', primary: true },
+      { href: '/pricing', label: 'Free to train', primary: true },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Join as an SDR' },
     ],
     keywords: [
@@ -486,7 +486,7 @@ export const GUIDES: readonly Guide[] = [
     related: ['cold-calling-gigs', 'sdr-applications-and-approval', 'get-paid-per-meeting-cold-calling'],
     ctas: [
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start practicing free', primary: true },
-      { href: '/pricing', label: 'See practice plans' },
+      { href: '/pricing', label: 'Free to train' },
     ],
     keywords: [
       'ai cold call practice',
@@ -507,10 +507,10 @@ export const GUIDES: readonly Guide[] = [
         links: [{ href: '/guides/sdr-applications-and-approval', label: 'Applications & approval' }],
       },
       {
-        question: 'How much does practice cost?',
+        question: 'Do I pay to practice?',
         answer:
-          'Free includes practice minutes to start. Starter is $7/mo and Pro is $29/mo for more minutes and coaching tools. Running brand campaigns stays free for reps — plans only buy practice.',
-        links: [{ href: '/pricing', label: 'See pricing' }],
+          'Practice and campaigns are free for reps. Brands fund escrow and pay you for verified results. Optional paid practice is only for teams or heavy AI use — never required to earn.',
+        links: [{ href: '/pricing', label: 'Free to train' }],
       },
       {
         question: 'How does practice help me get approved?',
@@ -721,8 +721,8 @@ export const GUIDES: readonly Guide[] = [
       {
         question: 'Is applying free?',
         answer:
-          'Yes. Applying to and running campaigns is free for reps. Paid plans only buy AI practice minutes and coaching tools that help you clear the gate faster.',
-        links: [{ href: '/pricing', label: 'See pricing' }],
+          'Yes. Applying to and running campaigns is free for reps. Brands fund the tool. Optional paid practice is only for teams or heavy AI use — never required to earn.',
+        links: [{ href: '/pricing', label: 'Free to train' }],
       },
       {
         question: 'What happens after I am approved?',

@@ -934,6 +934,21 @@ body:has(.lp-athletic) .mkt-footer .brand-mark {
   color: #ffffff !important;
 }
 
+body:has(.lp-athletic) .mkt-header .brand-mark__wordmark,
+body:has(.lp-athletic) .mkt-footer .brand-mark__wordmark {
+  color: #ffffff !important;
+}
+
+body:has(.lp-athletic) .mkt-header .brand-mark__by,
+body:has(.lp-athletic) .mkt-footer .brand-mark__by {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+body:has(.lp-athletic) .mkt-header .brand-mark__by:hover,
+body:has(.lp-athletic) .mkt-footer .brand-mark__by:hover {
+  color: var(--ath-signal) !important;
+}
+
 body:has(.lp-athletic) .mkt-header .theme-mode-toggle {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
@@ -2166,6 +2181,27 @@ main:has(> .lp-athletic) > .lp-wrap {
 .lp-ath-sdr__inner {
   max-width: 80rem;
   margin-inline: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(2rem, 5vw, 3.5rem);
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .lp-ath-sdr__inner {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.lp-ath-sdr__media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 18px;
+  border: 1px solid var(--ath-line);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
 }
 
 .lp-ath-sdr__sub {

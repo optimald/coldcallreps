@@ -1,4 +1,4 @@
-import { PLAN, TRIAL_MINUTES } from '@/lib/product';
+import { TRIAL_MINUTES } from '@/lib/product';
 import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 
 export type RoleLandingKey = 'reps';
@@ -87,24 +87,16 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
         body: 'Stack wins, unlock higher-paying deals, and raise your earnings with skill and consistency — no hard cap.',
       },
     ],
-    pricingHeadline: 'Practice plans for SDRs',
+    pricingHeadline: 'Free to train. Brands pay you.',
+    pricingNote:
+      'Polish with free AI practice, train on the brand offer, clear the gate, then get paid from brand escrow. Campaigns stay $0 for reps — brands fund the tool.',
     planHref: MARKETPOUNCE_SIGN_UP_REP,
     pricingCards: [
       {
-        label: 'Free',
+        label: 'For SDRs',
         price: '$0',
-        detail: `${TRIAL_MINUTES} practice minutes to start · brand deals free`,
-      },
-      {
-        label: 'Starter',
-        price: `$${PLAN.STARTER.price}/mo`,
-        detail: `${PLAN.STARTER.minutes} practice minutes / mo · live coach`,
+        detail: `${TRIAL_MINUTES}+ free practice minutes · campaigns free · earn on verified results`,
         highlight: true,
-      },
-      {
-        label: 'Pro',
-        price: `$${PLAN.PRO.price}/mo`,
-        detail: `${PLAN.PRO.minutes} practice minutes / mo · recording storage`,
       },
     ],
   },

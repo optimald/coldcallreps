@@ -1,42 +1,42 @@
 import type { NextConfig } from 'next';
 
-const MARKETPOUNCE = 'https://marketpounce.com';
+const MARKETPOUNCE = 'https://www.marketpounce.com';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Required so PostHog capture endpoints that use trailing slashes (e.g. /e/) work.
   skipTrailingSlashRedirect: true,
   async redirects() {
-    // Auth lives on MarketPounce — never host login/signup here.
+    // Auth lives on MarketPounce (Clerk app name: MarketPounce) — never host login/signup here.
     return [
       {
         source: '/sign-in',
-        destination: `${MARKETPOUNCE}/sign-in`,
+        destination: `${MARKETPOUNCE}/sign-in?from=ccr`,
         permanent: true,
       },
       {
         source: '/sign-in/:path*',
-        destination: `${MARKETPOUNCE}/sign-in`,
+        destination: `${MARKETPOUNCE}/sign-in?from=ccr`,
         permanent: true,
       },
       {
         source: '/sign-up',
-        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        destination: `${MARKETPOUNCE}/sign-up?role=REP&from=ccr`,
         permanent: true,
       },
       {
         source: '/sign-up/:path*',
-        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        destination: `${MARKETPOUNCE}/sign-up?role=REP&from=ccr`,
         permanent: true,
       },
       {
         source: '/login',
-        destination: `${MARKETPOUNCE}/sign-in`,
+        destination: `${MARKETPOUNCE}/sign-in?from=ccr`,
         permanent: true,
       },
       {
         source: '/signup',
-        destination: `${MARKETPOUNCE}/sign-up?role=REP`,
+        destination: `${MARKETPOUNCE}/sign-up?role=REP&from=ccr`,
         permanent: true,
       },
     ];

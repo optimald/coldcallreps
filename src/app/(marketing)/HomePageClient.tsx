@@ -296,7 +296,7 @@ export default function HomePageClient() {
             transition={{ duration: 0.55, delay: 0.16 }}
           >
             <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
-              Start free as an SDR
+              Join MarketPounce as an SDR
             </a>
             <a href="#how-it-works" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
               How it works
@@ -309,7 +309,7 @@ export default function HomePageClient() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.22 }}
           >
-            Free practice to start · brand deals free for reps · paid per verified result
+            Free to train · accounts on MarketPounce · brands pay you
           </motion.p>
         </div>
       </section>
@@ -454,20 +454,33 @@ export default function HomePageClient() {
       {/* Mid CTA */}
       <section className="lp-ath-sdr" id="for-sdrs" aria-labelledby="lp-sdr-title">
         <Reveal className="lp-ath-sdr__inner">
-          <p className="lp-ath-kicker">Recruiting SDRs</p>
-          <h2 id="lp-sdr-title" className="lp-ath-h2">
-            Training + brand deals in one path.
-          </h2>
-          <p className="lp-ath-sub lp-ath-sdr__sub">
-            Start free. Practice until you pass. Apply to campaigns and earn per verified result.
-          </p>
-          <div className="lp-ath-cta lp-ath-cta--left">
-            <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
-              Join as an SDR
-            </a>
-            <a href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
-              See practice pricing
-            </a>
+          <div className="lp-ath-sdr__copy">
+            <p className="lp-ath-kicker">Recruiting SDRs</p>
+            <h2 id="lp-sdr-title" className="lp-ath-h2">
+              Training + brand deals in one path.
+            </h2>
+            <p className="lp-ath-sub lp-ath-sdr__sub">
+              Create your MarketPounce account free. Practice until you pass. Apply to campaigns and
+              earn per verified result.
+            </p>
+            <div className="lp-ath-cta lp-ath-cta--left">
+              <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
+                Join MarketPounce as an SDR
+              </a>
+              <a href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
+                Free to train
+              </a>
+            </div>
+          </div>
+          <div className="lp-ath-sdr__media">
+            <img
+              src="/people/story-join.webp"
+              alt="Two SDRs training together and closing brand deals on ColdCallReps"
+              loading="lazy"
+              decoding="async"
+              width={1200}
+              height={900}
+            />
           </div>
         </Reveal>
       </section>
@@ -476,8 +489,8 @@ export default function HomePageClient() {
       <section className="lp-ath-proofbar" aria-label="Why reps join">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>Free training minutes</strong>
-            <span>Practice to prove yourself</span>
+            <strong>Free to train</strong>
+            <span>Polish, clear the gate, then earn</span>
           </div>
           <div>
             <strong>$0 to join</strong>
@@ -497,11 +510,11 @@ export default function HomePageClient() {
             Ready to train, prove, and get paid?
           </h2>
           <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary lp-ath-btn--xl">
-            Start free as an SDR
+            Join MarketPounce as an SDR
           </a>
           <div className="lp-ath-final__alt">
             <a href="/for/reps">see the full SDR path →</a>
-            <a href="/pricing">or check practice pricing →</a>
+            <a href="/pricing">or see free to train →</a>
           </div>
         </Reveal>
       </section>

@@ -1,13 +1,16 @@
 /**
- * Product auth lives on marketpounce.com.
+ * Product auth lives on marketpounce.com (Clerk application_name: MarketPounce).
  * This site never hosts login — see next.config.ts redirects for /sign-in|/sign-up.
  */
-export const MARKETPOUNCE_ORIGIN = 'https://marketpounce.com';
+export const MARKETPOUNCE_ORIGIN = 'https://www.marketpounce.com';
 
 export const MARKETPOUNCE_SIGN_IN = `${MARKETPOUNCE_ORIGIN}/sign-in`;
 
 export function marketpounceSignUp(qs?: string): string {
-  return `${MARKETPOUNCE_ORIGIN}/sign-up${qs ? `?${qs}` : ''}`;
+  const params = new URLSearchParams(qs || '');
+  if (!params.has('from')) params.set('from', 'ccr');
+  const query = params.toString();
+  return `${MARKETPOUNCE_ORIGIN}/sign-up${query ? `?${query}` : ''}`;
 }
 
 /** Default SDR signup (primary CTA for this marketing site). */

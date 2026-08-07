@@ -1,6 +1,8 @@
 # Cold Call Reps (ColdCallReps.com)
 
-Standalone voice-based cold call training — **Master Your Reps. Become a Top Rep.**
+**ColdCallReps by MarketPounce** — SDR recruiting door into the [MarketPounce](https://www.marketpounce.com) growth desk. Train with AI voice, prove your skills, get paid on brand deals.
+
+Auth/accounts live on MarketPounce (Clerk `application_name`: MarketPounce). This site never hosts login — `/sign-in` and `/sign-up` redirect there with `?role=REP&from=ccr`.
 
 Repo: https://github.com/optimald/coldcallreps
 
@@ -63,27 +65,30 @@ Browser (Vercel Next.js)
 End call → scorecard → Prisma + points / minutes
 ```
 
-## Pricing
+## Pricing (SDR recruiting)
+
+| Who | Pays | What |
+|-----|------|------|
+| **SDRs** | **$0** required | Free practice to polish + clear the gate; campaigns free; earn from brand escrow |
+| **Brands** | Escrow + desk | Fund outcomes and the growth tool |
+
+Optional Starter ($7) / Pro ($29) / Org ($60/user) buy extra AI practice volume for teams or heavy use — **never required to earn**.
 
 | Plan | Price | Minutes |
 |------|-------|---------|
-| Free | $0 | **15** minutes on signup (`TRIAL_MINUTES`) |
-| Starter | **$7**/mo | **100** minutes / billing cycle |
-| Pro | **$29**/mo | **600** minutes / billing cycle |
-| Org (TEAM) | **$60/user/mo** | **60** practice minutes / user / mo (pooled) |
+| Free | $0 | **15**+ on signup (`TRIAL_MINUTES`) — enough to clear the gate |
+| Starter | **$7**/mo | **100** / cycle (optional) |
+| Pro | **$29**/mo | **600** / cycle (optional) |
+| Org (TEAM) | **$60/user/mo** | **60** / user / mo pooled (optional) |
 
-Marketplace: brands/founders pay; reps free for gigs; ~20% platform fee on payouts via Stripe Connect (destination charges).
+Marketplace: ~20% platform fee on payouts via Stripe Connect (destination charges), capped.
 
-**Ops:** Stripe Price IDs must match these amounts — update `STRIPE_STARTER_PRICE_ID` for **$7** Starter (and any other changed amounts) in the Dashboard.
-
-`STRIPE_TEAM_PRICE_ID` must be a **$60/seat** Stripe price. Defaults: `TEAM_MINUTES_PER_SEAT=60`.
-
-Referral bonus: `REFERRAL_BONUS_MINUTES` (defaults to one month of Starter minutes).
+**Ops:** Stripe Price IDs must match amounts. Set `TRIAL_MINUTES=15` on Vercel production.
 
 ## Deploy
 
 - Vercel for Next.js · Cloudflare DO for voice (`npm run deploy:voice`)
 - Set `NEXT_PUBLIC_TRAINER_REALTIME_URL` + worker `APP_ORIGIN`
 - Stripe webhook → `/api/billing/webhook`
-- Set `TRIAL_MINUTES=15` on Vercel production (match `.env.example` / product allotment)
-- Update Stripe prices for Starter $7 / Pro $29 before live checkout
+- Set `TRIAL_MINUTES=15` on Vercel production (match `.env.example`)
+- Optional Starter/Pro Stripe prices for teams/heavy practice only — not the SDR recruitment pitch

@@ -780,7 +780,9 @@ textarea {
   justify-content: center;
 }
 
-.app-shell--sidebar-collapsed .app-sidebar--desktop .brand-mark__wordmark {
+.app-shell--sidebar-collapsed .app-sidebar--desktop .brand-mark__wordmark,
+.app-shell--sidebar-collapsed .app-sidebar--desktop .brand-mark__by,
+.app-shell--sidebar-collapsed .app-sidebar--desktop .brand-mark__text {
   display: none;
 }
 
@@ -2671,6 +2673,212 @@ textarea {
 .pricing-seg__btn.is-active {
   background: var(--accent);
   color: var(--on-accent);
+}
+
+.pricing-kicker {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.pricing-hero-free {
+  max-width: 36rem;
+  margin: 0 auto 2.75rem;
+  padding: 1.75rem 1.5rem 1.85rem;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 65%),
+    var(--bg-elevated);
+}
+
+.pricing-hero-free__label {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pricing-hero-free__minutes {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 4vw, 2.05rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.pricing-hero-free__sub {
+  margin: 0 auto 1.15rem;
+  max-width: 32ch;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.pricing-path {
+  list-style: none;
+  margin: 0 auto 1.35rem;
+  padding: 0;
+  max-width: 28rem;
+  text-align: left;
+  display: grid;
+  gap: 0.65rem;
+  counter-reset: path;
+}
+
+.pricing-path li {
+  position: relative;
+  padding-left: 2rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  counter-increment: path;
+}
+
+.pricing-path li::before {
+  content: counter(path);
+  position: absolute;
+  left: 0;
+  top: 0.05rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pricing-promise {
+  max-width: 36rem;
+  margin: 0 auto 2.5rem;
+  text-align: center;
+}
+
+.pricing-promise__title {
+  margin: 0 0 0.65rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.pricing-promise p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.pricing-hero-free__features {
+  list-style: none;
+  margin: 0 auto 1.35rem;
+  padding: 0;
+  max-width: 28rem;
+  text-align: left;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.pricing-hero-free__features li {
+  position: relative;
+  padding-left: 1.35rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.pricing-hero-free__features li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.pricing-hero-free__cta {
+  display: inline-flex;
+  margin-bottom: 0.75rem;
+}
+
+.pricing-hero-free__fine {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.pricing-optional {
+  max-width: 36rem;
+  margin: 0 auto 2rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-soft);
+  padding: 0.15rem 1rem 0.15rem;
+}
+
+.pricing-optional summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.95rem 0.15rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.pricing-optional summary::-webkit-details-marker {
+  display: none;
+}
+
+.pricing-optional summary::after {
+  content: '+';
+  float: right;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.pricing-optional[open] summary::after {
+  content: '–';
+}
+
+.pricing-optional__body {
+  padding: 0 0.15rem 1.1rem;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.pricing-optional__body p {
+  margin: 0 0 0.75rem;
+}
+
+.pricing-optional__body ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.15rem;
+}
+
+.pricing-optional__body li {
+  margin-bottom: 0.35rem;
+}
+
+.pricing-optional__body strong {
+  color: var(--ink);
+}
+
+.pricing-optional__note {
+  margin: 0;
+  font-size: 0.88rem;
 }
 
 .pricing-note {

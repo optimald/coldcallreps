@@ -209,7 +209,7 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
             {role.primaryCta.label}
           </Link>
           <Link href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
-            Compare all plans
+            Free to train
           </Link>
         </div>
       </section>

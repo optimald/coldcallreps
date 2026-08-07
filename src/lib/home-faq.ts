@@ -4,7 +4,7 @@ import {
   DEFAULT_MIN_PRACTICE_SESSIONS,
   DEFAULT_REQUIRE_CERTIFICATION,
 } from '@/lib/campaign-tiers';
-import { PLAN, TRIAL_MINUTES } from '@/lib/product';
+import { TRIAL_MINUTES } from '@/lib/product';
 import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 
 export type HomeFaqLink = {
@@ -41,10 +41,10 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     ],
   },
   {
-    question: 'How much does AI practice cost?',
-    answer: `Free includes ${TRIAL_MINUTES} practice minutes to start. Starter is $${PLAN.STARTER.price}/mo, Pro is $${PLAN.PRO.price}/mo, and Org is $${PLAN.TEAM.price}/user/mo. Brand deals stay free for reps — practice plans buy minutes and coaching tools.`,
+    question: 'Do I pay to practice or join campaigns?',
+    answer: `No. Practice starts free (${TRIAL_MINUTES}+ minutes to polish and clear the quality gate). Brand campaigns stay free for reps — brands fund escrow and pay you for verified results. Optional paid practice exists only for teams or heavy AI use; it is never required to earn.`,
     links: [
-      { href: '/pricing', label: 'See pricing' },
+      { href: '/pricing', label: 'Free to train' },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Sign up as a rep' },
     ],
   },
@@ -70,7 +70,7 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     answer:
       'You get paid for verified outcomes and optional base pay via Stripe Connect. The platform keeps 20% as a fee, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base — the rest goes to you.',
     links: [
-      { href: '/pricing', label: 'Pricing' },
+      { href: '/pricing', label: 'Free to train' },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
     ],
   },

@@ -9,7 +9,7 @@ import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 const NAV_LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/for/reps', label: 'For SDRs' },
-  { href: '/pricing', label: 'Pricing' },
+  { href: '/pricing', label: 'Free to train' },
   { href: '/guides', label: 'Guides' },
 ] as const;
 
@@ -48,7 +48,7 @@ export default function MarketingHeader() {
 
         <div className="mkt-nav-actions">
           <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-cta">
-            Start free
+            Join MarketPounce
           </a>
         </div>
 
@@ -83,7 +83,7 @@ export default function MarketingHeader() {
             ))}
             <div className="mkt-nav-drawer__actions">
               <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-drawer__btn">
-                Start free
+                Join MarketPounce
               </a>
             </div>
           </div>

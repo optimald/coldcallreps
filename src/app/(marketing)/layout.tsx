@@ -13,7 +13,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <div>
           <BrandMark size="sm" />
           <p className="mkt-footer-note" style={{ marginTop: '0.55rem' }}>
-            Recruiting SDRs: train with AI voice, prove your skills, get paid on brand deals.
+            Recruiting SDRs for the MarketPounce growth desk — train with AI voice, prove your
+            skills, get paid on brand deals. Accounts are created on MarketPounce.
           </p>
         </div>
         <div className="mkt-footer-cols">
@@ -21,12 +22,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <h4>For SDRs</h4>
             <Link href="/#how-it-works">How it works</Link>
             <Link href="/for/reps">SDR path</Link>
-            <Link href="/pricing">Practice pricing</Link>
+            <Link href="/pricing">Free to train</Link>
             <Link href="/guides">Guides</Link>
           </div>
           <div className="mkt-footer-col">
             <h4>Get started</h4>
-            <a href={MARKETPOUNCE_SIGN_UP_REP}>Start free</a>
+            <a href={MARKETPOUNCE_SIGN_UP_REP}>Join MarketPounce</a>
           </div>
           <div className="mkt-footer-col">
             <h4>Company</h4>
@@ -35,7 +36,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <a href="mailto:support@coldcallreps.com">Support</a>
           </div>
         </div>
-        <div className="mkt-footer-bottom">© {new Date().getFullYear()} ColdCallReps</div>
+        <div className="mkt-footer-bottom">
+          © {new Date().getFullYear()} ColdCallReps by MarketPounce
+        </div>
       </footer>
     </div>
   );
