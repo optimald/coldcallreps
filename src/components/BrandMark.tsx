@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { MARKETPOUNCE_ORIGIN } from '@/lib/marketpounce';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 
 /** Headset mark + wordmark used in nav / marketing / app shell. */
 export default function BrandMark({
@@ -67,7 +67,7 @@ export default function BrandMark({
         </Link>
         {showByline ? (
           <Link
-            href={MARKETPOUNCE_ORIGIN}
+            href={MARKETPOUNCE_SIGN_UP_REP}
             className="brand-mark__by"
             style={{
               fontFamily: 'var(--font-sans, system-ui, sans-serif)',
