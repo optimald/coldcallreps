@@ -18,3 +18,6 @@ export const MARKETPOUNCE_SIGN_UP_REP = marketpounceSignUp('role=REP');
 
 /** Brand founder signup. */
 export const MARKETPOUNCE_SIGN_UP_BRAND = marketpounceSignUp('role=BRAND');
+
+/** Agent-ready audit page for brands/operators. */
+export const MARKETPOUNCE_AGENT_READY = `${MARKETPOUNCE_ORIGIN}/isitagentready`;

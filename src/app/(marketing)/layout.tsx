@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import BrandMark from '@/components/BrandMark';
 import MarketingHeader from '@/components/MarketingHeader';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import { MARKETPOUNCE_SIGN_UP_REP, MARKETPOUNCE_AGENT_READY } from '@/lib/marketpounce';
 import './landing.css';
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +28,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           <div className="mkt-footer-col">
             <h4>Get started</h4>
             <a href={MARKETPOUNCE_SIGN_UP_REP}>Join MarketPounce</a>
+          </div>
+          <div className="mkt-footer-col">
+            <h4>For Operators</h4>
+            <a href={MARKETPOUNCE_AGENT_READY}>Is it agent-ready?</a>
           </div>
           <div className="mkt-footer-col">
             <h4>Company</h4>
