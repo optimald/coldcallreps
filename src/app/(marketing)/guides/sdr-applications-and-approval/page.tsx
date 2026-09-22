@@ -91,11 +91,13 @@ export default function Page() {
         <p>
           Approval unlocks live dialing for that campaign. From there you dial real prospects, submit
           outcome claims, and — once the AI post-call audit passes — get paid from escrow via Stripe
-          Connect. See where this sits in the whole flow in{' '}
-          <Link href="/guides/how-campaigns-work">how campaigns work</Link>, and the earning detail in{' '}
+          Connect. For the brand-side campaign lifecycle, see{' '}
+          <a href="https://www.marketpounce.com/guides/how-campaigns-work">how campaigns work</a> on
+          MarketPounce, and the earning detail in{' '}
           <Link href="/guides/get-paid-per-meeting-cold-calling">how reps get paid per meeting</Link>.
           Looking for campaigns to apply to? Browse{' '}
-          <Link href="/guides/cold-calling-gigs">cold calling gigs</Link> or open{' '}
+          <Link href="/guides/cold-calling-gigs">cold calling gigs</Link>, return to the{' '}
+          <Link href="/">Cold Call Reps home</Link>, or open{' '}
           <a href={MARKETPOUNCE_SIGN_UP_REP}>brand deals</a>.
         </p>
       </section>

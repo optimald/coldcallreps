@@ -30,11 +30,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: {
     default: 'Cold Call Reps — Train. Prove. Get Paid.',
-    template: '%s | ColdCallReps',
+    template: '%s | Cold Call Reps',
   },
   description:
-    'Recruiting SDRs and appointment setters: AI voice training, prove your score, unlock brand deals, and get paid per verified result.',
+    'Cold Call Reps: find cold calling gigs, get hired as a cold caller, and get paid per meeting. AI practice, quality gate, brand deals — Train. Prove. Get Paid.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com'),
+  alternates: { canonical: '/' },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -47,17 +48,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Cold Call Reps — Train. Prove. Get Paid.',
     description:
-      'For SDRs who want training and brand deals. Practice with AI voice, clear the quality gate, get paid to dial leads.',
+      'Find cold calling gigs and get hired by brands who hire cold callers. Practice with AI, clear the gate, get paid per verified result.',
     url: 'https://coldcallreps.com',
-    siteName: 'ColdCallReps',
+    siteName: 'Cold Call Reps',
     type: 'website',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'ColdCallReps — Train. Prove. Get Paid.' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Cold Call Reps — Train. Prove. Get Paid.' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Cold Call Reps — Train. Prove. Get Paid.',
     description:
-      'AI voice practice, brand deals, and pay-per-result outbound for SDRs and appointment setters.',
+      'Cold calling gigs, AI practice, and pay-per-meeting brand deals for SDRs — Cold Call Reps.',
     images: ['/og.png'],
   },
 };

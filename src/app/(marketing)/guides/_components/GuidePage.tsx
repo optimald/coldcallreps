@@ -6,6 +6,7 @@ import {
   guidePath,
   type Guide,
 } from '@/lib/guides';
+import { SITE_ORIGIN } from '@/lib/site';
 import GuideFAQ from './GuideFAQ';
 import RelatedGuides from './RelatedGuides';
 import GuideCTA from './GuideCTA';
@@ -13,8 +14,6 @@ import GuideCTA from './GuideCTA';
 const CATEGORY_LABEL = Object.fromEntries(
   GUIDE_CATEGORIES.map((c) => [c.id, c.label])
 ) as Record<Guide['category'], string>;
-
-const SITE = 'https://coldcallreps.com';
 
 function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
@@ -36,7 +35,7 @@ export default function GuidePage({
   ctaSub: string;
   children: React.ReactNode;
 }) {
-  const url = `${SITE}${guidePath(guide.slug)}`;
+  const url = `${SITE_ORIGIN}${guidePath(guide.slug)}`;
 
   return (
     <main className="guide-shell">

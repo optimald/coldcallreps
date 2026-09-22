@@ -41,7 +41,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     eyebrow: 'Recruiting SDRs · skill · speed · consistency',
     title: 'For SDRs & appointment setters',
     headline: 'Skill, speed, and consistency. No earning ceiling.',
-    sub: 'Cold calling pays the reps who show up sharp and stay consistent. Train with AI voice coaching, unlock brand campaigns, and get paid when you qualify or book — the harder you run, the more you can earn.',
+    sub: 'Get hired as a cold caller brands trust. Train with AI voice coaching, clear the quality gate, unlock cold calling gigs, and get paid when you qualify or book — the harder you run, the more you can earn.',
     primaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start Free — Get Paid' },
     secondaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse Brand Deals' },
     proof: 'There is no earning limit — only how skilled, fast, and consistent you are.',

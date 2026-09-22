@@ -1,14 +1,35 @@
 {
   "schemaVersion": "1.0.0",
   "siteId": "coldcallreps",
-  "lastRunId": "run-2026-07-20T20-31-46-459Z",
-  "lastRunCompletedAt": "2026-07-20T20:31:46.459Z",
-  "gscStatus": "pass",
-  "gscNote": "GSC is connected (service key at .secrets/google-search-console.json). Sampled guide URLs are Submitted and indexed. Corrects the 'blocked' status in run-2026-07-20T19-45-46-000Z, which was wrong: googleapis/gaxios fails on Node 26, so audit-google-sitemap.ts now uses native fetch for the token exchange.",
-  "nextWeeklyAt": "2026-07-27T19:45:46.000Z",
-  "nextMonthlyAt": "2026-08-20T19:45:46.000Z",
+  "lastRunId": "run-2026-08-25T18-40-44-300Z",
+  "lastRunCompletedAt": "2026-08-25T18:40:44.300Z",
+  "gscStatus": "partial",
+  "gscNote": "Daily GSC audit 2026-08-25. 0 clicks / 64 impressions (28d, avg pos 20.2). 11 of 16 inspected URLs indexed; 4 guides discovered-not-indexed (never crawled); /for/reps is a duplicate of /for. Disclosed queries: hire cold callers, callreps, hire cold caller, hire cold calling, cost to rep.",
+  "nextWeeklyAt": "2026-09-01T18:40:44.300Z",
+  "nextMonthlyAt": "2026-09-20T19:45:46.000Z",
   "nextQuarterlyAt": "2026-10-20T19:45:46.000Z",
-  "openFindings": [],
+  "openFindings": [
+    {
+      "id": "finding-for-reps-duplicate",
+      "severity": "high",
+      "title": "/for/reps treated as duplicate of /for redirect"
+    },
+    {
+      "id": "finding-four-guides-not-indexed",
+      "severity": "high",
+      "title": "Four published guides discovered but never crawled"
+    },
+    {
+      "id": "finding-www-apex-split",
+      "severity": "medium",
+      "title": "www and apex hosts both receiving impressions"
+    },
+    {
+      "id": "finding-homepage-stale-crawl",
+      "severity": "medium",
+      "title": "Homepage last crawled 2026-07-16; no user canonical"
+    }
+  ],
   "contentPlanVersion": "1.0.0",
   "publishedGuideUrls": [
     "https://coldcallreps.com/guides",

@@ -1,21 +1,21 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { GUIDE_CATEGORIES, GUIDES, getGuidesByCategory } from '@/lib/guides';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import { MARKETPOUNCE_ORIGIN, MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import { SITE_ORIGIN } from '@/lib/site';
 import GuideCard from './_components/GuideCard';
 
-const SITE = 'https://coldcallreps.com';
-const URL = `${SITE}/guides`;
+const URL = `${SITE_ORIGIN}/guides`;
 
 export const metadata: Metadata = {
-  title: 'Guides — Earn as an SDR, Practice, Get Paid',
+  title: { absolute: 'Cold Call Reps Guides — Gigs, Practice & Getting Paid' },
   description:
-    'Cold Call Reps guides for SDRs: AI practice, brand deals, payouts, escrow, and how to get paid per booked meeting.',
+    'Cold Call Reps guides for SDRs: cold calling gigs, AI practice, applications, and how to get paid per booked meeting.',
   alternates: { canonical: URL },
   openGraph: {
     title: 'Cold Call Reps Guides',
     description:
-      'Learn how to hire cold callers, find paid cold calling gigs, and how escrow, fees, and payouts work on Cold Call Reps.',
+      'Learn how to find paid cold calling gigs, practice with AI, clear the quality gate, and get paid per meeting on Cold Call Reps.',
     url: URL,
     images: [{ url: '/og.svg', width: 1200, height: 630 }],
   },
@@ -32,9 +32,9 @@ function jsonLd() {
     hasPart: GUIDES.map((g) => ({
       '@type': 'WebPage',
       name: g.title,
-      url: `${SITE}/guides/${g.slug}`,
+      url: `${SITE_ORIGIN}/guides/${g.slug}`,
     })),
-    isPartOf: { '@type': 'WebSite', name: 'Cold Call Reps', url: SITE },
+    isPartOf: { '@type': 'WebSite', name: 'Cold Call Reps', url: SITE_ORIGIN },
   };
 }
 
@@ -50,9 +50,12 @@ export default function GuidesHubPage() {
         <p className="guide-kicker">Guides</p>
         <h1 className="guides-hub__title">Cold Call Reps guides</h1>
         <p className="guides-hub__lede">
-          Straight answers on hiring human cold callers, earning as a rep, and how the money
-          moves. Every guide traces its claims to how Cold Call Reps actually works — humans dial
-          live, AI is practice only, and brands pay for verified outcomes.
+          Straight answers for SDRs: find cold calling gigs, practice with AI, clear the quality
+          gate, and get paid per meeting. Brand-side hiring guides live on{' '}
+          <a href={`${MARKETPOUNCE_ORIGIN}/guides/hire-cold-callers`} className="soft-link">
+            MarketPounce
+          </a>
+          .
         </p>
       </header>
 
@@ -81,6 +84,10 @@ export default function GuidesHubPage() {
           SDR path
         </Link>
         , see{' '}
+        <Link href="/hire-cold-callers" className="soft-link">
+          hire cold callers
+        </Link>
+        , check{' '}
         <Link href="/pricing" className="soft-link">
           practice pricing
         </Link>

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seo:audit-sitemap": "npx tsx scripts/audit-google-sitemap.ts",
+    "seo:audit-gsc": "npx tsx scripts/audit-gsc-daily.ts",
     "seo:indexnow": "npx tsx scripts/submit-indexnow.ts"
   },
   "dependencies": {

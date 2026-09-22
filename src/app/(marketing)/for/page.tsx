@@ -1,6 +1,7 @@
-import { redirect } from 'next/navigation';
+import { permanentRedirect } from 'next/navigation';
+import { MARKETPOUNCE_ORIGIN } from '@/lib/marketpounce';
 
-/** Audience hub collapsed — this site recruits SDRs only. */
+/** Brand audience hub lives on MarketPounce; CCR keeps /for/reps (and teams/recruiters). */
 export default function ForIndexPage() {
-  redirect('/for/reps');
+  permanentRedirect(`${MARKETPOUNCE_ORIGIN}/for`);
 }

@@ -22,7 +22,17 @@ function PostHogPageView() {
 
 export default function PostHogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
-    initPostHog();
+    const start = () => initPostHog();
+    const w = globalThis as typeof globalThis & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(start, { timeout: 4500 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = globalThis.setTimeout(start, 2800);
+    return () => globalThis.clearTimeout(t);
   }, []);
 
   if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) {

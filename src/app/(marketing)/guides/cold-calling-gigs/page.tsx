@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'cold-calling-gigs';
@@ -121,7 +122,9 @@ export default function Page() {
           experienced SDRs looking for flexible outcome pay, appointment setters who want steady
           campaign access, and newer reps willing to train up before dialing. If you treat the dial
           like a craft, the model rewards it. Read more on the{' '}
-          <Link href="/for/reps">for reps</Link> page.
+          <Link href="/for/reps">for reps</Link> page, start from the{' '}
+          <Link href="/">Cold Call Reps home</Link>, or{' '}
+          <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up free</a>.
         </p>
       </section>
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'ai-cold-call-practice';
@@ -103,7 +104,9 @@ export default function Page() {
           Reps who keep practicing after going live tend to hold higher scores, warm up before live
           blocks, and qualify for higher-tier campaigns and accelerators. Practice is not a one-time
           gate to clear — it is the training habit that compounds into more earnings. Ready to find
-          work? Start with <Link href="/guides/cold-calling-gigs">cold calling gigs</Link>.
+          work? Start with <Link href="/guides/cold-calling-gigs">cold calling gigs</Link>, the{' '}
+          <Link href="/">Cold Call Reps home</Link>, or{' '}
+          <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up free</a>.
         </p>
       </section>
 

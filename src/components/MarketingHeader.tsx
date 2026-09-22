@@ -9,6 +9,7 @@ import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 const NAV_LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/for/reps', label: 'For SDRs' },
+  { href: '/hire-cold-callers', label: 'Hire' },
   { href: '/pricing', label: 'Free to train' },
   { href: '/guides', label: 'Guides' },
 ] as const;

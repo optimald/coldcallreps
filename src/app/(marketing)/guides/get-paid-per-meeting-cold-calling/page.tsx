@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
+import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'get-paid-per-meeting-cold-calling';
@@ -80,8 +81,11 @@ export default function Page() {
           </li>
         </ul>
         <p>
-          Full detail and more examples are in{' '}
-          <Link href="/guides/platform-fees-and-payouts">platform fees and payouts</Link>.
+          Full detail and more examples are in the{' '}
+          <a href="https://www.marketpounce.com/guides/platform-fees-and-payouts">
+            platform fees and payouts
+          </a>{' '}
+          guide on MarketPounce.
         </p>
       </section>
 
@@ -107,8 +111,10 @@ export default function Page() {
         </ol>
         <p>
           New to campaigns? Start with{' '}
-          <Link href="/guides/cold-calling-gigs">finding cold calling gigs</Link>, and sharpen your
-          score first with <Link href="/guides/ai-cold-call-practice">AI cold call practice</Link>.
+          <Link href="/guides/cold-calling-gigs">finding cold calling gigs</Link>, sharpen your score
+          with <Link href="/guides/ai-cold-call-practice">AI cold call practice</Link>, or go back to
+          the <Link href="/">Cold Call Reps home</Link> and{' '}
+          <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up</a>.
         </p>
       </section>
 

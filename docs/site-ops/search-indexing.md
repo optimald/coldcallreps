@@ -58,7 +58,7 @@ The script must:
 3. Fetch the live `/sitemap.xml`; fail clearly on a non-2xx response or invalid
    XML.
 4. Extract and normalize canonical URLs, rejecting URLs on another host.
-5. Confirm the hub and all 12 `GUIDE_SLUGS` from `src/lib/guides.ts` are present.
+5. Confirm the hub and all `GUIDE_SLUGS` from `src/lib/guides.ts` are present.
 6. Use Search Console’s Sitemaps API to read the submitted sitemap and its
    reported errors/warnings.
 7. Use URL Inspection for sitemap URLs only when requested with `--inspect`.

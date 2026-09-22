@@ -311,6 +311,14 @@
   font-size: 0.9rem;
 }
 
+.guide-faq__links a,
+.guide-faq__links .soft-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.25rem 0.1rem;
+}
+
 /* Related guides */
 .guide-related {
   margin-top: 2.5rem;
