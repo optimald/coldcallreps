@@ -1,49 +1,51 @@
 {
   "schemaVersion": "1.0.0",
   "siteId": "coldcallreps",
-  "lastRunId": "run-2026-08-25T18-40-44-300Z",
-  "lastRunCompletedAt": "2026-08-25T18:40:44.300Z",
-  "gscStatus": "partial",
-  "gscNote": "Daily GSC audit 2026-08-25. 0 clicks / 64 impressions (28d, avg pos 20.2). 11 of 16 inspected URLs indexed; 4 guides discovered-not-indexed (never crawled); /for/reps is a duplicate of /for. Disclosed queries: hire cold callers, callreps, hire cold caller, hire cold calling, cost to rep.",
-  "nextWeeklyAt": "2026-09-01T18:40:44.300Z",
-  "nextMonthlyAt": "2026-09-20T19:45:46.000Z",
+  "lastRunId": "run-2026-10-02T23-06-56-933Z",
+  "lastRunCompletedAt": "2026-10-02T23:06:56.000Z",
+  "gscStatus": "blocked",
+  "gscNote": "Daily GSC audit 2026-10-02 blocked: no GOOGLE_APPLICATION_CREDENTIALS / .secrets/google-search-console.json in Cloud Agent env. Last live GSC still 2026-08-25 (0 clicks / 64 impressions / avg pos 20.2; queries: hire cold callers, callreps, hire cold caller, hire cold calling, cost to rep). Observed: sitemap 12 URLs; www→apex 301; /for/reps self-canonical; /pricing+/terms+/privacy wrongly canonicalize to homepage.",
+  "nextWeeklyAt": "2026-10-09T23:06:56.000Z",
+  "nextMonthlyAt": "2026-10-20T19:45:46.000Z",
   "nextQuarterlyAt": "2026-10-20T19:45:46.000Z",
   "openFindings": [
     {
-      "id": "finding-for-reps-duplicate",
+      "id": "finding-gsc-credentials-missing",
+      "severity": "critical",
+      "title": "GSC service-account credentials not available in Cloud Agent environment"
+    },
+    {
+      "id": "finding-pricing-canonical-home",
       "severity": "high",
-      "title": "/for/reps treated as duplicate of /for redirect"
+      "title": "/pricing, /terms, /privacy inherit root canonical pointing at homepage"
     },
     {
       "id": "finding-four-guides-not-indexed",
       "severity": "high",
-      "title": "Four published guides discovered but never crawled"
+      "title": "Prior discovered-not-indexed guides need re-inspection after CCR→MarketPounce guide split"
+    },
+    {
+      "id": "finding-for-reps-duplicate",
+      "severity": "medium",
+      "title": "/for/reps duplicate of /for — likely resolved live; confirm with URL Inspection"
     },
     {
       "id": "finding-www-apex-split",
-      "severity": "medium",
-      "title": "www and apex hosts both receiving impressions"
+      "severity": "low",
+      "title": "www/apex impression split — www 301 to apex observed; confirm in GSC"
     },
     {
       "id": "finding-homepage-stale-crawl",
       "severity": "medium",
-      "title": "Homepage last crawled 2026-07-16; no user canonical"
+      "title": "Homepage crawl freshness unknown without URL Inspection"
     }
   ],
   "contentPlanVersion": "1.0.0",
   "publishedGuideUrls": [
     "https://coldcallreps.com/guides",
-    "https://coldcallreps.com/guides/hire-cold-callers",
     "https://coldcallreps.com/guides/cold-calling-gigs",
-    "https://coldcallreps.com/guides/campaign-escrow-and-claims",
-    "https://coldcallreps.com/guides/platform-fees-and-payouts",
-    "https://coldcallreps.com/guides/pay-per-appointment-setting",
     "https://coldcallreps.com/guides/get-paid-per-meeting-cold-calling",
-    "https://coldcallreps.com/guides/how-campaigns-work",
     "https://coldcallreps.com/guides/ai-cold-call-practice",
-    "https://coldcallreps.com/guides/appointment-setting-marketplace",
-    "https://coldcallreps.com/guides/hire-outbound-without-in-house-sdr",
-    "https://coldcallreps.com/guides/cold-call-reps-vs-outbound-agency",
     "https://coldcallreps.com/guides/sdr-applications-and-approval"
   ]
 }

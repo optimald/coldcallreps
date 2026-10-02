@@ -1,0 +1,79 @@
+{
+  "runId": "run-2026-10-02T23-06-56-933Z",
+  "checkedAt": "2026-10-02T23:06:56.000Z",
+  "mode": "audit-gsc-daily",
+  "status": "blocked",
+  "siteUrl": "sc-domain:coldcallreps.com",
+  "sitemapUrl": "https://coldcallreps.com/sitemap.xml",
+  "blockedReason": "Missing GOOGLE_APPLICATION_CREDENTIALS (and .secrets/google-search-console.json). GSC Search Analytics / URL Inspection not queried this run.",
+  "needed": [
+    "Service-account JSON at .secrets/google-search-console.json (or Cloud Agent secret that writes that file)",
+    "GOOGLE_APPLICATION_CREDENTIALS=.secrets/google-search-console.json",
+    "GSC_SITE_URL=sc-domain:coldcallreps.com",
+    "GSC_SITEMAP_URL=https://coldcallreps.com/sitemap.xml",
+    "Service-account client_email added as user on the sc-domain:coldcallreps.com Search Console property",
+    "Search Console API enabled in the GCP project"
+  ],
+  "lastSuccessfulGscNote": {
+    "runId": "run-2026-08-25T18-40-44-300Z",
+    "checkedAt": "2026-08-25T18:40:44.300Z",
+    "staleDays": 38,
+    "totals28": {
+      "clicks": 0,
+      "impressions": 64,
+      "avgPosition": 20.2
+    },
+    "disclosedQueries": [
+      "hire cold callers",
+      "callreps",
+      "hire cold caller",
+      "hire cold calling",
+      "cost to rep"
+    ],
+    "indexation": "11 of 16 inspected URLs indexed; 4 guides discovered-not-indexed (never crawled); /for/reps treated as duplicate of /for"
+  },
+  "liveSitemap": {
+    "urlCount": 12,
+    "urls": [
+      "https://coldcallreps.com/",
+      "https://coldcallreps.com/for/reps",
+      "https://coldcallreps.com/hire-cold-callers",
+      "https://coldcallreps.com/pricing",
+      "https://coldcallreps.com/terms",
+      "https://coldcallreps.com/privacy",
+      "https://coldcallreps.com/llms.txt",
+      "https://coldcallreps.com/guides",
+      "https://coldcallreps.com/guides/cold-calling-gigs",
+      "https://coldcallreps.com/guides/get-paid-per-meeting-cold-calling",
+      "https://coldcallreps.com/guides/ai-cold-call-practice",
+      "https://coldcallreps.com/guides/sdr-applications-and-approval"
+    ]
+  },
+  "observedCrawl": {
+    "wwwToApex": "pass — https://www.coldcallreps.com/ → 301 https://coldcallreps.com/",
+    "forRepsStatus": "pass — /for/reps returns 200 with self-canonical (prior duplicate finding may be resolved)",
+    "brandGuideRedirects": "pass — former brand-hire guides 308 to marketpounce.com/guides/*",
+    "pricingCanonical": "fail — /pricing canonicalizes to https://coldcallreps.com/ (inherits root layout)",
+    "termsCanonical": "fail — /terms canonicalizes to homepage",
+    "privacyCanonical": "fail — /privacy canonicalizes to homepage"
+  },
+  "range28": null,
+  "range90": null,
+  "totals28": null,
+  "totals90": null,
+  "queries28": [],
+  "queries90": [],
+  "pages28": [],
+  "pages90": [],
+  "queryPage28": [],
+  "dates28": [],
+  "countries28": [],
+  "devices28": [],
+  "searchConsoleSitemaps": [],
+  "inspections": [],
+  "notes": [
+    "Live GSC Search Analytics blocked — do not treat lastSuccessfulGscNote as current performance.",
+    "CCR sitemap now lists 4 rep guides only; brand-hire guides permanently redirect to MarketPounce.",
+    "Search Analytics is lagged ~2 days when credentials are available."
+  ]
+}
