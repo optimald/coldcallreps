@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "1.0.0",
+  "run": {
+    "id": "run-2026-10-02T23-06-56-933Z",
+    "mode": "audit",
+    "cadence": "ad_hoc",
+    "startedAt": "2026-10-02T23:04:00.000Z",
+    "completedAt": "2026-10-02T23:06:56.000Z",
+    "agent": "cursor-cloud-agent",
+    "repositoryRevision": "b4cafa3b0aead5482ad7cbe9bf2556d477dba070",
+    "deploymentId": null,
+    "previousRunId": "run-2026-08-25T18-40-44-300Z"
+  },
+  "scope": {
+    "siteId": "coldcallreps",
+    "origins": ["https://coldcallreps.com"],
+    "contentCount": 12,
+    "cohorts": ["home", "for-reps", "hire-cold-callers", "pricing", "guides-rep"]
+  },
+  "summary": {
+    "status": "blocked",
+    "critical": 1,
+    "high": 2,
+    "medium": 2,
+    "low": 1,
+    "statement": "Daily GSC audit blocked: no Search Console service-account credentials in the Cloud Agent environment. Last live GSC (2026-08-25) showed 0 clicks / 64 impressions / avg position 20.2 with disclosed queries hire cold callers, callreps, hire cold caller, hire cold calling, cost to rep. Live crawl found /pricing, /terms, and /privacy wrongly canonicalizing to the homepage; www→apex and /for/reps self-canonical look fixed."
+  },
+  "scorecards": {
+    "seo": {
+      "status": "blocked",
+      "metrics": [
+        {
+          "name": "gsc_clicks_28d",
+          "value": null,
+          "unit": "clicks",
+          "source": "blocked: no GSC credentials",
+          "period": "2026-10-02",
+          "sampleSize": null,
+          "limitations": ["Last known 2026-08-25: 0 clicks / 64 impressions / pos 20.2"]
+        },
+        {
+          "name": "live_sitemap_urls",
+          "value": 12,
+          "unit": "urls",
+          "source": "https://coldcallreps.com/sitemap.xml",
+          "period": "2026-10-02",
+          "sampleSize": 12
+        },
+        {
+          "name": "pricing_self_canonical",
+          "value": "fail",
+          "unit": "gate",
+          "source": "curl live HTML link[rel=canonical]",
+          "period": "2026-10-02",
+          "sampleSize": 1
+        }
+      ],
+      "notes": [
+        "Root layout alternates.canonical '/' is inherited by /pricing, /terms, /privacy.",
+        "Brand-hire guides 308 to MarketPounce; CCR sitemap is rep-recruiting only."
+      ]
+    },
+    "aeo": {
+      "status": "partial",
+      "metrics": [
+        {
+          "name": "llms_txt_guide_list_matches_sitemap",
+          "value": "pass",
+          "unit": "gate",
+          "source": "curl https://coldcallreps.com/llms.txt vs sitemap",
+          "period": "2026-10-02",
+          "sampleSize": 4
+        }
+      ],
+      "notes": ["llms.txt correctly lists 4 CCR rep guides and MarketPounce brand guides."]
+    },
+    "geo": {
+      "status": "partial",
+      "metrics": [
+        {
+          "name": "claim_integrity_checked",
+          "value": "skipped",
+          "unit": "gate",
+          "source": "daily GSC mode — not a claim audit",
+          "period": "2026-10-02",
+          "sampleSize": null
+        }
+      ],
+      "notes": ["No claim revalidation this run."]
+    }
+  },
+  "checks": [
+    {
+      "id": "chk-gsc-analytics",
+      "area": "GSC search analytics",
+      "status": "blocked",
+      "evidence": "pnpm seo:audit-gsc → Missing GOOGLE_APPLICATION_CREDENTIALS"
+    },
+    {
+      "id": "chk-gsc-inspect",
+      "area": "GSC URL Inspection",
+      "status": "blocked",
+      "evidence": "No credentials; --inspect not run"
+    },
+    {
+      "id": "chk-live-sitemap",
+      "area": "Live sitemap fetch",
+      "status": "pass",
+      "evidence": "HTTP 200; 12 loc URLs"
+    },
+    {
+      "id": "chk-www-apex",
+      "area": "www to apex redirect",
+      "status": "pass",
+      "evidence": "https://www.coldcallreps.com/ → 301 https://coldcallreps.com/"
+    },
+    {
+      "id": "chk-pricing-canonical",
+      "area": "Pricing self-canonical",
+      "status": "fail",
+      "evidence": "link rel=canonical href=https://coldcallreps.com (should be /pricing)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding-gsc-credentials-missing",
+      "severity": "critical",
+      "title": "GSC credentials missing in Cloud Agent environment",
+      "detail": "Cannot run scripts/audit-gsc-daily.ts. Add service-account JSON + env vars per docs/site-ops/search-indexing.md."
+    },
+    {
+      "id": "finding-pricing-canonical-home",
+      "severity": "high",
+      "title": "/pricing, /terms, /privacy canonicalize to homepage",
+      "detail": "src/app/layout.tsx sets alternates.canonical to '/'. Pages without an override inherit it."
+    }
+  ],
+  "blockedChecks": [
+    {
+      "checkId": "chk-gsc-analytics",
+      "needed": "GOOGLE_APPLICATION_CREDENTIALS pointing at .secrets/google-search-console.json; GSC_SITE_URL; GSC_SITEMAP_URL; service account invited on sc-domain:coldcallreps.com"
+    },
+    {
+      "checkId": "chk-gsc-inspect",
+      "needed": "Same credentials plus Search Console API URL Inspection permission"
+    }
+  ],
+  "approvalsRequired": [],
+  "nextReviewAt": "2026-10-03T23:06:56.000Z"
+}
