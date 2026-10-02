@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import GuideDiscoverSection from '@/components/GuideDiscoverSection';
 import type { RoleLanding } from '@/lib/role-landings';
 import '@/app/(marketing)/landing.css';
 
@@ -180,6 +181,8 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
         </div>
       </section>
 
+      <GuideDiscoverSection />
+
       {/* Pricing */}
       <section className="lp-ath-role-pricing" aria-labelledby="lp-role-pricing">
         <p className="lp-ath-kicker lp-ath-kicker--center">Pricing</p>
@@ -207,6 +210,9 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
         <div className="lp-ath-cta lp-ath-cta--center" style={{ marginTop: '2rem' }}>
           <Link href={role.planHref} className="lp-ath-btn lp-ath-btn--primary">
             {role.primaryCta.label}
+          </Link>
+          <Link href="/guides/cold-calling-gigs" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
+            Find cold calling gigs
           </Link>
           <Link href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
             Free to train

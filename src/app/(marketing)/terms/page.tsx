@@ -1,11 +1,15 @@
 import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SITE_ORIGIN } from '@/lib/site';
+
+const URL = `${SITE_ORIGIN}/terms`;
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description:
     'Terms of Service for ColdCallReps — AI voice practice, quality gates, and paid outbound campaigns.',
+  alternates: { canonical: URL },
 };
 
 const sectionTitle: CSSProperties = {

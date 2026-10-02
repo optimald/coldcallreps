@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import GuideDiscoverSection from '@/components/GuideDiscoverSection';
 import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
 import './landing.css';
 
@@ -503,6 +504,8 @@ export default function HomePageClient() {
         </div>
       </section>
 
+      <GuideDiscoverSection />
+
       {/* Final CTA */}
       <section className="lp-ath-final lp-ath-final--climax" aria-labelledby="lp-final-title">
         <Reveal>
@@ -514,6 +517,7 @@ export default function HomePageClient() {
           </a>
           <div className="lp-ath-final__alt">
             <a href="/for/reps">see the full SDR path →</a>
+            <a href="/guides/cold-calling-gigs">find cold calling gigs →</a>
             <a href="/pricing">or see free to train →</a>
           </div>
         </Reveal>

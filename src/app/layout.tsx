@@ -35,7 +35,9 @@ export const metadata: Metadata = {
   description:
     'Cold Call Reps: find cold calling gigs, get hired as a cold caller, and get paid per meeting. AI practice, quality gate, brand deals — Train. Prove. Get Paid.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com'),
-  alternates: { canonical: '/' },
+  // Do not set a root canonical — child routes inherit it and would
+  // collapse /pricing, /terms, /privacy into the homepage. Each public
+  // page sets its own alternates.canonical.
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },

@@ -77,8 +77,31 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function resolveCredentialsPath(raw: string): string {
-  return resolve(process.cwd(), raw);
+/**
+ * Prefer GOOGLE_SERVICE_ACCOUNT_JSON (Cloud Agent secret) and materialize it
+ * under .secrets/. Fall back to GOOGLE_APPLICATION_CREDENTIALS file path.
+ */
+function loadServiceAccountKey(): ServiceAccountKey {
+  const inline = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  if (inline) {
+    const key = JSON.parse(inline) as ServiceAccountKey;
+    if (!key.client_email || !key.private_key) {
+      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON must include client_email and private_key.');
+    }
+    const dir = resolve(process.cwd(), '.secrets');
+    mkdirSync(dir, { recursive: true });
+    const path = resolve(dir, 'google-search-console.json');
+    writeFileSync(path, `${inline}\n`, { mode: 0o600 });
+    return key;
+  }
+
+  const credentialsPath = resolve(process.cwd(), requireEnv('GOOGLE_APPLICATION_CREDENTIALS'));
+  if (!existsSync(credentialsPath)) {
+    throw new Error(
+      `Credentials file not found at ${credentialsPath}. Set GOOGLE_SERVICE_ACCOUNT_JSON or copy the key file.`,
+    );
+  }
+  return JSON.parse(readFileSync(credentialsPath, 'utf8')) as ServiceAccountKey;
 }
 
 function extractLocs(xml: string): string[] {
@@ -186,18 +209,12 @@ async function inspectUrl(token: string, siteUrl: string, inspectionUrl: string)
 
 async function main() {
   const { inspect, submitSitemap } = parseArgs(process.argv.slice(2));
-  const credentialsPath = resolveCredentialsPath(requireEnv('GOOGLE_APPLICATION_CREDENTIALS'));
   const siteUrl = requireEnv('GSC_SITE_URL');
   const sitemapUrl = requireEnv('GSC_SITEMAP_URL');
   const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || 'https://coldcallreps.com').replace(/\/$/, '');
   const expectedHost = new URL(appOrigin).hostname.replace(/^www\./, '');
 
-  if (!existsSync(credentialsPath)) {
-    throw new Error(
-      `Credentials file not found at ${credentialsPath}. Copy the service-account JSON there first.`,
-    );
-  }
-  const key = JSON.parse(readFileSync(credentialsPath, 'utf8')) as ServiceAccountKey;
+  const key = loadServiceAccountKey();
 
   const checkedAt = new Date().toISOString();
   const runId = `run-${checkedAt.replace(/[:.]/g, '-')}`;

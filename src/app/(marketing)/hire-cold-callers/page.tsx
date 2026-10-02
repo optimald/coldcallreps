@@ -76,8 +76,16 @@ export default function HireColdCallersLandingPage() {
             Cold calling gigs
           </Link>
           {' · '}
-          <Link href="/" className="soft-link">
-            Home
+          <Link href="/guides/ai-cold-call-practice" className="soft-link">
+            AI practice
+          </Link>
+          {' · '}
+          <Link href="/guides/get-paid-per-meeting-cold-calling" className="soft-link">
+            Get paid per meeting
+          </Link>
+          {' · '}
+          <Link href="/guides/sdr-applications-and-approval" className="soft-link">
+            Applications
           </Link>
         </p>
       </section>

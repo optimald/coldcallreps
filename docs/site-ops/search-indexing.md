@@ -27,6 +27,20 @@ GSC_SITE_URL=sc-domain:coldcallreps.com
 GSC_SITEMAP_URL=https://coldcallreps.com/sitemap.xml
 ```
 
+### Cloud Agent / CI secrets
+
+You can instead set the JSON key inline (preferred for Cursor Cloud Agents):
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GSC_SITE_URL=sc-domain:coldcallreps.com
+GSC_SITEMAP_URL=https://coldcallreps.com/sitemap.xml
+```
+
+The audit scripts materialize `GOOGLE_SERVICE_ACCOUNT_JSON` into
+`.secrets/google-search-console.json` at runtime (gitignored) and never log the
+key. Prefer this over committing a file path that does not exist in the VM.
+
 Before the audit can work:
 
 1. Enable the Google Search Console API in the key’s Google Cloud project.

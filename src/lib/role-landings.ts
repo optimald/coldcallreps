@@ -43,7 +43,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     headline: 'Skill, speed, and consistency. No earning ceiling.',
     sub: 'Get hired as a cold caller brands trust. Train with AI voice coaching, clear the quality gate, unlock cold calling gigs, and get paid when you qualify or book — the harder you run, the more you can earn.',
     primaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start Free — Get Paid' },
-    secondaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse Brand Deals' },
+    secondaryCta: { href: '/guides/cold-calling-gigs', label: 'Find Cold Calling Gigs' },
     proof: 'There is no earning limit — only how skilled, fast, and consistent you are.',
     outcomesHeadline: 'Built for reps who treat the dial like a craft',
     outcomes: [

@@ -6,7 +6,7 @@ import { SITE_ORIGIN } from '@/lib/site';
  * Homepage last material content change. Bump this when the home page copy or
  * layout changes so the sitemap lastmod stays truthful.
  */
-const HOME_UPDATED_AT = '2026-09-22';
+const HOME_UPDATED_AT = '2026-10-02';
 
 /** Recruiting landing for “hire cold callers” (rep-side) — brand-side guide lives on MarketPounce. */
 const HIRE_LANDING_UPDATED_AT = '2026-09-22';

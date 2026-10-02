@@ -3,11 +3,21 @@ import Link from 'next/link';
 import { PLAN, TRIAL_MINUTES } from '@/lib/product';
 import { PLATFORM_FEE_EXAMPLES } from '@/lib/platform-fees';
 import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import { SITE_ORIGIN } from '@/lib/site';
+
+const URL = `${SITE_ORIGIN}/pricing`;
 
 export const metadata: Metadata = {
   title: 'Free to train. Brands pay you.',
   description:
     'ColdCallReps is free for SDRs: polish with AI practice, train on the brand offer, clear the gate, then get paid by brands. Brands fund the tool — reps never pay to earn.',
+  alternates: { canonical: URL },
+  openGraph: {
+    title: 'Free to train. Brands pay you. | Cold Call Reps',
+    description:
+      'ColdCallReps is free for SDRs: polish with AI practice, train on the brand offer, clear the gate, then get paid by brands.',
+    url: URL,
+  },
 };
 
 export default function PricingPage() {

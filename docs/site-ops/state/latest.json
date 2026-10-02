@@ -4,7 +4,7 @@
   "lastRunId": "run-2026-10-02T23-06-56-933Z",
   "lastRunCompletedAt": "2026-10-02T23:06:56.000Z",
   "gscStatus": "blocked",
-  "gscNote": "Daily GSC audit 2026-10-02 blocked: no GOOGLE_APPLICATION_CREDENTIALS / .secrets/google-search-console.json in Cloud Agent env. Last live GSC still 2026-08-25 (0 clicks / 64 impressions / avg pos 20.2; queries: hire cold callers, callreps, hire cold caller, hire cold calling, cost to rep). Observed: sitemap 12 URLs; www→apex 301; /for/reps self-canonical; /pricing+/terms+/privacy wrongly canonicalize to homepage.",
+  "gscNote": "Daily GSC audit 2026-10-02 blocked pending Cloud Agent secrets (GOOGLE_SERVICE_ACCOUNT_JSON, GSC_SITE_URL, GSC_SITEMAP_URL). Last live GSC still 2026-08-25 (0 clicks / 64 impressions / avg pos 20.2). Remediated in follow-up: removed root canonical inheritance; /pricing /terms /privacy now self-canonical; guide discover links added on home, /for/reps, footer, and /hire-cold-callers; audit scripts accept GOOGLE_SERVICE_ACCOUNT_JSON.",
   "nextWeeklyAt": "2026-10-09T23:06:56.000Z",
   "nextMonthlyAt": "2026-10-20T19:45:46.000Z",
   "nextQuarterlyAt": "2026-10-20T19:45:46.000Z",
@@ -13,11 +13,6 @@
       "id": "finding-gsc-credentials-missing",
       "severity": "critical",
       "title": "GSC service-account credentials not available in Cloud Agent environment"
-    },
-    {
-      "id": "finding-pricing-canonical-home",
-      "severity": "high",
-      "title": "/pricing, /terms, /privacy inherit root canonical pointing at homepage"
     },
     {
       "id": "finding-four-guides-not-indexed",
@@ -38,6 +33,13 @@
       "id": "finding-homepage-stale-crawl",
       "severity": "medium",
       "title": "Homepage crawl freshness unknown without URL Inspection"
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "id": "finding-pricing-canonical-home",
+      "resolvedAt": "2026-10-02T23:15:00.000Z",
+      "note": "Root layout no longer sets canonical:/; pricing, terms, privacy set self-canonicals."
     }
   ],
   "contentPlanVersion": "1.0.0",

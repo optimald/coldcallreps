@@ -1,11 +1,15 @@
 import type { CSSProperties } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SITE_ORIGIN } from '@/lib/site';
+
+const URL = `${SITE_ORIGIN}/privacy`;
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description:
     'Privacy Policy for ColdCallReps — how we collect, use, and share data for AI practice and marketplace features.',
+  alternates: { canonical: URL },
 };
 
 const sectionTitle: CSSProperties = {

@@ -3406,6 +3406,63 @@ main:has(> .lp-athletic) > .lp-wrap {
   margin-top: 0.35rem;
 }
 
+/* === Guide discovery (home + role landings) === */
+.lp-ath-guides {
+  padding: 3.5rem var(--ath-pad) 3.75rem;
+  border-top: 1px solid var(--ath-line);
+  background: var(--bg);
+  text-align: center;
+}
+
+.lp-ath-guides__lede {
+  max-width: 36rem;
+  margin: 0.75rem auto 1.75rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.lp-ath-guides__list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 40rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  text-align: left;
+}
+
+.lp-ath-guides__list a {
+  display: block;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  padding-bottom: 0.55rem;
+}
+
+.lp-ath-guides__list a:hover {
+  color: var(--ath-signal, var(--accent, #2f6f5e));
+  border-bottom-color: color-mix(in srgb, var(--ath-signal, #2f6f5e) 55%, transparent);
+}
+
+.lp-ath-guides__all {
+  margin-top: 1.5rem;
+}
+
+.lp-ath-guides__all a {
+  color: var(--muted);
+  font-size: 0.95rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.lp-ath-guides__all a:hover {
+  color: var(--ink);
+}
+
 
 /* === Role landing pages === */
 .lp-ath-hero--role .lp-ath-hero__video {

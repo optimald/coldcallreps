@@ -30,7 +30,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Link href="/for/reps">SDR path</Link>
             <Link href="/hire-cold-callers">Hire cold callers</Link>
             <Link href="/pricing">Free to train</Link>
-            <Link href="/guides">Guides</Link>
+          </div>
+          <div className="mkt-footer-col">
+            <p className="mkt-footer-heading">Guides</p>
+            <Link href="/guides">All guides</Link>
+            <Link href="/guides/cold-calling-gigs">Cold calling gigs</Link>
+            <Link href="/guides/get-paid-per-meeting-cold-calling">Get paid per meeting</Link>
+            <Link href="/guides/ai-cold-call-practice">AI cold call practice</Link>
+            <Link href="/guides/sdr-applications-and-approval">SDR applications</Link>
           </div>
           <div className="mkt-footer-col">
             <p className="mkt-footer-heading">Get started</p>
