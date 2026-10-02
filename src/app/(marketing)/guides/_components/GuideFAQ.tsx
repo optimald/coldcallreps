@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import SmartLink from '@/components/SmartLink';
 import type { GuideFaqItem } from '@/lib/guides';
 
 export default function GuideFAQ({ faqs }: { faqs: readonly GuideFaqItem[] }) {
@@ -16,9 +16,9 @@ export default function GuideFAQ({ faqs }: { faqs: readonly GuideFaqItem[] }) {
               {item.links && item.links.length > 0 ? (
                 <div className="guide-faq__links">
                   {item.links.map((l) => (
-                    <Link key={l.href} href={l.href} className="soft-link">
+                    <SmartLink key={l.href} href={l.href} className="soft-link">
                       {l.label}
-                    </Link>
+                    </SmartLink>
                   ))}
                 </div>
               ) : null}

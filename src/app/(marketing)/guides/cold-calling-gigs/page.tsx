@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'cold-calling-gigs';
@@ -124,7 +124,7 @@ export default function Page() {
           like a craft, the model rewards it. Read more on the{' '}
           <Link href="/for/reps">for reps</Link> page, start from the{' '}
           <Link href="/">Cold Call Reps home</Link>, or{' '}
-          <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up free</a>.
+          <SignupLink>sign up free</SignupLink>.
         </p>
       </section>
 

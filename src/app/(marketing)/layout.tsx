@@ -2,7 +2,8 @@ import Link from 'next/link';
 import BrandMark from '@/components/BrandMark';
 import MarketingHeader from '@/components/MarketingHeader';
 import WebMcpBootstrap from '@/components/WebMcpBootstrap';
-import { MARKETPOUNCE_SIGN_UP_REP, MARKETPOUNCE_AGENT_READY } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
+import { MARKETPOUNCE_AGENT_READY } from '@/lib/marketpounce';
 import './landing.css';
 
 /** Register WebMCP tools synchronously on first paint (IAR browser probe). */
@@ -34,7 +35,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </div>
           <div className="mkt-footer-col">
             <p className="mkt-footer-heading">Get started</p>
-            <a href={MARKETPOUNCE_SIGN_UP_REP}>Join MarketPounce</a>
+            <SignupLink>Join MarketPounce</SignupLink>
           </div>
           <div className="mkt-footer-col">
             <p className="mkt-footer-heading">For Operators</p>

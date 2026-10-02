@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import BrandMark from '@/components/BrandMark';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 
 const NAV_LINKS = [
   { href: '/#how-it-works', label: 'How it works' },
@@ -48,9 +48,9 @@ export default function MarketingHeader() {
         </div>
 
         <div className="mkt-nav-actions">
-          <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-cta">
+          <SignupLink className="btn mkt-nav-cta">
             Join MarketPounce
-          </a>
+          </SignupLink>
         </div>
 
         <button
@@ -83,9 +83,9 @@ export default function MarketingHeader() {
               </Link>
             ))}
             <div className="mkt-nav-drawer__actions">
-              <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn mkt-nav-drawer__btn">
+              <SignupLink className="btn mkt-nav-drawer__btn">
                 Join MarketPounce
-              </a>
+              </SignupLink>
             </div>
           </div>
         </>

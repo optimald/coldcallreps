@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 import './landing.css';
 
 function Reveal({
@@ -295,9 +295,9 @@ export default function HomePageClient() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.16 }}
           >
-            <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
+            <SignupLink className="lp-ath-btn lp-ath-btn--primary">
               Join MarketPounce as an SDR
-            </a>
+            </SignupLink>
             <a href="#how-it-works" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
               How it works
             </a>
@@ -464,9 +464,9 @@ export default function HomePageClient() {
               earn per verified result.
             </p>
             <div className="lp-ath-cta lp-ath-cta--left">
-              <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary">
+              <SignupLink className="lp-ath-btn lp-ath-btn--primary">
                 Join MarketPounce as an SDR
-              </a>
+              </SignupLink>
               <a href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
                 Free to train
               </a>
@@ -509,9 +509,9 @@ export default function HomePageClient() {
           <h2 id="lp-final-title" className="lp-ath-h2 lp-ath-h2--xl">
             Ready to train, prove, and get paid?
           </h2>
-          <a href={MARKETPOUNCE_SIGN_UP_REP} className="lp-ath-btn lp-ath-btn--primary lp-ath-btn--xl">
+          <SignupLink className="lp-ath-btn lp-ath-btn--primary lp-ath-btn--xl">
             Join MarketPounce as an SDR
-          </a>
+          </SignupLink>
           <div className="lp-ath-final__alt">
             <a href="/for/reps">see the full SDR path →</a>
             <a href="/pricing">or see free to train →</a>

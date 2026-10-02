@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { GUIDE_CATEGORIES, GUIDES, getGuidesByCategory } from '@/lib/guides';
-import { MARKETPOUNCE_ORIGIN, MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import { MARKETPOUNCE_ORIGIN } from '@/lib/marketpounce';
 import { SITE_ORIGIN } from '@/lib/site';
+import SignupLink from '@/components/SignupLink';
 import GuideCard from './_components/GuideCard';
 
 const URL = `${SITE_ORIGIN}/guides`;
@@ -92,9 +93,9 @@ export default function GuidesHubPage() {
           practice pricing
         </Link>
         , or{' '}
-        <a href={MARKETPOUNCE_SIGN_UP_REP} className="soft-link">
+        <SignupLink className="soft-link">
           start free
-        </a>
+        </SignupLink>
         .
       </p>
     </main>
