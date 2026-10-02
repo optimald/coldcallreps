@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import SmartLink from '@/components/SmartLink';
 import type { GuideCta } from '@/lib/guides';
 
 export default function GuideCTA({
@@ -16,13 +16,13 @@ export default function GuideCTA({
       <p className="guide-cta__sub">{sub}</p>
       <div className="guide-cta__row">
         {ctas.map((cta) => (
-          <Link
+          <SmartLink
             key={cta.href}
             href={cta.href}
             className={cta.primary ? 'btn' : 'btn-ghost'}
           >
             {cta.label}
-          </Link>
+          </SmartLink>
         ))}
       </div>
     </section>

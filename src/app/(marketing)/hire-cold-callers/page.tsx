@@ -3,8 +3,8 @@ import Link from 'next/link';
 import {
   MARKETPOUNCE_ORIGIN,
   MARKETPOUNCE_SIGN_UP_BRAND,
-  MARKETPOUNCE_SIGN_UP_REP,
 } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 import { SITE_ORIGIN } from '@/lib/site';
 
 const URL = `${SITE_ORIGIN}/hire-cold-callers`;
@@ -64,9 +64,9 @@ export default function HireColdCallersLandingPage() {
             <strong>Get paid</strong> — dial funded brand deals
           </li>
         </ol>
-        <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn pricing-hero-free__cta">
+        <SignupLink className="btn pricing-hero-free__cta">
           Start free — get hired
-        </a>
+        </SignupLink>
         <p className="pricing-hero-free__fine">
           <Link href="/for/reps" className="soft-link">
             SDR path

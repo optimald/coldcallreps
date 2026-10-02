@@ -4,6 +4,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import { Suspense, useEffect, type ReactNode } from 'react';
 import { initPostHog, posthog } from '@/lib/posthog/client';
+import { useUtmCapture } from '@/hooks/useUtmCapture';
 
 function PostHogPageView() {
   const pathname = usePathname();
@@ -21,6 +22,8 @@ function PostHogPageView() {
 }
 
 export default function PostHogProvider({ children }: { children: ReactNode }) {
+  useUtmCapture();
+
   useEffect(() => {
     const start = () => initPostHog();
     const w = globalThis as typeof globalThis & {

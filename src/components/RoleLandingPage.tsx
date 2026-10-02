@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SmartLink from '@/components/SmartLink';
 import type { RoleLanding } from '@/lib/role-landings';
 import '@/app/(marketing)/landing.css';
 
@@ -86,12 +87,12 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
           </h1>
           <p className="lp-ath-sub lp-ath-sub--hero">{role.sub}</p>
           <div className="lp-ath-cta lp-ath-cta--hero">
-            <Link href={role.primaryCta.href} className="lp-ath-btn lp-ath-btn--primary">
+            <SmartLink href={role.primaryCta.href} className="lp-ath-btn lp-ath-btn--primary">
               {role.primaryCta.label}
-            </Link>
-            <Link href={role.secondaryCta.href} className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
+            </SmartLink>
+            <SmartLink href={role.secondaryCta.href} className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
               {role.secondaryCta.label}
-            </Link>
+            </SmartLink>
           </div>
           {role.proof ? <p className="lp-ath-proof">{role.proof}</p> : null}
         </div>
@@ -205,9 +206,9 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
         ) : null}
 
         <div className="lp-ath-cta lp-ath-cta--center" style={{ marginTop: '2rem' }}>
-          <Link href={role.planHref} className="lp-ath-btn lp-ath-btn--primary">
+          <SmartLink href={role.planHref} className="lp-ath-btn lp-ath-btn--primary">
             {role.primaryCta.label}
-          </Link>
+          </SmartLink>
           <Link href="/pricing" className="lp-ath-btn lp-ath-btn--ghost lp-ath-btn--sub">
             Free to train
           </Link>

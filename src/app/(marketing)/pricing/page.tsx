@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { PLAN, TRIAL_MINUTES } from '@/lib/product';
 import { PLATFORM_FEE_EXAMPLES } from '@/lib/platform-fees';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 
 export const metadata: Metadata = {
   title: 'Free to train. Brands pay you.',
@@ -43,9 +43,9 @@ export default function PricingPage() {
             <strong>Get paid</strong> — brands fund escrow; you earn on verified meetings and leads
           </li>
         </ol>
-        <a href={MARKETPOUNCE_SIGN_UP_REP} className="btn pricing-hero-free__cta">
+        <SignupLink className="btn pricing-hero-free__cta">
           Join MarketPounce as an SDR
-        </a>
+        </SignupLink>
         <p className="pricing-hero-free__fine">
           ColdCallReps by MarketPounce · accounts created on MarketPounce
         </p>
@@ -117,9 +117,9 @@ export default function PricingPage() {
           SDR path
         </Link>
         {' · '}
-        <a href={MARKETPOUNCE_SIGN_UP_REP} className="soft-link">
+        <SignupLink className="soft-link">
           Join free and get paid
-        </a>
+        </SignupLink>
       </p>
     </main>
   );

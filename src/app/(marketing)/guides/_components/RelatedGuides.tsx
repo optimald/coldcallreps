@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getRelatedGuides } from '@/lib/guides';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 import GuideCard from './GuideCard';
 
 export default function RelatedGuides({ slug }: { slug: string }) {
@@ -25,9 +25,9 @@ export default function RelatedGuides({ slug }: { slug: string }) {
           Home
         </Link>
         {' · '}
-        <a href={MARKETPOUNCE_SIGN_UP_REP} className="soft-link">
+        <SignupLink className="soft-link">
           Sign up
-        </a>
+        </SignupLink>
         {' · '}
         <Link href="/guides" className="soft-link">
           All guides

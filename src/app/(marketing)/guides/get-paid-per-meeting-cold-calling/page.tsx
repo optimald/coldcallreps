@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildGuideMetadata, getGuide } from '@/lib/guides';
-import { MARKETPOUNCE_SIGN_UP_REP } from '@/lib/marketpounce';
+import SignupLink from '@/components/SignupLink';
 import GuidePage from '../_components/GuidePage';
 
 const SLUG = 'get-paid-per-meeting-cold-calling';
@@ -114,7 +114,7 @@ export default function Page() {
           <Link href="/guides/cold-calling-gigs">finding cold calling gigs</Link>, sharpen your score
           with <Link href="/guides/ai-cold-call-practice">AI cold call practice</Link>, or go back to
           the <Link href="/">Cold Call Reps home</Link> and{' '}
-          <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up</a>.
+          <SignupLink>sign up</SignupLink>.
         </p>
       </section>
 
