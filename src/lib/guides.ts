@@ -69,7 +69,7 @@ export type GuideCategory = {
 };
 
 export const GUIDES_PUBLISHED_AT = '2026-07-16';
-export const GUIDES_UPDATED_AT = '2026-09-22';
+export const GUIDES_UPDATED_AT = '2026-10-20';
 export const GUIDES_NEXT_REVIEW_AT = '2026-12-22';
 
 const base = {
@@ -212,9 +212,9 @@ export const GUIDES: readonly Guide[] = [
     ...base,
     slug: 'ai-cold-call-practice',
     category: 'rep-earn',
-    title: 'AI Cold Call Practice & Simulator — Train Free',
+    title: 'AI Cold Call Practice Free — Train, Get Scored, Get Hired',
     description:
-      'AI cold call practice and simulator on Cold Call Reps: rehearse gatekeepers and DMs with an AI voice trainer, hit your score, then unlock live brand dials. Humans dial live — AI is practice only.',
+      'Free AI cold call practice on Cold Call Reps: rehearse gatekeepers and decision-makers with an AI voice trainer, earn the score brands require, then unlock paid live dials. Built for reps who want gigs — humans dial live, AI is practice only.',
     h1: 'AI cold call practice before live dials',
     oneLiner: 'Use AI voice practice before dialing live brand campaigns.',
     directAnswer:
@@ -319,6 +319,56 @@ export const GUIDES: readonly Guide[] = [
           { href: MP_CAMPAIGNS, label: 'How campaigns work (MarketPounce)' },
           { href: '/guides/get-paid-per-meeting-cold-calling', label: 'How reps get paid' },
         ],
+      },
+    ],
+  },
+  {
+    ...base,
+    updatedAt: '2026-10-20',
+    slug: 'remote-cold-calling-jobs',
+    category: 'rep-earn',
+    title: 'Remote Cold Calling Jobs — Get Paid Per Meeting, Not Per Hour',
+    description:
+      'Remote cold calling jobs on Cold Call Reps: train free with AI, clear the quality gate, dial funded brand campaigns from anywhere, and get paid $35–$250+ per verified meeting via Stripe Connect.',
+    h1: 'Remote cold calling jobs that pay per meeting',
+    oneLiner: 'Work remote cold calling campaigns and get paid per verified meeting.',
+    directAnswer:
+      'Remote cold calling jobs on Cold Call Reps are brand campaigns you run from anywhere: train free with AI voice practice, clear the quality gate (practice score 80+ and brand certification by default), dial live prospects, and get paid $35–$250+ per verified booked meeting or qualified lead through Stripe Connect. Joining is free for reps — brands fund escrow before you dial.',
+    related: ['cold-calling-gigs', 'get-paid-per-meeting-cold-calling', 'ai-cold-call-practice'],
+    ctas: [
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free — find remote gigs', primary: true },
+      { href: '/guides/cold-calling-gigs', label: 'Cold calling gigs' },
+      { href: '/for/reps', label: 'SDR path' },
+    ],
+    keywords: [
+      'remote cold calling jobs',
+      'cold calling jobs remote',
+      'work from home cold calling jobs',
+      'remote appointment setter jobs',
+      'cold caller jobs online',
+    ],
+    faqs: [
+      {
+        question: 'Are these hourly remote jobs or per-meeting gigs?',
+        answer:
+          'Per-meeting gigs. Brands fund campaign escrow and pay per verified booked meeting or qualified lead — High Volume $35–$60, Mid-Market $75–$120, Enterprise $150–$250+ per set — instead of hourly call-center wages. Some campaigns stack optional base pay.',
+        links: [{ href: '/guides/get-paid-per-meeting-cold-calling', label: 'How reps get paid' }],
+      },
+      {
+        question: 'Can I do remote cold calling jobs outside the US?',
+        answer:
+          'Yes. Signup is global, including the Philippines and other remote markets. You practice and dial from anywhere and get paid through Stripe Connect where supported.',
+      },
+      {
+        question: 'What do I need to get hired for a remote cold calling job?',
+        answer:
+          'Clear the apply gate: at least one practice session on the brand pack, a score of 80 or higher by default, and brand certification. Brands see your score and profile and approve you before live dials unlock.',
+        links: [{ href: '/guides/sdr-applications-and-approval', label: 'Applications & approval' }, { href: '/guides/ai-cold-call-practice', label: 'AI practice' }],
+      },
+      {
+        question: 'Does it cost anything to start?',
+        answer:
+          'No. Training, applying, and running campaigns are free for reps. Brands fund the payouts; the platform fee (20%, capped at $30 per outcome) comes out of the payout, not your pocket up front.',
       },
     ],
   },

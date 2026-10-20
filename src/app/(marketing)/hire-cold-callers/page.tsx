@@ -31,9 +31,42 @@ export const metadata: Metadata = {
   },
 };
 
+const FAQS = [
+  {
+    question: 'How much does it cost to hire cold callers?',
+    answer:
+      'Brands pay per verified outcome on MarketPounce: High Volume $35–$60, Mid-Market $75–$120, Enterprise $150–$250+ per booked meeting or qualified lead, plus a 20% platform fee capped at $30 per outcome. No salary, no retainer, no pay for dial time.',
+  },
+  {
+    question: 'How are Cold Call Reps callers vetted?',
+    answer:
+      'Every rep trains with AI voice practice, must score 80 or higher by default, and earns brand certification before a brand can approve them. Brands see scores and profiles before any live dial.',
+  },
+  {
+    question: 'How do I get hired as a cold caller?',
+    answer:
+      'Start free on Cold Call Reps: practice with the AI trainer, clear the quality gate, apply to funded brand campaigns, dial live, and get paid per verified meeting through Stripe Connect.',
+  },
+  {
+    question: 'Are the callers human or AI?',
+    answer:
+      'Human. AI is used only for practice, coaching, and post-call claim audits. Every live brand call is placed by a vetted human rep.',
+  },
+];
+
 export default function HireColdCallersLandingPage() {
+  const faqLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQS.map((f) => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: { '@type': 'Answer', text: f.answer },
+    })),
+  };
   return (
     <main className="pricing-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <header className="pricing-head">
         <p className="pricing-kicker">Hire cold callers · Cold Call Reps</p>
         <h1 className="pricing-title">Hire cold callers who already cleared the gate</h1>
@@ -104,6 +137,41 @@ export default function HireColdCallersLandingPage() {
           <a href={`${MARKETPOUNCE_ORIGIN}/for/brands`} className="soft-link">
             For brands
           </a>
+          {' · '}
+          <a href={`${MARKETPOUNCE_ORIGIN}/guides/cost-to-hire-cold-callers`} className="soft-link">
+            What hiring costs
+          </a>
+        </p>
+      </section>
+
+      <section className="pricing-promise" aria-labelledby="hire-cost-title">
+        <h2 id="hire-cost-title" className="pricing-promise__title">What hiring cold callers costs</h2>
+        <p>
+          Outcome pay by difficulty tier — paid only when a meeting or lead passes audit:
+          High Volume $35–$60, Mid-Market $75–$120, Enterprise $150–$250+ per verified set, plus a
+          20% platform fee capped at $30 per outcome. Optional base pay can stack on top. Compare
+          that with a salaried SDR (fixed cost before results) or an agency retainer (paid whether
+          or not meetings book) in the{' '}
+          <a href={`${MARKETPOUNCE_ORIGIN}/guides/cost-to-hire-cold-callers`} className="soft-link">full cost guide</a>.
+        </p>
+      </section>
+
+      <section className="pricing-promise" aria-labelledby="hire-faq-title">
+        <h2 id="hire-faq-title" className="pricing-promise__title">Hire cold callers — questions</h2>
+        <dl>
+          {FAQS.map((f) => (
+            <div key={f.question} style={{ marginTop: '1rem' }}>
+              <dt><strong>{f.question}</strong></dt>
+              <dd style={{ marginTop: '0.35rem' }}>{f.answer}</dd>
+            </div>
+          ))}
+        </dl>
+        <p style={{ marginTop: '1.25rem' }}>
+          <Link href="/guides/ai-cold-call-practice" className="soft-link">AI cold call practice</Link>
+          {' · '}
+          <Link href="/guides/remote-cold-calling-jobs" className="soft-link">Remote cold calling jobs</Link>
+          {' · '}
+          <Link href="/guides/get-paid-per-meeting-cold-calling" className="soft-link">Get paid per meeting</Link>
         </p>
       </section>
     </main>

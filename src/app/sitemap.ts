@@ -6,10 +6,10 @@ import { SITE_ORIGIN } from '@/lib/site';
  * Homepage last material content change. Bump this when the home page copy or
  * layout changes so the sitemap lastmod stays truthful.
  */
-const HOME_UPDATED_AT = '2026-09-22';
+const HOME_UPDATED_AT = '2026-10-20';
 
 /** Recruiting landing for “hire cold callers” (rep-side) — brand-side guide lives on MarketPounce. */
-const HIRE_LANDING_UPDATED_AT = '2026-09-22';
+const HIRE_LANDING_UPDATED_AT = '2026-10-20';
 
 type Entry = {
   path: string;
@@ -43,7 +43,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/pricing', changeFrequency: 'weekly', priority: 0.9 },
     { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
     { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
-    { path: '/llms.txt', changeFrequency: 'monthly', priority: 0.4 },
     ...guideEntries,
   ];
 
