@@ -34,27 +34,53 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
   {
     question: 'What is ColdCallReps?',
     answer:
-      'ColdCallReps recruits SDRs and appointment setters. You practice cold calls with AI voice, prove quality with scores and certifications, then run paid brand deals calling leads. Humans dial live prospects — AI trains and gates quality.',
+      'ColdCallReps recruits SDRs and appointment setters onto MarketPounce. You practice with AI voice, prove your score, then dial brand-provided leads on paid campaigns. Humans place every live call — AI trains and audits. Accounts are free; you earn per verified appointment or qualified lead.',
     links: [
       { href: '/for/reps', label: 'SDR path' },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
     ],
   },
   {
-    question: 'Do I pay to practice or join campaigns?',
-    answer: `No. Practice starts free (${TRIAL_MINUTES}+ minutes to polish and clear the quality gate). Brand campaigns stay free for reps — brands fund escrow and pay you for verified results. Optional paid practice exists only for teams or heavy AI use; it is never required to earn.`,
+    question: 'Do I have to find my own clients and leads?',
+    answer:
+      'No. Brands provide the clients and lead lists. After you clear the quality gate and a brand accepts you, you dial their never-contacted prospects — you do not hunt your own pipeline.',
+    links: [
+      { href: '/for/reps', label: 'SDR path' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
+    ],
+  },
+  {
+    question: 'Do I pay to practice, unlock Resume, or join campaigns?',
+    answer: `No. The free tier is generous on purpose — new accounts get ${TRIAL_MINUTES}+ free practice minutes, meant to cover training end-to-end (including unlocking Resume and clearing the gate). Brand campaigns stay $0 for reps. Buying extra minutes is only if you burn through free and want more practice — never required to earn. The point is for you to earn money, not spend it.`,
     links: [
       { href: '/pricing', label: 'Free to train' },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Sign up as a rep' },
     ],
   },
   {
-    question: 'Do reps pay to join campaigns?',
+    question: 'Do I pay a platform fee when I get brands?',
     answer:
-      'No. Marketplace campaigns are free for reps once you clear the quality gate. Brands fund payouts; you get paid for approved results via Stripe Connect.',
+      'No join fee and no extra platform fee to accept brand deals. Brands fund escrow. When a verified appointment or qualified lead pays out, MarketPounce keeps a small capped commission from that payout (20%, capped at $30 per outcome) — like a marketplace cut, not a bill you pay up front. The rest goes to you.',
     links: [
-      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
+      { href: '/pricing', label: 'See fee caps' },
       { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start getting paid' },
+    ],
+  },
+  {
+    question: 'How do I get paid — through the platform or from brands directly?',
+    answer:
+      'Through the platform, similar to Fiverr: brands fund escrow on MarketPounce, you deliver verified results, and payouts land with you. Stripe Connect is live where Stripe supports your country. Remitly payouts — coming soon. Brands do not pay you outside the platform for campaign outcomes.',
+    links: [
+      { href: '/guides/get-paid-per-meeting-cold-calling', label: 'Get paid per meeting' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
+    ],
+  },
+  {
+    question: 'What do I earn?',
+    answer: `Pay is per verified booked meeting or qualified lead — typically about $30–$40 per appointment set on many B2B campaigns, and higher on mid-market or enterprise deals. Exact rates are set per brand. There is no hard earning ceiling. Optional base pay stacks on some campaigns. ${tierBandSummary}.`,
+    links: [
+      { href: '/pricing', label: 'Free to train' },
+      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse brand deals' },
     ],
   },
   {
@@ -66,27 +92,10 @@ export const HOME_FAQS: readonly HomeFaqItem[] = [
     ],
   },
   {
-    question: 'How do payouts work?',
-    answer:
-      'You get paid for verified outcomes and optional base pay via Stripe Connect. The platform keeps 20% as a fee, capped at $30 per outcome and $40/wk · $75/bi-weekly · $150/mo on base — the rest goes to you.',
-    links: [
-      { href: '/pricing', label: 'Free to train' },
-      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start free' },
-    ],
-  },
-  {
     question: 'What counts as a booked meeting?',
     answer:
       'A booked meeting is a claimed outcome that passes AI post-call audit — typically a calendar hold with a qualified decision-maker, supported by notes or transcript. Claims without enough evidence do not pay.',
     links: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'How brand deals pay' }],
-  },
-  {
-    question: 'What are the campaign payout tiers?',
-    answer: `Campaigns use flat tier bands per verified set (not bidding): ${tierBandSummary}. Rates depend on ICP difficulty and gatekeeper friction.`,
-    links: [
-      { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Brand deals' },
-      { href: '/for/reps', label: 'SDR path' },
-    ],
   },
   {
     question: 'Is this an AI autodialer?',

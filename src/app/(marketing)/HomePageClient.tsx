@@ -3,7 +3,15 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import SignupLink from '@/components/SignupLink';
+import { HOME_FAQS } from '@/lib/home-faq';
 import './landing.css';
+
+/** Hero starts visible so Messenger / no-hydration browsers never show a blank page. */
+const heroReveal = {
+  initial: { opacity: 1, y: 0 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0 },
+} as const;
 
 function Reveal({
   children,
@@ -160,21 +168,21 @@ function MockPayout() {
 const FEATURES = [
   {
     title: 'AI Voice Practice',
-    body: 'Run realistic cold calls with a live AI coach. Gatekeepers, objections, and asks — until your scorecard proves you’re sharp.',
+    body: 'Run realistic cold calls with a live AI coach. Generous free minutes are meant to cover training end-to-end — you should not need to pay. Buying extra minutes is only if free runs out.',
     Mock: MockPractice,
     photo: '/people/story-train.webp',
     alt: 'An SDR smiling while practicing a cold call with the AI voice coach',
   },
   {
     title: 'Brand Deals',
-    body: 'Clear the quality gate, then apply to paid campaigns. Dial leads for founders who fund escrow — brand deals stay free for reps.',
+    body: 'Clear the quality gate, then apply. Brands provide the clients and lead lists — you dial their prospects. Campaigns stay $0 for reps; no fee to accept a brand.',
     Mock: MockDeals,
     photo: '/people/story-deals.webp',
     alt: 'An SDR excited after finding a brand deal they love selling for',
   },
   {
     title: 'Get Paid Per Result',
-    body: 'Earn on qualified leads or booked meetings. No salary ceiling — skill, speed, and consistency decide what you make.',
+    body: 'Earn per booked meeting or qualified lead — typically ~$30–$40 per B2B appointment set, higher on harder deals. Paid through the platform (Stripe Connect live · Remitly coming soon). No earning ceiling.',
     Mock: MockPayout,
     photo: '/people/story-paid.webp',
     alt: 'An SDR working on her own hours and celebrating a verified payout',
@@ -185,7 +193,7 @@ const STEPS = [
   {
     n: '01',
     title: 'Train',
-    body: 'Practice with AI voice on real brand offers until your openers and asks are clean.',
+    body: 'Practice with AI voice on real brand offers — generous free minutes are meant to cover training without paying.',
   },
   {
     n: '02',
@@ -195,12 +203,12 @@ const STEPS = [
   {
     n: '03',
     title: 'Apply',
-    body: 'Unlock paid brand deals and pick campaigns that fit your strengths.',
+    body: 'Unlock brand deals. Brands provide the leads — you pick campaigns that fit.',
   },
   {
     n: '04',
     title: 'Get Paid',
-    body: 'Dial live leads. Get paid when meetings or qualified sets are verified.',
+    body: 'Dial brand-provided leads. Get paid per verified result (Stripe Connect live · Remitly coming soon).',
   },
 ] as const;
 
@@ -272,29 +280,18 @@ export default function HomePageClient() {
           <motion.h1
             id="lp-hero-title"
             className="lp-ath-h1 lp-ath-h1--hero lp-ath-h1--center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            {...heroReveal}
           >
             Train. Prove. Get Paid.
           </motion.h1>
 
-          <motion.p
-            className="lp-ath-sub lp-ath-sub--hero lp-ath-sub--center"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.08 }}
-          >
+          <motion.p className="lp-ath-sub lp-ath-sub--hero lp-ath-sub--center" {...heroReveal}>
             For SDRs and appointment setters who want training and brand deals. Practice with AI
-            voice, prove your score, then get paid to call leads — no earning ceiling.
+            voice, prove your score, then get paid to dial brand-provided leads — typically ~$30–$40
+            per B2B appointment. Completely free to join. No earning ceiling.
           </motion.p>
 
-          <motion.div
-            className="lp-ath-cta lp-ath-cta--hero lp-ath-cta--center"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.16 }}
-          >
+          <motion.div className="lp-ath-cta lp-ath-cta--hero lp-ath-cta--center" {...heroReveal}>
             <SignupLink className="lp-ath-btn lp-ath-btn--primary">
               Join MarketPounce as an SDR
             </SignupLink>
@@ -303,13 +300,8 @@ export default function HomePageClient() {
             </a>
           </motion.div>
 
-          <motion.p
-            className="lp-ath-proof lp-ath-proof--center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.22 }}
-          >
-            Free to train · accounts on MarketPounce · brands pay you
+          <motion.p className="lp-ath-proof lp-ath-proof--center" {...heroReveal}>
+            Completely free · leads provided · Stripe Connect live · Remitly coming soon
           </motion.p>
         </div>
       </section>
@@ -435,16 +427,17 @@ export default function HomePageClient() {
             </p>
             <ul className="lp-ath-trust__points">
               <li>
-                <strong>Funded before you dial.</strong> Brands escrow the budget, so the money is
-                already there when you deliver.
+                <strong>Leads provided.</strong> Brands hand you their clients and dial lists — you
+                do not find your own.
               </li>
               <li>
-                <strong>Verified, not vibes.</strong> Every qualified lead or booked meeting is
-                checked against clear criteria.
+                <strong>Funded before you dial.</strong> Brands escrow the budget. You get paid
+                through the platform when results verify — Stripe Connect live, Remitly coming soon —
+                not a side deal with the brand.
               </li>
               <li>
-                <strong>Your hours, your ceiling.</strong> Set your own schedule and earn per
-                result — there’s no cap on what you make.
+                <strong>No fee to join a brand.</strong> Campaigns are free for reps. A small capped
+                commission comes out of each payout, not your pocket up front.
               </li>
             </ul>
           </div>
@@ -460,8 +453,9 @@ export default function HomePageClient() {
               Training + brand deals in one path.
             </h2>
             <p className="lp-ath-sub lp-ath-sdr__sub">
-              Create your MarketPounce account free. Practice until you pass. Apply to campaigns and
-              earn per verified result.
+              Create your MarketPounce account free. Generous free practice covers training — buying
+              minutes is the exception. Apply to campaigns — brands provide the leads — and earn per
+              verified result.
             </p>
             <div className="lp-ath-cta lp-ath-cta--left">
               <SignupLink className="lp-ath-btn lp-ath-btn--primary">
@@ -489,17 +483,52 @@ export default function HomePageClient() {
       <section className="lp-ath-proofbar" aria-label="Why reps join">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>Free to train</strong>
-            <span>Polish, clear the gate, then earn</span>
+            <strong>Generous free training</strong>
+            <span>You shouldn’t need to pay — buy minutes only if free runs out</span>
           </div>
           <div>
-            <strong>$0 to join</strong>
-            <span>Brand campaigns are free for reps</span>
+            <strong>Leads provided</strong>
+            <span>Brands supply clients and dial lists</span>
           </div>
           <div>
-            <strong>Earn payment per result</strong>
-            <span>Paid when outcomes verify</span>
+            <strong>~$30–$40 / appt</strong>
+            <span>Stripe Connect live · Remitly coming soon</span>
           </div>
+        </div>
+      </section>
+
+      {/* FAQ — visible answers to the questions reps actually ask */}
+      <section className="lp-ath-faq" id="faq" aria-labelledby="lp-faq-title">
+        <Reveal>
+          <p className="lp-ath-kicker">Straight answers</p>
+          <h2 id="lp-faq-title" className="lp-ath-h2">
+            What reps ask before they join
+          </h2>
+          <p className="lp-ath-faq__lead lp-ath-sub">
+            Free to join. Leads provided. Paid through the platform. No fee to accept a brand.
+          </p>
+        </Reveal>
+        <div className="lp-ath-faq__list">
+          {HOME_FAQS.map((item) => (
+            <details key={item.question} className="lp-ath-faq__item">
+              <summary className="lp-ath-faq__q">{item.question}</summary>
+              <div className="lp-ath-faq__a">
+                <p>{item.answer}</p>
+                {item.links && item.links.length > 0 ? (
+                  <p className="lp-ath-faq__links">
+                    {item.links.map((l, i) => (
+                      <span key={l.href}>
+                        {i > 0 ? ' · ' : null}
+                        <a href={l.href} className="soft-link">
+                          {l.label}
+                        </a>
+                      </span>
+                    ))}
+                  </p>
+                ) : null}
+              </div>
+            </details>
+          ))}
         </div>
       </section>
 

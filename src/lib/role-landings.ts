@@ -41,27 +41,27 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
     eyebrow: 'Recruiting SDRs · skill · speed · consistency',
     title: 'For SDRs & appointment setters',
     headline: 'Skill, speed, and consistency. No earning ceiling.',
-    sub: 'Get hired as a cold caller brands trust. Train with AI voice coaching, clear the quality gate, unlock cold calling gigs, and get paid when you qualify or book — the harder you run, the more you can earn.',
+    sub: 'Train with AI voice, prove your score, then get paid to dial brand-provided leads — typically ~$30–$40 per B2B appointment set. Completely free to join. Clients and leads are provided. No hard earning ceiling.',
     primaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Start Free — Get Paid' },
     secondaryCta: { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Browse Brand Deals' },
-    proof: 'There is no earning limit — only how skilled, fast, and consistent you are.',
+    proof: 'Leads provided · $0 to join · Stripe Connect live · Remitly coming soon',
     outcomesHeadline: 'Built for reps who treat the dial like a craft',
     outcomes: [
+      {
+        title: 'Leads Provided',
+        body: 'You do not hunt clients. Brands fund campaigns and hand you their dial-ready lists after acceptance.',
+      },
       {
         title: 'Skill Over Spam',
         body: 'Practice gatekeepers, openers, and objection handling until your score proves you’re ready for live brand campaigns.',
       },
       {
-        title: 'Speed on the Dial',
-        body: 'Live AI coach whispers mid-call so you stay sharp and keep moving — more quality conversations per hour.',
+        title: 'Paid Per Result',
+        body: 'Earn per booked meeting or qualified lead — typically ~$30–$40/appt on many B2B deals, higher on harder ICPs. No salary ceiling.',
       },
       {
-        title: 'Consistency Wins',
-        body: 'Scorecards and recordings show what to fix. Brands hire the reps who show up every day and hit the standard.',
-      },
-      {
-        title: 'No Earning Ceiling',
-        body: 'Get paid per qualified lead or booked meeting — plus accelerators and optional base on some campaigns. Volume and quality are yours to push.',
+        title: 'Platform Pays You',
+        body: 'Like Fiverr: brands fund escrow, you deliver. Stripe Connect is live; Remitly coming soon. No join fee to accept brands.',
       },
     ],
     stepsHeadline: 'Four Moves to Getting Paid',
@@ -69,7 +69,7 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       {
         n: '01',
         title: 'Train',
-        body: 'Run AI voice sessions on brand packs until your openers, objections, and asks are sharp.',
+        body: `Use your generous ${TRIAL_MINUTES}+ free practice minutes on AI voice — meant to cover training without paying. Buying minutes is only if free runs out.`,
       },
       {
         n: '02',
@@ -78,24 +78,24 @@ export const ROLE_LANDINGS: Record<RoleLandingKey, RoleLanding> = {
       },
       {
         n: '03',
-        title: 'Get Paid',
-        body: 'Apply to campaigns. Finish Stripe Connect. Brands pay you for results.',
+        title: 'Apply',
+        body: 'Unlock paid brand deals. Brands provide the leads — you pick campaigns that fit.',
       },
       {
         n: '04',
-        title: 'Scale Up',
-        body: 'Stack wins, unlock higher-paying deals, and raise your earnings with skill and consistency — no hard cap.',
+        title: 'Get Paid',
+        body: 'Connect payouts (Stripe live · Remitly coming soon). Dial brand leads. Get paid per verified result.',
       },
     ],
     pricingHeadline: 'Free to train. Brands pay you.',
     pricingNote:
-      'Polish with free AI practice, train on the brand offer, clear the gate, then get paid from brand escrow. Campaigns stay $0 for reps — brands fund the tool.',
+      'Generous free practice is the default — buying minutes is the exception. Campaigns stay $0 for reps. Brands fund escrow; a small capped commission comes out of each payout — you never pay a fee to join a brand.',
     planHref: MARKETPOUNCE_SIGN_UP_REP,
     pricingCards: [
       {
         label: 'For SDRs',
         price: '$0',
-        detail: `${TRIAL_MINUTES}+ free practice minutes · campaigns free · earn on verified results`,
+        detail: `${TRIAL_MINUTES}+ free practice minutes · leads provided · Stripe Connect · Remitly soon`,
         highlight: true,
       },
     ],

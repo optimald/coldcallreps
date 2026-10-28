@@ -7,7 +7,7 @@ import SignupLink from '@/components/SignupLink';
 export const metadata: Metadata = {
   title: 'Free to train. Brands pay you.',
   description:
-    'ColdCallReps is free for SDRs: polish with AI practice, train on the brand offer, clear the gate, then get paid by brands. Brands fund the tool — reps never pay to earn.',
+    'ColdCallReps is free for SDRs: generous free AI practice (buying minutes is the exception), brand-provided leads, paid per verified appointment. Stripe Connect live; Remitly coming soon.',
 };
 
 export default function PricingPage() {
@@ -17,30 +17,32 @@ export default function PricingPage() {
         <p className="pricing-kicker">For SDRs</p>
         <h1 className="pricing-title">Free to train. Brands pay you.</h1>
         <p className="pricing-lede">
-          You’re here to earn on brand deals — not buy a practice subscription. Free AI practice is
-          how you polish, learn the brand offer, and clear the quality gate. Brands fund escrow and
-          the desk. You get paid when verified results land.
+          You’re here to earn — not buy a subscription. The free tier is generous on purpose: enough
+          AI practice to unlock Resume and clear the gate without paying. Brands provide the clients
+          and lead lists. You get paid when verified appointments land — typically ~$30–$40 per B2B
+          set.
         </p>
       </header>
 
       <section className="pricing-hero-free" aria-labelledby="pricing-free-title">
         <p className="pricing-hero-free__label">The deal for reps</p>
         <h2 id="pricing-free-title" className="pricing-hero-free__minutes">
-          $0 to practice · $0 to join campaigns
+          $0 to practice · $0 to join campaigns · leads provided
         </h2>
         <p className="pricing-hero-free__sub">
-          Start with {TRIAL_MINUTES}+ free practice minutes — enough to get sharp on the brand pack
-          and apply. No card required.
+          Start with {TRIAL_MINUTES}+ free practice minutes — meant to cover training end-to-end. No
+          card required. Buying extra minutes is only if you burn through free and want more
+          practice.
         </p>
         <ol className="pricing-path">
           <li>
-            <strong>Polish</strong> — AI voice practice + scorecards
+            <strong>Polish</strong> — generous free AI voice practice + scorecards
           </li>
           <li>
-            <strong>Train the offer</strong> — rehearse the brand pack until you clear the gate
+            <strong>Apply</strong> — brands provide leads; no fee to accept a campaign
           </li>
           <li>
-            <strong>Get paid</strong> — brands fund escrow; you earn on verified meetings and leads
+            <strong>Get paid</strong> — Stripe Connect live · Remitly coming soon
           </li>
         </ol>
         <SignupLink className="btn pricing-hero-free__cta">
@@ -56,17 +58,20 @@ export default function PricingPage() {
           Why practice isn’t a paywall
         </h2>
         <p>
-          Charging people who are trying to earn is the wrong model. Free practice is how we recruit
-          and qualify talent. If you burn through free minutes, take a short break (same idea as
-          free ChatGPT / Claude limits) or move on to brand deals you’ve already unlocked —
-          upgrading is never required to get paid.
+          Charging people who are trying to earn is the wrong model. The free tier is generous so
+          you can train, unlock Resume, and clear the gate without paying. Buying extra minutes is
+          the exception — only if you burn through free and want more practice. Upgrading is never
+          required to get paid on brand deals.
         </p>
       </section>
 
       <section className="pricing-fees">
         <h2 className="pricing-fees__title">How your payouts work</h2>
         <p className="pricing-fees__lede">
-          Brands fund escrow. One platform fee is capped so your take-home stays strong.
+          Brands fund escrow on MarketPounce. You get paid through the platform — not as a side deal
+          with the brand. Stripe Connect is live where supported; Remitly payouts — coming soon. No
+          fee to accept a brand; a small capped commission comes out of each payout (not a bill you
+          pay up front).
         </p>
         <div className="pricing-fees__grid">
           <div className="pricing-fee">
@@ -106,8 +111,8 @@ export default function PricingPage() {
             </li>
           </ul>
           <p className="pricing-optional__note">
-            Brand deals stay free either way. Brands pay for the growth desk and escrow — reps pay
-            nothing to earn.
+            Brand deals stay free either way. Brands fund the desk and escrow — you never pay a fee
+            to join a brand. The capped commission only comes out of verified payouts.
           </p>
         </div>
       </details>

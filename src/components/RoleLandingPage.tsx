@@ -167,16 +167,16 @@ export default function RoleLandingPage({ role }: { role: RoleLanding }) {
       <section className="lp-ath-proofbar" aria-label="Why reps join">
         <div className="lp-ath-proofbar__grid">
           <div>
-            <strong>Free start</strong>
-            <span>Practice minutes to prove yourself</span>
+            <strong>Generous free training</strong>
+            <span>You shouldn’t need to pay — buy minutes only if free runs out</span>
           </div>
           <div>
-            <strong>$0 deals</strong>
-            <span>Brand campaigns free for reps</span>
+            <strong>Leads provided</strong>
+            <span>Brands supply clients and dial lists</span>
           </div>
           <div>
-            <strong>Per result</strong>
-            <span>Paid when outcomes verify</span>
+            <strong>~$30–$40 / appt</strong>
+            <span>Stripe Connect live · Remitly coming soon</span>
           </div>
         </div>
       </section>

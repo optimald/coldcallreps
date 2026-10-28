@@ -121,23 +121,29 @@ export const GUIDES: readonly Guide[] = [
     ],
     faqs: [
       {
-        question: 'Do I have to pay to take a cold calling gig?',
+        question: 'Do I have to pay to practice, unlock Resume, or take a gig?',
         answer:
-          'No. Joining and running brand campaigns is free for reps once you clear the quality gate. Brands fund payouts. Optional paid practice is never required to earn.',
+          'No. The free tier is generous on purpose — enough practice to unlock Resume and clear the gate without paying. Joining and running brand campaigns stays free for reps. Buying extra minutes is only if you burn through free and want more practice — never required to earn. You do not pay a fee to accept a brand.',
         links: [
           { href: '/pricing', label: 'Free to train' },
           { href: MARKETPOUNCE_SIGN_UP_REP, label: 'Open brand deals' },
         ],
       },
       {
-        question: 'Can I do this remotely / outside the US?',
+        question: 'Do I have to find my own clients and leads?',
         answer:
-          'Yes. Signup is global, including the Philippines and other remote markets. You practice and dial from anywhere and get paid through Stripe Connect where it is supported.',
+          'No. Brands provide the clients and dial-ready lead lists. After a brand accepts you, you dial their prospects — you do not hunt your own pipeline.',
+        links: [{ href: MARKETPOUNCE_SIGN_UP_REP, label: 'Open brand deals' }],
       },
       {
-        question: 'How do I get paid?',
+        question: 'Can I do this remotely / outside the US?',
         answer:
-          'You claim outcomes (a booked meeting or a qualified lead). Once a claim passes the AI post-call audit, the payout releases from the brand’s escrow to your Stripe Connect account, minus the platform fee.',
+          'Yes. Signup is global, including the Philippines and other remote markets. You practice and dial from anywhere. Stripe Connect pays out where Stripe supports your country; Remitly payouts are coming soon for more regions.',
+      },
+      {
+        question: 'How do I get paid — through the platform or from brands directly?',
+        answer:
+          'Through the platform, similar to Fiverr: brands fund escrow on MarketPounce, you deliver verified results, and payouts land with you. Stripe Connect is live where supported; Remitly payouts — coming soon. A small capped commission comes out of each payout — not a bill you pay up front.',
         links: [{ href: '/guides/get-paid-per-meeting-cold-calling', label: 'How reps get paid' }],
       },
       {
@@ -149,7 +155,7 @@ export const GUIDES: readonly Guide[] = [
       {
         question: 'How much can I earn per gig?',
         answer:
-          'Payouts are flat tier bands per verified set: High Volume $35–$60, Mid-Market $75–$120, and Enterprise $150–$250+ per set, depending on ICP difficulty and gatekeeper friction. Some campaigns stack optional base pay on top.',
+          'Typically about $30–$40 per B2B appointment set on many campaigns; flat tier bands go High Volume $35–$60, Mid-Market $75–$120, and Enterprise $150–$250+ per set. Some campaigns stack optional base pay. There is no hard earning ceiling.',
         links: [{ href: '/guides/get-paid-per-meeting-cold-calling', label: 'Earning mechanics' }],
       },
     ],
