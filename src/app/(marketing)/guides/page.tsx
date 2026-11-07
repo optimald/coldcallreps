@@ -86,7 +86,7 @@ export default function GuidesHubPage() {
         </Link>
         , see{' '}
         <Link href="/hire-cold-callers" className="soft-link">
-          hire cold callers
+          hire remote cold callers
         </Link>
         , check{' '}
         <Link href="/pricing" className="soft-link">

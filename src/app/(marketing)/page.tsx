@@ -25,7 +25,7 @@ export default function LandingPage() {
         <p>Start where reps start</p>
         <h2>Get hired as a cold caller</h2>
         <ul>
-          <li><Link href="/hire-cold-callers">Hire cold callers / get hired →</Link></li>
+          <li><Link href="/hire-cold-callers">Hire remote cold callers →</Link></li>
           <li><Link href="/for/reps">For SDRs →</Link></li>
           <li><Link href="/guides/cold-calling-gigs">Cold calling gigs →</Link></li>
           <li><Link href="/guides/remote-cold-calling-jobs">Remote cold calling jobs →</Link></li>

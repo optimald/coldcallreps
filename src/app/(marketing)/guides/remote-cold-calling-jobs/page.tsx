@@ -29,6 +29,11 @@ export default function Page() {
           the Philippines and other remote markets. You need a voice, a connection, and the craft —
           not a commute.
         </p>
+        <p>
+          If you are a brand looking to{' '}
+          <Link href="/hire-cold-callers">hire remote cold callers</Link> instead of taking a job,
+          start there. This page is the rep path.
+        </p>
       </section>
 
       <section>
@@ -59,7 +64,7 @@ export default function Page() {
           Experienced SDRs who want outcome pay without a seat, appointment setters who want steady
           campaign access, and newer reps willing to train up first. Browse the broader market on{' '}
           <Link href="/guides/cold-calling-gigs">cold calling gigs</Link>, follow the{' '}
-          <Link href="/for/reps">SDR path</Link>, check <Link href="/hire-cold-callers">hire cold callers</Link> for
+          <Link href="/for/reps">SDR path</Link>, check <Link href="/hire-cold-callers">hire remote cold callers</Link> for
           how brands see you, or <a href={MARKETPOUNCE_SIGN_UP_REP}>sign up free</a>.
         </p>
       </section>

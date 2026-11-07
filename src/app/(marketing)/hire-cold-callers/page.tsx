@@ -11,21 +11,22 @@ const URL = `${SITE_ORIGIN}/hire-cold-callers`;
 const MP_HIRE = `${MARKETPOUNCE_ORIGIN}/guides/hire-cold-callers`;
 
 export const metadata: Metadata = {
-  title: { absolute: 'Hire Cold Callers — Get Hired as an SDR | Cold Call Reps' },
+  title: { absolute: 'Hire Remote Cold Callers | Cold Call Reps' },
   description:
-    'Hire cold callers who train, prove, and get paid on Cold Call Reps — or get hired as a cold caller yourself. Brands post on MarketPounce; reps train and earn here.',
+    'Hire remote cold callers who already trained and cleared a quality gate. Pay per verified meeting — or get hired as a remote SDR. Campaigns post on MarketPounce.',
   keywords: [
+    'hire remote cold callers',
+    'hire remote cold caller',
     'hire cold callers',
-    'hire cold calling',
     'get hired as cold caller',
     'cold calling gigs',
     'Cold Call Reps',
   ],
   alternates: { canonical: URL },
   openGraph: {
-    title: 'Hire Cold Callers — Get Hired as an SDR | Cold Call Reps',
+    title: 'Hire Remote Cold Callers | Cold Call Reps',
     description:
-      'Brands hire cold callers via MarketPounce. SDRs train, clear the gate, and get paid on Cold Call Reps.',
+      'Hire remote cold callers who trained and cleared the gate. SDRs get hired and paid per meeting. Brands post campaigns on MarketPounce.',
     url: URL,
     images: [{ url: '/og.svg', width: 1200, height: 630 }],
   },
@@ -41,6 +42,11 @@ const FAQS = [
     question: 'How are Cold Call Reps callers vetted?',
     answer:
       'Every rep trains with AI voice practice, must score 80 or higher by default, and earns brand certification before a brand can approve them. Brands see scores and profiles before any live dial.',
+  },
+  {
+    question: 'How do I hire remote cold callers?',
+    answer:
+      'Start with reps who already practice on Cold Call Reps and clear a score gate (80+ by default) plus brand certification. You post the campaign and fund escrow on MarketPounce, then pay per verified booked meeting or qualified lead — not per hour and not for a salary.',
   },
   {
     question: 'How do I get hired as a cold caller?',
@@ -68,12 +74,12 @@ export default function HireColdCallersLandingPage() {
     <main className="pricing-page">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <header className="pricing-head">
-        <p className="pricing-kicker">Hire cold callers · Cold Call Reps</p>
-        <h1 className="pricing-title">Hire cold callers who already cleared the gate</h1>
+        <p className="pricing-kicker">Hire remote cold callers · Cold Call Reps</p>
+        <h1 className="pricing-title">Hire remote cold callers who already cleared the gate</h1>
         <p className="pricing-lede">
-          Cold Call Reps recruits human SDRs: train with AI voice, prove your score, get paid per
-          meeting. Brands who want to <strong>hire cold callers</strong> for outcome-based dials do
-          that on MarketPounce. Reps who want to <strong>get hired</strong> start here.
+          Hire remote cold callers from a pool that trains with AI voice, proves a score, and gets
+          paid per meeting. You post the campaign on MarketPounce. Reps who want to{' '}
+          <strong>get hired</strong> start here.
         </p>
       </header>
 

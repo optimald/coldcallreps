@@ -5,9 +5,9 @@ import { PLATFORM_FEE_EXAMPLES } from '@/lib/platform-fees';
 import SignupLink from '@/components/SignupLink';
 
 export const metadata: Metadata = {
-  title: 'Free to train. Brands pay you.',
+  title: { absolute: 'Cold Call Reps Pricing — Free for SDRs' },
   description:
-    'ColdCallReps is free for SDRs: generous free AI practice (buying minutes is the exception), brand-provided leads, paid per verified appointment. Stripe Connect live; Remitly coming soon.',
+    'Cold Call Reps pricing: $0 to practice and $0 to join campaigns. Brands pay you per verified meeting, typically $30–$40 and up per B2B set. No card required.',
 };
 
 export default function PricingPage() {

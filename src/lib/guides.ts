@@ -164,9 +164,10 @@ export const GUIDES: readonly Guide[] = [
     ...base,
     slug: 'get-paid-per-meeting-cold-calling',
     category: 'rep-earn',
-    title: 'Get Paid Per Meeting Cold Calling — SDR Earnings',
+    updatedAt: '2026-11-06',
+    title: 'Get Paid Per Meeting Cold Calling',
     description:
-      'Get paid per meeting cold calling on Cold Call Reps: booked meetings, qualified leads, tiered accelerators, and optional base pay via Stripe Connect from funded escrow.',
+      'Get paid per meeting cold calling: $35–$250+ per verified set, optional base pay, Stripe Connect. Free to join. You keep the payout minus a 20% fee capped at $30.',
     h1: 'How to get paid per meeting cold calling',
     oneLiner: 'How reps earn on booked meetings and qualified leads.',
     directAnswer:
@@ -218,6 +219,7 @@ export const GUIDES: readonly Guide[] = [
     ...base,
     slug: 'ai-cold-call-practice',
     category: 'rep-earn',
+    updatedAt: '2026-11-06',
     title: 'AI Cold Call Practice Free — Train, Get Scored, Get Hired',
     description:
       'Free AI cold call practice on Cold Call Reps: rehearse gatekeepers and decision-makers with an AI voice trainer, earn the score brands require, then unlock paid live dials. Built for reps who want gigs — humans dial live, AI is practice only.',
@@ -233,6 +235,8 @@ export const GUIDES: readonly Guide[] = [
     ],
     keywords: [
       'ai cold call practice',
+      'ai cold call training',
+      'ai cold call script',
       'ai cold call simulator',
       'cold call roleplay ai',
       'ai sales trainer voice',
@@ -267,6 +271,18 @@ export const GUIDES: readonly Guide[] = [
         answer:
           'Most reps do. Ongoing practice keeps scores high, warms you up before live blocks, and helps you qualify for higher-tier campaigns and accelerators.',
         links: [{ href: '/guides/get-paid-per-meeting-cold-calling', label: 'Earning mechanics' }],
+      },
+      {
+        question: 'Is AI cold call training free?',
+        answer:
+          'Yes. AI cold call training on Cold Call Reps — voice roleplay, scoring, and the practice you need to clear the quality gate — is free for reps. Brands fund the live campaigns. Buying extra practice minutes is optional and never required to get hired.',
+        links: [{ href: '/pricing', label: 'Free to train' }],
+      },
+      {
+        question: 'Can I download a free AI cold call script?',
+        answer:
+          'There is no standalone script PDF. Practice runs as live voice roleplay: gatekeepers, decision-makers, pricing objections, and rejection recovery, scored as you go. That rehearsal is the script — you train it, then use it on funded brand campaigns.',
+        links: [{ href: '/guides/cold-calling-gigs', label: 'Cold calling gigs' }],
       },
     ],
   },
@@ -330,7 +346,7 @@ export const GUIDES: readonly Guide[] = [
   },
   {
     ...base,
-    updatedAt: '2026-10-20',
+    updatedAt: '2026-11-06',
     slug: 'remote-cold-calling-jobs',
     category: 'rep-earn',
     title: 'Remote Cold Calling Jobs — Get Paid Per Meeting, Not Per Hour',
@@ -375,6 +391,12 @@ export const GUIDES: readonly Guide[] = [
         question: 'Does it cost anything to start?',
         answer:
           'No. Training, applying, and running campaigns are free for reps. Brands fund the payouts; the platform fee (20%, capped at $30 per outcome) comes out of the payout, not your pocket up front.',
+      },
+      {
+        question: 'I want to hire remote cold callers, not take a job. Where do I start?',
+        answer:
+          'Brands who want to hire remote cold callers start on the hire page: vetted human SDRs who already cleared a practice gate, paid per verified meeting. Posting the campaign and funding escrow happens on MarketPounce. This jobs guide is for reps who want the work.',
+        links: [{ href: '/hire-cold-callers', label: 'Hire remote cold callers' }],
       },
     ],
   },

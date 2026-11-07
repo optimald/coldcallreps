@@ -9,7 +9,7 @@ import { SITE_ORIGIN } from '@/lib/site';
 const HOME_UPDATED_AT = '2026-10-20';
 
 /** Recruiting landing for “hire cold callers” (rep-side) — brand-side guide lives on MarketPounce. */
-const HIRE_LANDING_UPDATED_AT = '2026-10-20';
+const HIRE_LANDING_UPDATED_AT = '2026-11-06';
 
 type Entry = {
   path: string;

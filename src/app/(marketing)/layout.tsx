@@ -29,7 +29,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <p className="mkt-footer-heading">For SDRs</p>
             <Link href="/#how-it-works">How it works</Link>
             <Link href="/for/reps">SDR path</Link>
-            <Link href="/hire-cold-callers">Hire cold callers</Link>
+            <Link href="/hire-cold-callers">Hire remote cold callers</Link>
             <Link href="/pricing">Free to train</Link>
             <Link href="/guides">Guides</Link>
           </div>
